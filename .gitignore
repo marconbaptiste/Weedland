@@ -1,0 +1,25 @@
+node_modules
+dist
+dist-ssr
+*.local
+
+# Variables d'environnement (ne jamais committer les clés)
+.env
+.env.*
+!.env.example
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Éditeurs
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

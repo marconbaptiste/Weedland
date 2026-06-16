@@ -1,0 +1,30 @@
+{
+  "name": "weedland",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Plateforme de gestion pour magasin de CBD (caisse, chromes, paiements employés)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.11.1",
+    "@vitejs/plugin-react": "^4.3.2",
+    "eslint": "^9.11.1",
+    "eslint-plugin-react": "^7.37.5",
+    "globals": "^15.10.0",
+    "vite": "^5.4.8",
+    "vitest": "^2.1.2"
+  }
+}
