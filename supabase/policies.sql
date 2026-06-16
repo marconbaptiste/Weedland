@@ -36,6 +36,7 @@ alter table public.charges             enable row level security;
 alter table public.fournisseurs        enable row level security;
 alter table public.parametres          enable row level security;
 alter table public.fiches_paie         enable row level security;
+alter table public.promos              enable row level security;
 
 -- ---------------------------------------------------------------------------
 -- users : chacun voit son profil ; l'admin voit/gère tout.
@@ -189,3 +190,23 @@ create policy parametres_admin on public.parametres for all to authenticated
 drop policy if exists fiches_paie_admin on public.fiches_paie;
 create policy fiches_paie_admin on public.fiches_paie for all to authenticated
   using (public.est_admin()) with check (public.est_admin());
+
+-- ---------------------------------------------------------------------------
+-- promos : registre partagé (lecture/saisie par tout employé connecté).
+-- ---------------------------------------------------------------------------
+drop policy if exists promos_select on public.promos;
+create policy promos_select on public.promos for select to authenticated
+  using (true);
+
+drop policy if exists promos_insert on public.promos;
+create policy promos_insert on public.promos for insert to authenticated
+  with check (employe_id = auth.uid() or public.est_admin());
+
+drop policy if exists promos_update on public.promos;
+create policy promos_update on public.promos for update to authenticated
+  using (employe_id = auth.uid() or public.est_admin())
+  with check (employe_id = auth.uid() or public.est_admin());
+
+drop policy if exists promos_delete on public.promos;
+create policy promos_delete on public.promos for delete to authenticated
+  using (employe_id = auth.uid() or public.est_admin());

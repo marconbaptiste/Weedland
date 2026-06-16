@@ -300,6 +300,43 @@ hr {
   font-size: 0.9rem;
   font-style: italic;
 }
+.section-promos {
+  border-top: 1px solid var(--bordure);
+  border-bottom: 1px solid var(--bordure);
+  padding: 0.6rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.section-promos h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.liste-promos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+.liste-promos li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.promo-date {
+  color: var(--texte-doux);
+  white-space: nowrap;
+}
+.promo-desc {
+  flex: 1;
+}
+.promo-qui {
+  color: var(--texte-doux);
+  white-space: nowrap;
+}
 .badge {
   font-size: 0.8rem;
   padding: 0.3rem 0.6rem;

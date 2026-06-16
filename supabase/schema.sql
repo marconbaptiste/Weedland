@@ -139,6 +139,20 @@ create table if not exists public.fiches_paie (
 );
 create index if not exists idx_fiches_paie_employe on public.fiches_paie (employe_id);
 
+-- ---------------------------------------------------------------------------
+-- promos : promotions / traitements de faveur accordés à un client.
+-- Registre partagé entre employés (comme clients/chromes).
+-- ---------------------------------------------------------------------------
+create table if not exists public.promos (
+  id          uuid primary key default gen_random_uuid(),
+  client_id   uuid not null references public.clients (id) on delete cascade,
+  description text not null,
+  date        date not null,
+  employe_id  uuid not null references public.users (id) on delete restrict,
+  created_at  timestamptz not null default now()
+);
+create index if not exists idx_promos_client on public.promos (client_id);
+
 -- Index utiles pour les filtres jour / employé.
 create index if not exists idx_caisse_jour_date on public.caisse_jour (date);
 create index if not exists idx_caisse_jour_employe on public.caisse_jour (employe_id);

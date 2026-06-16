@@ -45,7 +45,7 @@ Le SQL vit dans `supabase/` et s'exécute dans l'éditeur SQL Supabase, **dans c
 1. `schema.sql` — tables, vues calculées, trigger de création de profil.
 2. `policies.sql` — RLS (à exécuter après le schéma).
 
-Tables (modèle imposé, ne pas renommer) : `users` (profil lié à `auth.users`, porte le `role`), `clients`, `caisse_jour`, `chromes`, `paiements_employes`. À l'inscription d'un utilisateur Supabase Auth, le trigger `handle_new_user` crée automatiquement la ligne `public.users` (rôle `employe` par défaut).
+Tables (modèle imposé, ne pas renommer) : `users` (profil lié à `auth.users`, porte le `role`), `clients`, `caisse_jour`, `chromes`, `paiements_employes`, `promos` (promotions/traitements de faveur par client, registre partagé comme `chromes`). À l'inscription d'un utilisateur Supabase Auth, le trigger `handle_new_user` crée automatiquement la ligne `public.users` (rôle `employe` par défaut).
 
 **Vues calculées** (jamais de CA stocké en dur) — toutes en `security_invoker = on` pour respecter la RLS de l'appelant :
 - `v_ca_jour` : par clôture de caisse, expose `ca_jour`, `encaissements`, `encaissements_attendus`, `ecart`. C'est la traduction SQL de la règle métier ci-dessous.

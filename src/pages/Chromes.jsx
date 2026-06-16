@@ -15,6 +15,9 @@ export default function Chromes() {
   const [clients, setClients] = useState([]);
   const [clientSel, setClientSel] = useState(null);
   const [lignes, setLignes] = useState([]);
+  const [promos, setPromos] = useState([]);
+  const [clientsAvecPromo, setClientsAvecPromo] = useState(new Set());
+  const [nouvellePromo, setNouvellePromo] = useState({ description: '', date: aujourdhuiISO() });
 
   const [nouveau, setNouveau] = useState({ surnom: '', description: '' });
   const [creationOuverte, setCreationOuverte] = useState(false);
@@ -24,11 +27,12 @@ export default function Chromes() {
   const [date, setDate] = useState(aujourdhuiISO());
 
   const chargerClients = useCallback(async () => {
-    const { data } = await supabase
-      .from('v_solde_client')
-      .select('client_id, surnom, description, solde')
-      .order('surnom');
+    const [{ data }, { data: pr }] = await Promise.all([
+      supabase.from('v_solde_client').select('client_id, surnom, description, solde').order('surnom'),
+      supabase.from('promos').select('client_id'),
+    ]);
     setClients(data ?? []);
+    setClientsAvecPromo(new Set((pr ?? []).map((p) => p.client_id)));
   }, []);
 
   useEffect(() => {
@@ -37,13 +41,22 @@ export default function Chromes() {
 
   const ouvrirClient = useCallback(async (client) => {
     setClientSel(client);
-    const { data } = await supabase
-      .from('chromes')
-      .select('id, type, montant, date, employe_id, users(nom)')
-      .eq('client_id', client.client_id)
-      .order('date', { ascending: false })
-      .order('created_at', { ascending: false });
-    setLignes(data ?? []);
+    const [{ data: chr }, { data: pr }] = await Promise.all([
+      supabase
+        .from('chromes')
+        .select('id, type, montant, date, employe_id, users(nom)')
+        .eq('client_id', client.client_id)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('promos')
+        .select('id, description, date, employe_id, users(nom)')
+        .eq('client_id', client.client_id)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false }),
+    ]);
+    setLignes(chr ?? []);
+    setPromos(pr ?? []);
   }, []);
 
   async function creerClient(e) {
@@ -70,6 +83,29 @@ export default function Chromes() {
 
   async function supprimerLigne(id) {
     await supabase.from('chromes').delete().eq('id', id);
+    await ouvrirClient(clientSel);
+    await chargerClients();
+  }
+
+  async function creerPromo(e) {
+    e.preventDefault();
+    const description = nouvellePromo.description.trim();
+    if (!clientSel || !description) return;
+    const { error } = await supabase.from('promos').insert({
+      client_id: clientSel.client_id,
+      description,
+      date: nouvellePromo.date,
+      employe_id: utilisateur.id,
+    });
+    if (!error) {
+      setNouvellePromo({ description: '', date: aujourdhuiISO() });
+      await ouvrirClient(clientSel);
+      await chargerClients();
+    }
+  }
+
+  async function supprimerPromo(id) {
+    await supabase.from('promos').delete().eq('id', id);
     await ouvrirClient(clientSel);
     await chargerClients();
   }
@@ -116,7 +152,10 @@ export default function Chromes() {
                   className={`ligne-client ${clientSel?.client_id === c.client_id ? 'actif' : ''}`}
                   onClick={() => ouvrirClient(c)}
                 >
-                  <span>{c.surnom}</span>
+                  <span>
+                    {clientsAvecPromo.has(c.client_id) && <span title="Promo / faveur">★ </span>}
+                    {c.surnom}
+                  </span>
                   <span className={Number(c.solde) > 0 ? 'dette' : 'solde-ok'}>
                     {formatEuros(c.solde)}
                   </span>
@@ -176,6 +215,45 @@ export default function Chromes() {
               {clientSel.description && (
                 <p className="description-client">{clientSel.description}</p>
               )}
+
+              <div className="section-promos">
+                <h3>★ Promos / traitements de faveur</h3>
+                <form className="form-inline" onSubmit={creerPromo}>
+                  <input
+                    placeholder="ex. -10% sur tout, 1 g offert…"
+                    value={nouvellePromo.description}
+                    onChange={(e) => setNouvellePromo((p) => ({ ...p, description: e.target.value }))}
+                  />
+                  <input
+                    type="date"
+                    value={nouvellePromo.date}
+                    onChange={(e) => setNouvellePromo((p) => ({ ...p, date: e.target.value }))}
+                  />
+                  <button className="btn" type="submit">
+                    Ajouter
+                  </button>
+                </form>
+                <ul className="liste-promos">
+                  {promos.map((p) => (
+                    <li key={p.id}>
+                      <span className="promo-date">{formatDateFr(p.date)}</span>
+                      <span className="promo-desc">{p.description}</span>
+                      <span className="promo-qui">{p.users?.nom ?? '—'}</span>
+                      {(estAdmin || p.employe_id === utilisateur.id) && (
+                        <button
+                          type="button"
+                          className="btn btn-discret"
+                          onClick={() => supprimerPromo(p.id)}
+                          aria-label="Supprimer la promo"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                  {promos.length === 0 && <li className="vide">Aucune promo enregistrée.</li>}
+                </ul>
+              </div>
 
               <form className="form-chrome" onSubmit={ajouterLigne}>
                 <div className="bascule">
