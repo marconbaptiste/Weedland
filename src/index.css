@@ -398,6 +398,57 @@ hr {
   margin-left: 0.4rem;
   font-size: 0.7rem;
 }
+
+/* ----- Graphiques ----- */
+.graph {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.graph-label {
+  font-size: 9px;
+  fill: var(--texte-doux);
+}
+.camembert {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.graph-donut {
+  width: 140px;
+  height: 140px;
+  flex: none;
+}
+.legende {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  flex: 1;
+  min-width: 160px;
+}
+.legende li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.puce {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: none;
+}
+.legende-nom {
+  flex: 1;
+}
+.legende-val {
+  color: var(--texte-doux);
+  white-space: nowrap;
+}
 .vide {
   color: var(--texte-doux);
   text-align: center;

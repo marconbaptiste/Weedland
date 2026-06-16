@@ -10,6 +10,7 @@ import {
 } from '../lib/dates';
 import { somme } from '../lib/comptabilite';
 import ListeMontants from '../components/ListeMontants';
+import { Courbe, Barres, Camembert } from '../components/Graphiques';
 
 // Module admin — Comptabilité : CA mois/semaine/année, charges, fournisseurs,
 // bénéfice. Charges et fournisseurs sont mensuels (repris du mois précédent).
@@ -98,6 +99,13 @@ export default function Comptabilite() {
     ca: somme(caRows.filter((r) => semaineDuMois(r.date) === n).map((r) => r.ca_jour)),
   }));
 
+  // Données graphiques.
+  const pointsCA = [...caRows]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((r) => ({ label: r.date.slice(8, 10), valeur: r.ca_jour }));
+  const barresSemaine = semaines.map((s) => ({ label: `S${s.n}`, valeur: s.ca }));
+  const partsCharges = charges.map((c) => ({ label: c.libelle, valeur: parseMontant(c.montant) }));
+
   return (
     <div className="page">
       <h1>Comptabilité</h1>
@@ -146,7 +154,13 @@ export default function Comptabilite() {
       </div>
 
       <div className="card">
+        <h2>CA du mois (par jour)</h2>
+        <Courbe points={pointsCA} />
+      </div>
+
+      <div className="card">
         <h2>CA par semaine</h2>
+        <Barres items={barresSemaine} />
         <table className="tableau">
           <tbody>
             {semaines.map((s) => (
@@ -157,6 +171,11 @@ export default function Comptabilite() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="card">
+        <h2>Répartition des charges</h2>
+        <Camembert parts={partsCharges} />
       </div>
 
       <ListeMontants
