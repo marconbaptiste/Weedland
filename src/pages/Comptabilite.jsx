@@ -105,6 +105,11 @@ export default function Comptabilite() {
     .map((r) => ({ label: r.date.slice(8, 10), valeur: r.ca_jour }));
   const barresSemaine = semaines.map((s) => ({ label: `S${s.n}`, valeur: s.ca }));
   const partsCharges = charges.map((c) => ({ label: c.libelle, valeur: parseMontant(c.montant) }));
+  const partsDepenses = [
+    ...charges.map((c) => ({ label: c.libelle || 'Charge', valeur: parseMontant(c.montant) })),
+    ...fournisseurs.map((f) => ({ label: f.libelle || 'Fournisseur', valeur: parseMontant(f.montant) })),
+  ];
+  const totalDepenses = somme([totalCharges, totalFournisseurs]);
 
   return (
     <div className="page">
@@ -176,6 +181,14 @@ export default function Comptabilite() {
       <div className="card">
         <h2>Répartition des charges</h2>
         <Camembert parts={partsCharges} />
+      </div>
+
+      <div className="card">
+        <div className="entete-client">
+          <h2>Dépenses totales</h2>
+          <strong>{formatEuros(totalDepenses)}</strong>
+        </div>
+        <Camembert parts={partsDepenses} />
       </div>
 
       <ListeMontants
