@@ -3,12 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 const url = import.meta.env.VITE_SUPABASE_URL;
 const cleAnon = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!url || !cleAnon) {
-  // Message explicite plutôt qu'une erreur cryptique de createClient.
-  throw new Error(
-    'Configuration Supabase manquante : renseignez VITE_SUPABASE_URL et ' +
-      'VITE_SUPABASE_ANON_KEY dans un fichier .env (voir .env.example).',
-  );
-}
+// Indique si la configuration est présente. Si elle manque, on n'instancie pas
+// le client (createClient planterait) : l'app affiche un message dédié plutôt
+// qu'un écran blanc (voir main.jsx + ConfigManquante).
+export const configSupabaseOk = Boolean(url && cleAnon);
 
-export const supabase = createClient(url, cleAnon);
+export const supabase = configSupabaseOk ? createClient(url, cleAnon) : null;
