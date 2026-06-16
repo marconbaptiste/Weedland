@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { parseMontant, formatEuros } from '../lib/format';
-import { premierDuMois } from '../lib/dates';
+import { parseMontant, formatEuros, formatNombre } from '../lib/format';
+import { premierDuMois, intervallePeriode } from '../lib/dates';
+import { somme } from '../lib/comptabilite';
 import { calculerBulletin, bulletinVierge } from '../lib/bulletin';
 import { telechargerBulletinPaie } from '../lib/export';
 
@@ -19,6 +20,7 @@ export default function FichesPaie() {
   const [fiche, setFiche] = useState(bulletinVierge());
   const [ficheId, setFicheId] = useState(null);
   const [statut, setStatut] = useState('');
+  const [activite, setActivite] = useState({ interessement: 0, heures: 0, jours: 0 });
 
   // Chargement initial : employés + infos employeur mémorisées.
   useEffect(() => {
@@ -41,13 +43,17 @@ export default function FichesPaie() {
       .eq('employe_id', employeId)
       .eq('mois', mois)
       .maybeSingle();
+    const [dM, fM] = intervallePeriode('mois', mois);
+    const periodeDefaut = { date_paiement: '', debut: dM, fin: fM, heures: '', jours: '' };
     if (data) {
-      setFiche({ ...bulletinVierge(), ...data.data });
+      const d = { ...bulletinVierge(), ...data.data };
+      d.periode = { ...periodeDefaut, ...(data.data.periode || {}) };
+      setFiche(d);
       setFicheId(data.id);
     } else {
       const vierge = bulletinVierge();
-      const nom = employes.find((e) => e.id === employeId)?.nom ?? '';
-      vierge.salarie.nom = nom;
+      vierge.salarie.nom = employes.find((e) => e.id === employeId)?.nom ?? '';
+      vierge.periode = periodeDefaut;
       setFiche(vierge);
       setFicheId(null);
     }
@@ -56,6 +62,54 @@ export default function FichesPaie() {
   useEffect(() => {
     charger();
   }, [charger]);
+
+  // Active = intéressement + heures + jours de l'employé sur la période choisie
+  // (inclut clôtures et journées partagées, via v_interessement_employe).
+  const debut = fiche.periode?.debut;
+  const fin = fiche.periode?.fin;
+  useEffect(() => {
+    if (!employeId || !debut || !fin) return;
+    let actif = true;
+    supabase
+      .from('v_interessement_employe')
+      .select('date, interessement, heures_travaillees')
+      .eq('employe_id', employeId)
+      .gte('date', debut)
+      .lte('date', fin)
+      .then(({ data }) => {
+        if (!actif) return;
+        const rows = data ?? [];
+        setActivite({
+          interessement: somme(rows.map((r) => r.interessement)),
+          heures: somme(rows.map((r) => r.heures_travaillees)),
+          jours: new Set(rows.map((r) => r.date)).size,
+        });
+      });
+    return () => {
+      actif = false;
+    };
+  }, [employeId, debut, fin]);
+
+  // Reprend l'intéressement (ligne de gain) + les heures/jours de la période.
+  function reprendreActivite() {
+    setFiche((f) => {
+      const gains = [...f.gains];
+      const idx = gains.findIndex((g) => (g.libelle || '').toLowerCase().includes('intéress'));
+      const ligne = { libelle: 'Intéressement', montant: String(activite.interessement) };
+      if (idx >= 0) gains[idx] = ligne;
+      else gains.push(ligne);
+      return {
+        ...f,
+        gains,
+        periode: {
+          ...f.periode,
+          heures: String(activite.heures),
+          jours: String(activite.jours),
+        },
+      };
+    });
+    setStatut('Intéressement et activité repris dans le bulletin.');
+  }
 
   // --- Mises à jour ---
   const majSalarie = (champ, v) =>
@@ -137,6 +191,8 @@ export default function FichesPaie() {
       salarie: fiche.salarie,
       periodeLabel: labelMois(mois),
       datePaiement: fiche.periode?.date_paiement,
+      heures: fiche.periode?.heures,
+      jours: fiche.periode?.jours,
       gains: gainsNum,
       cotisations: totaux.lignes,
       totaux,
@@ -212,6 +268,22 @@ export default function FichesPaie() {
                 </label>
               ))}
               <label className="field">
+                <span>Période du</span>
+                <input
+                  type="date"
+                  value={fiche.periode?.debut ?? ''}
+                  onChange={(e) => majPeriode('debut', e.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>au</span>
+                <input
+                  type="date"
+                  value={fiche.periode?.fin ?? ''}
+                  onChange={(e) => majPeriode('fin', e.target.value)}
+                />
+              </label>
+              <label className="field">
                 <span>Date de paiement</span>
                 <input
                   type="date"
@@ -219,7 +291,46 @@ export default function FichesPaie() {
                   onChange={(e) => majPeriode('date_paiement', e.target.value)}
                 />
               </label>
+              <label className="field">
+                <span>Heures travaillées</span>
+                <input
+                  inputMode="decimal"
+                  value={fiche.periode?.heures ?? ''}
+                  onChange={(e) => majPeriode('heures', e.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>Jours travaillés</span>
+                <input
+                  inputMode="decimal"
+                  value={fiche.periode?.jours ?? ''}
+                  onChange={(e) => majPeriode('jours', e.target.value)}
+                />
+              </label>
             </div>
+          </div>
+
+          <div className="card">
+            <h2>Activité sur la période</h2>
+            <div className="recap-ligne">
+              <span>Intéressement</span>
+              <strong>{formatEuros(activite.interessement)}</strong>
+            </div>
+            <div className="recap-ligne">
+              <span>Heures</span>
+              <strong>{formatNombre(activite.heures)} h</strong>
+            </div>
+            <div className="recap-ligne">
+              <span>Jours travaillés</span>
+              <strong>{activite.jours}</strong>
+            </div>
+            <button className="btn btn-primary" onClick={reprendreActivite}>
+              Reprendre dans le bulletin
+            </button>
+            <p className="statut">
+              Reprend l’intéressement en ligne de gain et renseigne les heures/jours, calculés
+              sur la période (clôtures + journées partagées).
+            </p>
           </div>
 
           <div className="card">

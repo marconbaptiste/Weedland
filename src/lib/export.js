@@ -151,6 +151,8 @@ export function telechargerBulletinPaie(nomFichier, b) {
     s.statut && `Statut : ${s.statut}`,
     s.num_secu && `N° SS : ${s.num_secu}`,
     s.date_entree && `Entrée : ${s.date_entree}`,
+    b.heures && `Heures travaillées : ${b.heures}`,
+    b.jours && `Jours travaillés : ${b.jours}`,
   ]
     .filter(Boolean)
     .forEach((l) => {
