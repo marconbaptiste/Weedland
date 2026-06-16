@@ -36,7 +36,7 @@ export function AuthProvider({ children }) {
       }
       const { data } = await supabase
         .from('users')
-        .select('id, nom, role')
+        .select('id, nom, role, pourcentage_interessement')
         .eq('id', session.user.id)
         .single();
       if (actif) {

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { formatEuros, formatDateFr } from '../lib/format';
+import { formatEuros, formatNombre, formatDateFr } from '../lib/format';
 import { aujourdhuiISO, intervallePeriode } from '../lib/dates';
 import { somme } from '../lib/comptabilite';
 import { telechargerCSV, telechargerPDF } from '../lib/export';
@@ -27,7 +27,7 @@ export default function Dashboard() {
   const charger = useCallback(async () => {
     let q = supabase
       .from('v_ca_jour')
-      .select('caisse_id, date, employe_id, ventes_directes, cb, especes, avances, remboursements, ca_jour, encaissements, ecart')
+      .select('caisse_id, date, employe_id, ventes_directes, cb, especes, avances, remboursements, ca_jour, encaissements, ecart, heures_travaillees, pourcentage_interessement, interessement')
       .gte('date', debut)
       .lte('date', fin)
       .order('date', { ascending: false });
@@ -54,17 +54,20 @@ export default function Dashboard() {
     encaissements: somme(caRows.map((r) => r.encaissements)),
     avances: somme(caRows.map((r) => r.avances)),
     remboursements: somme(caRows.map((r) => r.remboursements)),
+    interessement: somme(caRows.map((r) => r.interessement)),
+    heures: somme(caRows.map((r) => r.heures_travaillees)),
   };
   const nomEmploye = (id) => employes.find((e) => e.id === id)?.nom ?? '—';
 
   function exporter() {
     const entetes = [
       'Date', 'Employé', 'Ventes directes', 'Avances', 'Remboursements',
-      'CA', 'CB', 'Espèces', 'Encaissements', 'Écart',
+      'CA', 'CB', 'Espèces', 'Encaissements', 'Écart', 'Heures', '% intéress.', 'Intéressement',
     ];
     const lignes = caRows.map((r) => [
       r.date, nomEmploye(r.employe_id), r.ventes_directes, r.avances,
       r.remboursements, r.ca_jour, r.cb, r.especes, r.encaissements, r.ecart,
+      r.heures_travaillees, r.pourcentage_interessement, r.interessement,
     ]);
     telechargerCSV(`recap-${debut}_${fin}.csv`, entetes, lignes);
   }
@@ -78,16 +81,19 @@ export default function Dashboard() {
       ['Encaissements', formatEuros(totaux.encaissements)],
       ['Avances', formatEuros(totaux.avances)],
       ['Remboursements', formatEuros(totaux.remboursements)],
+      ['Intéressement', formatEuros(totaux.interessement)],
+      ['Heures travaillées', `${formatNombre(totaux.heures)} h`],
       ['Paiements employés', formatEuros(totalPaiements)],
     ];
     const entetes = [
-      'Date', 'Employé', 'Ventes', 'Avances', 'Rembours.',
-      'CA', 'CB', 'Espèces', 'Encaiss.', 'Écart',
+      'Date', 'Employé', 'CA', 'Encaiss.', 'Avances', 'Rembours.',
+      'Écart', 'Heures', '%', 'Intéress.',
     ];
     const lignes = caRows.map((r) => [
-      formatDateFr(r.date), nomEmploye(r.employe_id), formatEuros(r.ventes_directes),
-      formatEuros(r.avances), formatEuros(r.remboursements), formatEuros(r.ca_jour),
-      formatEuros(r.cb), formatEuros(r.especes), formatEuros(r.encaissements), formatEuros(r.ecart),
+      formatDateFr(r.date), nomEmploye(r.employe_id), formatEuros(r.ca_jour),
+      formatEuros(r.encaissements), formatEuros(r.avances), formatEuros(r.remboursements),
+      formatEuros(r.ecart), formatNombre(r.heures_travaillees),
+      `${r.pourcentage_interessement} %`, formatEuros(r.interessement),
     ]);
     telechargerPDF(`recap-${debut}_${fin}.pdf`, {
       titre: 'Weedland — Récapitulatif',
@@ -156,6 +162,14 @@ export default function Dashboard() {
           <span className="kpi-valeur">{formatEuros(totaux.remboursements)}</span>
         </div>
         <div className="kpi">
+          <span className="kpi-label">Intéressement</span>
+          <span className="kpi-valeur">{formatEuros(totaux.interessement)}</span>
+        </div>
+        <div className="kpi">
+          <span className="kpi-label">Heures</span>
+          <span className="kpi-valeur">{formatNombre(totaux.heures)} h</span>
+        </div>
+        <div className="kpi">
           <span className="kpi-label">Paiements employés</span>
           <span className="kpi-valeur">{formatEuros(totalPaiements)}</span>
         </div>
@@ -173,6 +187,8 @@ export default function Dashboard() {
               <th className="droite">Avances</th>
               <th className="droite">Rembours.</th>
               <th className="droite">Écart</th>
+              <th className="droite">Heures</th>
+              <th className="droite">Intéress.</th>
             </tr>
           </thead>
           <tbody>
@@ -187,11 +203,13 @@ export default function Dashboard() {
                 <td className={`droite ${Number(r.ecart) === 0 ? 'solde-ok' : 'dette'}`}>
                   {formatEuros(r.ecart)}
                 </td>
+                <td className="droite">{formatNombre(r.heures_travaillees)}</td>
+                <td className="droite">{formatEuros(r.interessement)}</td>
               </tr>
             ))}
             {caRows.length === 0 && (
               <tr>
-                <td colSpan={7} className="vide">
+                <td colSpan={9} className="vide">
                   Aucune donnée sur la période.
                 </td>
               </tr>

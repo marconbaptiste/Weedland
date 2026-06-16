@@ -8,13 +8,16 @@ import ChampMontant from '../components/ChampMontant';
 
 // Module 1 — Clôture de caisse journalière (par employé / par jour).
 export default function Caisse() {
-  const { utilisateur } = useAuth();
+  const { utilisateur, profil } = useAuth();
+  const tauxParDefaut = profil?.pourcentage_interessement ?? 0;
   const [date, setDate] = useState(aujourdhuiISO());
   const [form, setForm] = useState({
     ventes_directes: '',
     cb: '',
     especes: '',
     fond_caisse: '',
+    heures_travaillees: '',
+    pourcentage_interessement: '',
     commentaire: '',
   });
   const [chromesJour, setChromesJour] = useState([]);
@@ -46,24 +49,36 @@ export default function Caisse() {
         cb: String(caisse.data.cb),
         especes: String(caisse.data.especes),
         fond_caisse: String(caisse.data.fond_caisse),
+        heures_travaillees: String(caisse.data.heures_travaillees ?? ''),
+        pourcentage_interessement: String(caisse.data.pourcentage_interessement ?? ''),
         commentaire: caisse.data.commentaire ?? '',
       });
     } else {
-      setForm({ ventes_directes: '', cb: '', especes: '', fond_caisse: '', commentaire: '' });
+      // Nouvelle clôture : on pré-remplit le taux depuis la fiche employé.
+      setForm({
+        ventes_directes: '',
+        cb: '',
+        especes: '',
+        fond_caisse: '',
+        heures_travaillees: '',
+        pourcentage_interessement: tauxParDefaut ? String(tauxParDefaut) : '',
+        commentaire: '',
+      });
     }
     setChromesJour(chromes.data ?? []);
-  }, [utilisateur.id, date]);
+  }, [utilisateur.id, date, tauxParDefaut]);
 
   useEffect(() => {
     charger();
   }, [charger]);
 
-  // Calculs temps réel (logique CA/chromes centralisée).
+  // Calculs temps réel (logique CA/chromes/intéressement centralisée).
   const resume = resumeJour(
     {
       ventes_directes: parseMontant(form.ventes_directes),
       cb: parseMontant(form.cb),
       especes: parseMontant(form.especes),
+      pourcentage_interessement: parseMontant(form.pourcentage_interessement),
     },
     chromesJour,
   );
@@ -80,6 +95,8 @@ export default function Caisse() {
         cb: parseMontant(form.cb),
         especes: parseMontant(form.especes),
         fond_caisse: parseMontant(form.fond_caisse),
+        heures_travaillees: parseMontant(form.heures_travaillees),
+        pourcentage_interessement: parseMontant(form.pourcentage_interessement),
         commentaire: form.commentaire || null,
       },
       { onConflict: 'employe_id,date' },
@@ -104,6 +121,26 @@ export default function Caisse() {
         <ChampMontant label="Encaissements CB" valeur={form.cb} onChange={maj('cb')} />
         <ChampMontant label="Espèces (Moro)" valeur={form.especes} onChange={maj('especes')} />
         <ChampMontant label="Fond de caisse" valeur={form.fond_caisse} onChange={maj('fond_caisse')} />
+        <label className="field">
+          <span>Heures travaillées</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder="ex. 6,5"
+            value={form.heures_travaillees}
+            onChange={(e) => maj('heures_travaillees')(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>% d’intéressement</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder="ex. 5"
+            value={form.pourcentage_interessement}
+            onChange={(e) => maj('pourcentage_interessement')(e.target.value)}
+          />
+        </label>
         <label className="field">
           <span>Commentaire</span>
           <textarea
@@ -143,6 +180,15 @@ export default function Caisse() {
           {reco.coherent
             ? '● Caisse cohérente'
             : `● Écart de caisse : ${formatEuros(reco.ecart)} (attendu ${formatEuros(reco.attendu)})`}
+        </div>
+        <hr />
+        <div className="recap-ligne">
+          <span>
+            Intéressement
+            {parseMontant(form.pourcentage_interessement) > 0 &&
+              ` (${form.pourcentage_interessement} % · ${form.heures_travaillees || 0} h)`}
+          </span>
+          <strong>{formatEuros(resume.interessement)}</strong>
         </div>
       </div>
     </div>

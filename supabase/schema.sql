@@ -16,6 +16,8 @@ create table if not exists public.users (
   id         uuid primary key references auth.users (id) on delete cascade,
   nom        text not null,
   role       text not null default 'employe' check (role in ('employe', 'admin')),
+  -- Taux d'intéressement par défaut de l'employé (% du CA), fixé par l'admin.
+  pourcentage_interessement numeric(5, 2) not null default 0 check (pourcentage_interessement >= 0),
   created_at timestamptz not null default now()
 );
 
@@ -44,6 +46,10 @@ create table if not exists public.caisse_jour (
   cb              numeric(10, 2) not null default 0 check (cb >= 0),
   especes         numeric(10, 2) not null default 0 check (especes >= 0),
   fond_caisse     numeric(10, 2) not null default 0 check (fond_caisse >= 0),
+  -- Heures travaillées et taux d'intéressement appliqué ce jour-là (pré-rempli
+  -- depuis la fiche employé mais ajustable, notamment pour les journées partagées).
+  heures_travaillees        numeric(5, 2) not null default 0 check (heures_travaillees >= 0),
+  pourcentage_interessement numeric(5, 2) not null default 0 check (pourcentage_interessement >= 0),
   commentaire     text,
   created_at      timestamptz not null default now(),
   unique (employe_id, date)
@@ -114,12 +120,19 @@ select
   c.cb,
   c.especes,
   c.fond_caisse,
+  c.heures_travaillees,
+  c.pourcentage_interessement,
   coalesce(ch.avances, 0)        as avances,
   coalesce(ch.remboursements, 0) as remboursements,
   c.ventes_directes + coalesce(ch.avances, 0) - coalesce(ch.remboursements, 0) as ca_jour,
   c.cb + c.especes                                                             as encaissements,
   c.ventes_directes + coalesce(ch.remboursements, 0)                           as encaissements_attendus,
-  (c.cb + c.especes) - (c.ventes_directes + coalesce(ch.remboursements, 0))    as ecart
+  (c.cb + c.especes) - (c.ventes_directes + coalesce(ch.remboursements, 0))    as ecart,
+  round(
+    (c.ventes_directes + coalesce(ch.avances, 0) - coalesce(ch.remboursements, 0))
+      * c.pourcentage_interessement / 100,
+    2
+  ) as interessement
 from public.caisse_jour c
 left join public.v_chromes_jour ch
   on ch.date = c.date and ch.employe_id = c.employe_id;
@@ -148,11 +161,12 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.users (id, nom, role)
+  insert into public.users (id, nom, role, pourcentage_interessement)
   values (
     new.id,
     coalesce(new.raw_user_meta_data ->> 'nom', split_part(new.email, '@', 1)),
-    coalesce(new.raw_user_meta_data ->> 'role', 'employe')
+    coalesce(new.raw_user_meta_data ->> 'role', 'employe'),
+    coalesce((new.raw_user_meta_data ->> 'pourcentage_interessement')::numeric, 0)
   )
   on conflict (id) do nothing;
   return new;

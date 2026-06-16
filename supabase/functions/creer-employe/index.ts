@@ -51,15 +51,20 @@ Deno.serve(async (req) => {
     }
 
     // 3. Créer le compte.
-    const { email, motDePasse, nom, role } = await req.json();
+    const { email, motDePasse, nom, role, pourcentage } = await req.json();
     if (!email || !motDePasse || !nom) {
       return json({ error: 'Champs requis : nom, email, mot de passe' }, 400);
     }
+    const taux = Number(String(pourcentage ?? '0').replace(',', '.')) || 0;
     const { data, error } = await admin.auth.admin.createUser({
       email,
       password: motDePasse,
       email_confirm: true,
-      user_metadata: { nom, role: role === 'admin' ? 'admin' : 'employe' },
+      user_metadata: {
+        nom,
+        role: role === 'admin' ? 'admin' : 'employe',
+        pourcentage_interessement: taux,
+      },
     });
     if (error) return json({ error: error.message }, 400);
 

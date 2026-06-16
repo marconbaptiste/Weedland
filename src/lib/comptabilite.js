@@ -72,6 +72,16 @@ export function encaissements({ cb = 0, especes = 0 }) {
 }
 
 /**
+ * Intéressement = CA × pourcentage / 100, arrondi au centime.
+ * @param {number} ca          CA du jour (euros)
+ * @param {number} pourcentage taux d'intéressement (ex. 5 pour 5 %)
+ */
+export function interessement(ca, pourcentage) {
+  const taux = Number(pourcentage) || 0;
+  return enEuros(Math.round((enCentimes(ca) * taux) / 100));
+}
+
+/**
  * Contrôle de cohérence de la caisse.
  * L'argent réellement entré (CB + espèces) doit égaler ce qui est attendu
  * (ventes_directes + remboursements du jour).
@@ -92,7 +102,7 @@ export function reconciliation({ cb = 0, especes = 0, ventesDirectes = 0, rembou
 /**
  * Résumé complet d'une journée à partir d'une clôture de caisse et des lignes
  * de chromes du jour. Pratique pour l'affichage temps réel du module Caisse.
- * @param {{ventes_directes:number, cb:number, especes:number}} caisse
+ * @param {{ventes_directes:number, cb:number, especes:number, pourcentage_interessement?:number}} caisse
  * @param {Array<{type:string, montant:number}>} lignesChromes
  */
 export function resumeJour(caisse, lignesChromes = []) {
@@ -101,11 +111,13 @@ export function resumeJour(caisse, lignesChromes = []) {
   const ventesDirectes = Number(caisse.ventes_directes) || 0;
   const cb = Number(caisse.cb) || 0;
   const especes = Number(caisse.especes) || 0;
+  const ca = caJour({ ventesDirectes, avances, remboursements });
   return {
     avances,
     remboursements,
-    ca: caJour({ ventesDirectes, avances, remboursements }),
+    ca,
     encaissements: encaissements({ cb, especes }),
     reconciliation: reconciliation({ cb, especes, ventesDirectes, remboursements }),
+    interessement: interessement(ca, caisse.pourcentage_interessement),
   };
 }

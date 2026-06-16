@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
+import { parseMontant } from '../lib/format';
 
 // Module — Gestion des comptes (réservé admin).
 // La création de compte passe par l'Edge Function `creer-employe` (clé
@@ -8,12 +9,21 @@ import { useAuth } from '../auth/AuthProvider';
 export default function Comptes() {
   const { utilisateur } = useAuth();
   const [users, setUsers] = useState([]);
-  const [form, setForm] = useState({ nom: '', email: '', motDePasse: '', role: 'employe' });
+  const [form, setForm] = useState({
+    nom: '',
+    email: '',
+    motDePasse: '',
+    role: 'employe',
+    pourcentage: '',
+  });
   const [statut, setStatut] = useState('');
   const [envoi, setEnvoi] = useState(false);
 
   const charger = useCallback(async () => {
-    const { data } = await supabase.from('users').select('id, nom, role').order('nom');
+    const { data } = await supabase
+      .from('users')
+      .select('id, nom, role, pourcentage_interessement')
+      .order('nom');
     setUsers(data ?? []);
   }, []);
 
@@ -23,6 +33,20 @@ export default function Comptes() {
 
   async function changerRole(id, role) {
     await supabase.from('users').update({ role }).eq('id', id);
+    charger();
+  }
+
+  // Met à jour l'affichage local du taux pendant la saisie.
+  function majPourcentageLocal(id, valeur) {
+    setUsers((liste) =>
+      liste.map((u) => (u.id === id ? { ...u, pourcentage_interessement: valeur } : u)),
+    );
+  }
+
+  // Persiste le taux d'intéressement de l'employé (au blur).
+  async function enregistrerPourcentage(id, valeur) {
+    const taux = parseMontant(valeur);
+    await supabase.from('users').update({ pourcentage_interessement: taux }).eq('id', id);
     charger();
   }
 
@@ -47,7 +71,7 @@ export default function Comptes() {
       setStatut(data.error);
       return;
     }
-    setForm({ nom: '', email: '', motDePasse: '', role: 'employe' });
+    setForm({ nom: '', email: '', motDePasse: '', role: 'employe', pourcentage: '' });
     setStatut('Compte créé ✅');
     charger();
   }
@@ -94,6 +118,16 @@ export default function Comptes() {
             <option value="admin">Admin</option>
           </select>
         </label>
+        <label className="field">
+          <span>% d’intéressement (par défaut)</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder="ex. 5"
+            value={form.pourcentage}
+            onChange={(e) => setForm((f) => ({ ...f, pourcentage: e.target.value }))}
+          />
+        </label>
         <button className="btn btn-primary" type="submit" disabled={envoi}>
           {envoi ? 'Création…' : 'Créer le compte'}
         </button>
@@ -107,6 +141,7 @@ export default function Comptes() {
             <tr>
               <th>Nom</th>
               <th>Rôle</th>
+              <th className="droite">% intéress.</th>
             </tr>
           </thead>
           <tbody>
@@ -123,11 +158,21 @@ export default function Comptes() {
                     </select>
                   )}
                 </td>
+                <td className="droite">
+                  <input
+                    className="champ-pourcentage"
+                    type="text"
+                    inputMode="decimal"
+                    value={u.pourcentage_interessement ?? ''}
+                    onChange={(e) => majPourcentageLocal(u.id, e.target.value)}
+                    onBlur={(e) => enregistrerPourcentage(u.id, e.target.value)}
+                  />
+                </td>
               </tr>
             ))}
             {users.length === 0 && (
               <tr>
-                <td colSpan={2} className="vide">
+                <td colSpan={3} className="vide">
                   Aucun compte.
                 </td>
               </tr>

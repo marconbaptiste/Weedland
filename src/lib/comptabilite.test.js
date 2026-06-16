@@ -9,6 +9,7 @@ import {
   caJour,
   encaissements,
   reconciliation,
+  interessement,
   resumeJour,
 } from './comptabilite.js';
 
@@ -117,6 +118,23 @@ describe('réconciliation de caisse', () => {
   });
 });
 
+describe('intéressement (pourcentage du CA)', () => {
+  it('applique le pourcentage au CA', () => {
+    expect(interessement(200, 5)).toBe(10);
+    expect(interessement(1000, 2.5)).toBe(25);
+  });
+
+  it('vaut 0 sans pourcentage', () => {
+    expect(interessement(200, 0)).toBe(0);
+    expect(interessement(200, undefined)).toBe(0);
+  });
+
+  it('arrondit au centime', () => {
+    // 333,33 € à 3 % = 9,9999 -> 10,00 €
+    expect(interessement(333.33, 3)).toBe(10);
+  });
+});
+
 describe('resumeJour (vue d’ensemble temps réel)', () => {
   it('agrège caisse + chromes du jour', () => {
     const caisse = { ventes_directes: 200, cb: 150, especes: 80 };
@@ -138,5 +156,14 @@ describe('resumeJour (vue d’ensemble temps réel)', () => {
     expect(r.ca).toBe(100);
     expect(r.encaissements).toBe(100);
     expect(r.reconciliation.coherent).toBe(true);
+    expect(r.interessement).toBe(0);
+  });
+
+  it('calcule l’intéressement sur le CA du jour', () => {
+    const caisse = { ventes_directes: 200, cb: 150, especes: 80, pourcentage_interessement: 5 };
+    const chromes = [{ type: 'avance', montant: 50 }, { type: 'remboursement', montant: 30 }];
+    const r = resumeJour(caisse, chromes);
+    expect(r.ca).toBe(220); // 200 + 50 - 30
+    expect(r.interessement).toBe(11); // 220 × 5 %
   });
 });

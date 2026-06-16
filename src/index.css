@@ -361,6 +361,11 @@ hr {
 .droite {
   text-align: right;
 }
+.champ-pourcentage {
+  width: 5rem;
+  text-align: right;
+  padding: 0.4rem 0.5rem;
+}
 .vide {
   color: var(--texte-doux);
   text-align: center;
