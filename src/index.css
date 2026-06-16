@@ -369,6 +369,26 @@ hr {
 .champ-nom {
   padding: 0.4rem 0.5rem;
 }
+.champ-mini {
+  width: 3.6rem;
+  text-align: right;
+  padding: 0.4rem 0.4rem;
+}
+.bloc-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+.tableau-cot {
+  font-size: 0.8rem;
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+details > summary {
+  cursor: pointer;
+}
 
 /* ----- Journée partagée ----- */
 .liste-partage {

@@ -34,6 +34,8 @@ alter table public.paiements_employes  enable row level security;
 alter table public.caisse_partage      enable row level security;
 alter table public.charges             enable row level security;
 alter table public.fournisseurs        enable row level security;
+alter table public.parametres          enable row level security;
+alter table public.fiches_paie         enable row level security;
 
 -- ---------------------------------------------------------------------------
 -- users : chacun voit son profil ; l'admin voit/gère tout.
@@ -178,4 +180,12 @@ create policy charges_admin on public.charges for all to authenticated
 
 drop policy if exists fournisseurs_admin on public.fournisseurs;
 create policy fournisseurs_admin on public.fournisseurs for all to authenticated
+  using (public.est_admin()) with check (public.est_admin());
+
+drop policy if exists parametres_admin on public.parametres;
+create policy parametres_admin on public.parametres for all to authenticated
+  using (public.est_admin()) with check (public.est_admin());
+
+drop policy if exists fiches_paie_admin on public.fiches_paie;
+create policy fiches_paie_admin on public.fiches_paie for all to authenticated
   using (public.est_admin()) with check (public.est_admin());

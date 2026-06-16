@@ -118,6 +118,27 @@ create table if not exists public.fournisseurs (
 );
 create index if not exists idx_fournisseurs_mois on public.fournisseurs (mois);
 
+-- ---------------------------------------------------------------------------
+-- parametres : clé/valeur JSONB (mémorise l'employeur). fiches_paie : bulletins
+-- de paie (contenu en JSONB). Réservés à l'admin.
+-- ---------------------------------------------------------------------------
+create table if not exists public.parametres (
+  cle        text primary key,
+  valeur     jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.fiches_paie (
+  id         uuid primary key default gen_random_uuid(),
+  employe_id uuid not null references public.users (id) on delete restrict,
+  mois       date not null,
+  data       jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (employe_id, mois)
+);
+create index if not exists idx_fiches_paie_employe on public.fiches_paie (employe_id);
+
 -- Index utiles pour les filtres jour / employé.
 create index if not exists idx_caisse_jour_date on public.caisse_jour (date);
 create index if not exists idx_caisse_jour_employe on public.caisse_jour (employe_id);
