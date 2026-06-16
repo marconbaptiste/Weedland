@@ -1,0 +1,4 @@
+# Le dossier supabase/ (SQL + Edge Functions) se déploie via la CLI Supabase,
+# pas par Vercel.
+supabase
+**/*.test.js

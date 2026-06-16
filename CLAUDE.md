@@ -13,7 +13,7 @@ Weedland est une application web de gestion pour un magasin de CBD (vente au com
 - **Front** : React 18 + Vite, responsive mobile-first, thème sombre par défaut, interface 100 % en français.
 - **Back / BDD / Auth** : Supabase (PostgreSQL + Auth + Row Level Security). Pas de backend custom — tout passe par le client `@supabase/supabase-js` et la RLS.
 - **Tests** : Vitest (logique métier en pur Node).
-- **Déploiement** : Vercel.
+- **Déploiement** : Vercel (`vercel.json` : framework Vite + rewrite SPA `/(.*) → /index.html`, indispensable pour React Router). Variables `VITE_SUPABASE_*` à définir dans Vercel. Le dossier `supabase/` n'est pas déployé par Vercel.
 
 ## Commandes
 

@@ -67,3 +67,16 @@ La logique est centralisée et testée dans `src/lib/comptabilite.js`. Voir `CLA
 - **Dashboard** *(admin)* — vue consolidée jour/semaine/mois, filtres, exports CSV/Excel et PDF.
 - **Journal** *(admin)* — flux chronologique de toutes les saisies (caisse, chromes, paiements).
 - **Comptes** *(admin)* — liste des employés, changement de rôle, et création de compte via l'Edge Function `creer-employe`.
+
+## Déploiement (Vercel)
+
+Le projet est prêt pour Vercel (`vercel.json`) : framework Vite détecté, build `npm run build`, sortie `dist`, et une *rewrite* SPA qui renvoie toutes les routes vers `index.html` (indispensable avec React Router, sinon `/chromes` ou `/dashboard` renvoient un 404 au rechargement).
+
+1. Importer le dépôt sur [vercel.com](https://vercel.com) (ou `npx vercel`).
+2. Renseigner les variables d'environnement du projet (Settings → Environment Variables) :
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+3. Déployer. À chaque push, Vercel rebuild automatiquement.
+
+Le dossier `supabase/` (SQL + Edge Functions) n'est **pas** déployé par Vercel : le SQL s'exécute dans l'éditeur Supabase et les functions via `supabase functions deploy`.
+
