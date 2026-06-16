@@ -133,6 +133,16 @@ describe('intéressement (pourcentage du CA)', () => {
     // 333,33 € à 3 % = 9,9999 -> 10,00 €
     expect(interessement(333.33, 3)).toBe(10);
   });
+
+  it('divise la base par le nombre de personnes (journée partagée à parts égales)', () => {
+    // CA 800 €, 2 personnes, 5 % -> (800 / 2) × 5 % = 20 €
+    expect(interessement(800, 5, 2)).toBe(20);
+    // 3 personnes
+    expect(interessement(900, 10, 3)).toBe(30);
+    // nbPersonnes absent/0/1 -> pas de division
+    expect(interessement(200, 5, 1)).toBe(10);
+    expect(interessement(200, 5, 0)).toBe(10);
+  });
 });
 
 describe('resumeJour (vue d’ensemble temps réel)', () => {

@@ -72,13 +72,16 @@ export function encaissements({ cb = 0, especes = 0 }) {
 }
 
 /**
- * Intéressement = CA × pourcentage / 100, arrondi au centime.
+ * Intéressement = (CA ÷ nbPersonnes) × pourcentage / 100, arrondi au centime.
+ * Pour une journée partagée à parts égales, nbPersonnes > 1 divise la base.
  * @param {number} ca          CA du jour (euros)
  * @param {number} pourcentage taux d'intéressement (ex. 5 pour 5 %)
+ * @param {number} nbPersonnes nombre de personnes se partageant la journée (défaut 1)
  */
-export function interessement(ca, pourcentage) {
+export function interessement(ca, pourcentage, nbPersonnes = 1) {
   const taux = Number(pourcentage) || 0;
-  return enEuros(Math.round((enCentimes(ca) * taux) / 100));
+  const n = Math.max(1, Number(nbPersonnes) || 1);
+  return enEuros(Math.round((enCentimes(ca) * taux) / 100 / n));
 }
 
 /**
@@ -102,7 +105,7 @@ export function reconciliation({ cb = 0, especes = 0, ventesDirectes = 0, rembou
 /**
  * Résumé complet d'une journée à partir d'une clôture de caisse et des lignes
  * de chromes du jour. Pratique pour l'affichage temps réel du module Caisse.
- * @param {{ventes_directes:number, cb:number, especes:number, pourcentage_interessement?:number}} caisse
+ * @param {{ventes_directes:number, cb:number, especes:number, pourcentage_interessement?:number, nb_partageurs?:number}} caisse
  * @param {Array<{type:string, montant:number}>} lignesChromes
  */
 export function resumeJour(caisse, lignesChromes = []) {
@@ -118,6 +121,6 @@ export function resumeJour(caisse, lignesChromes = []) {
     ca,
     encaissements: encaissements({ cb, especes }),
     reconciliation: reconciliation({ cb, especes, ventesDirectes, remboursements }),
-    interessement: interessement(ca, caisse.pourcentage_interessement),
+    interessement: interessement(ca, caisse.pourcentage_interessement, caisse.nb_partageurs),
   };
 }

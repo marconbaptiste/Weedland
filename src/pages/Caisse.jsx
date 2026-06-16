@@ -21,40 +21,61 @@ export default function Caisse() {
     commentaire: '',
   });
   const [chromesJour, setChromesJour] = useState([]);
+  const [collegues, setCollegues] = useState([]);
+  // Co-participants sélectionnés : { employe_id, nom, heures }
+  const [partageurs, setPartageurs] = useState([]);
   const [statut, setStatut] = useState('');
   const [enregistrement, setEnregistrement] = useState(false);
 
   const maj = (champ) => (valeur) => setForm((f) => ({ ...f, [champ]: valeur }));
 
-  // Charge la clôture existante + les chromes du jour pour cet employé.
+  // Liste des collègues (hors soi-même) pour le partage de journée.
+  useEffect(() => {
+    supabase
+      .from('v_collegues')
+      .select('id, nom')
+      .order('nom')
+      .then(({ data }) => setCollegues((data ?? []).filter((c) => c.id !== utilisateur.id)));
+  }, [utilisateur.id]);
+
+  // Charge la clôture existante + chromes du jour + co-participants éventuels.
   const charger = useCallback(async () => {
     setStatut('');
-    const [caisse, chromes] = await Promise.all([
-      supabase
-        .from('caisse_jour')
-        .select('*')
-        .eq('employe_id', utilisateur.id)
-        .eq('date', date)
-        .maybeSingle(),
-      supabase
-        .from('chromes')
-        .select('type, montant')
-        .eq('employe_id', utilisateur.id)
-        .eq('date', date),
-    ]);
+    const { data: caisse } = await supabase
+      .from('caisse_jour')
+      .select('*')
+      .eq('employe_id', utilisateur.id)
+      .eq('date', date)
+      .maybeSingle();
 
-    if (caisse.data) {
+    const { data: chromes } = await supabase
+      .from('chromes')
+      .select('type, montant')
+      .eq('employe_id', utilisateur.id)
+      .eq('date', date);
+    setChromesJour(chromes ?? []);
+
+    if (caisse) {
       setForm({
-        ventes_directes: String(caisse.data.ventes_directes),
-        cb: String(caisse.data.cb),
-        especes: String(caisse.data.especes),
-        fond_caisse: String(caisse.data.fond_caisse),
-        heures_travaillees: String(caisse.data.heures_travaillees ?? ''),
-        pourcentage_interessement: String(caisse.data.pourcentage_interessement ?? ''),
-        commentaire: caisse.data.commentaire ?? '',
+        ventes_directes: String(caisse.ventes_directes),
+        cb: String(caisse.cb),
+        especes: String(caisse.especes),
+        fond_caisse: String(caisse.fond_caisse),
+        heures_travaillees: String(caisse.heures_travaillees ?? ''),
+        pourcentage_interessement: String(caisse.pourcentage_interessement ?? ''),
+        commentaire: caisse.commentaire ?? '',
       });
+      const { data: parts } = await supabase
+        .from('caisse_partage')
+        .select('employe_id, heures_travaillees')
+        .eq('caisse_id', caisse.id);
+      setPartageurs(
+        (parts ?? []).map((p) => ({
+          employe_id: p.employe_id,
+          heures: String(p.heures_travaillees ?? ''),
+        })),
+      );
     } else {
-      // Nouvelle clôture : on pré-remplit le taux depuis la fiche employé.
       setForm({
         ventes_directes: '',
         cb: '',
@@ -64,21 +85,38 @@ export default function Caisse() {
         pourcentage_interessement: tauxParDefaut ? String(tauxParDefaut) : '',
         commentaire: '',
       });
+      setPartageurs([]);
     }
-    setChromesJour(chromes.data ?? []);
   }, [utilisateur.id, date, tauxParDefaut]);
 
   useEffect(() => {
     charger();
   }, [charger]);
 
-  // Calculs temps réel (logique CA/chromes/intéressement centralisée).
+  const nbPartageurs = 1 + partageurs.length;
+
+  function basculerCollegue(id) {
+    setPartageurs((liste) =>
+      liste.some((p) => p.employe_id === id)
+        ? liste.filter((p) => p.employe_id !== id)
+        : [...liste, { employe_id: id, heures: '' }],
+    );
+  }
+
+  function majHeuresPartage(id, valeur) {
+    setPartageurs((liste) =>
+      liste.map((p) => (p.employe_id === id ? { ...p, heures: valeur } : p)),
+    );
+  }
+
+  // Calculs temps réel (CA/chromes/intéressement, divisé par le nb de personnes).
   const resume = resumeJour(
     {
       ventes_directes: parseMontant(form.ventes_directes),
       cb: parseMontant(form.cb),
       especes: parseMontant(form.especes),
       pourcentage_interessement: parseMontant(form.pourcentage_interessement),
+      nb_partageurs: nbPartageurs,
     },
     chromesJour,
   );
@@ -87,22 +125,45 @@ export default function Caisse() {
     e.preventDefault();
     setEnregistrement(true);
     setStatut('');
-    const { error } = await supabase.from('caisse_jour').upsert(
-      {
-        employe_id: utilisateur.id,
-        date,
-        ventes_directes: parseMontant(form.ventes_directes),
-        cb: parseMontant(form.cb),
-        especes: parseMontant(form.especes),
-        fond_caisse: parseMontant(form.fond_caisse),
-        heures_travaillees: parseMontant(form.heures_travaillees),
-        pourcentage_interessement: parseMontant(form.pourcentage_interessement),
-        commentaire: form.commentaire || null,
-      },
-      { onConflict: 'employe_id,date' },
-    );
+    const { data: ligne, error } = await supabase
+      .from('caisse_jour')
+      .upsert(
+        {
+          employe_id: utilisateur.id,
+          date,
+          ventes_directes: parseMontant(form.ventes_directes),
+          cb: parseMontant(form.cb),
+          especes: parseMontant(form.especes),
+          fond_caisse: parseMontant(form.fond_caisse),
+          heures_travaillees: parseMontant(form.heures_travaillees),
+          pourcentage_interessement: parseMontant(form.pourcentage_interessement),
+          commentaire: form.commentaire || null,
+        },
+        { onConflict: 'employe_id,date' },
+      )
+      .select()
+      .single();
+
+    if (error || !ligne) {
+      setEnregistrement(false);
+      setStatut('Erreur lors de l’enregistrement.');
+      return;
+    }
+
+    // Remplace les co-participants de cette clôture.
+    await supabase.from('caisse_partage').delete().eq('caisse_id', ligne.id);
+    if (partageurs.length > 0) {
+      await supabase.from('caisse_partage').insert(
+        partageurs.map((p) => ({
+          caisse_id: ligne.id,
+          employe_id: p.employe_id,
+          heures_travaillees: parseMontant(p.heures),
+        })),
+      );
+    }
+
     setEnregistrement(false);
-    setStatut(error ? 'Erreur lors de l’enregistrement.' : 'Clôture enregistrée ✅');
+    setStatut('Clôture enregistrée ✅');
   }
 
   const { reconciliation: reco } = resume;
@@ -155,6 +216,43 @@ export default function Caisse() {
         {statut && <p className="statut">{statut}</p>}
       </form>
 
+      <div className="card">
+        <h2>Journée partagée</h2>
+        <p className="statut">
+          Cochez les collègues présents <strong>en même temps</strong> que vous. L’intéressement
+          sera réparti à parts égales (CA ÷ nombre de personnes). Une seule personne saisit la
+          clôture ; les autres ne créent pas la leur ce jour-là.
+        </p>
+        <ul className="liste-partage">
+          {collegues.map((c) => {
+            const sel = partageurs.find((p) => p.employe_id === c.id);
+            return (
+              <li key={c.id} className="ligne-partage">
+                <label className="case-partage">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(sel)}
+                    onChange={() => basculerCollegue(c.id)}
+                  />
+                  <span>{c.nom}</span>
+                </label>
+                {sel && (
+                  <input
+                    className="champ-pourcentage"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="heures"
+                    value={sel.heures}
+                    onChange={(e) => majHeuresPartage(c.id, e.target.value)}
+                  />
+                )}
+              </li>
+            );
+          })}
+          {collegues.length === 0 && <li className="vide">Aucun autre employé.</li>}
+        </ul>
+      </div>
+
       <div className="card recap">
         <h2>Récapitulatif du jour</h2>
         <div className="recap-ligne">
@@ -184,9 +282,9 @@ export default function Caisse() {
         <hr />
         <div className="recap-ligne">
           <span>
-            Intéressement
+            Votre intéressement
             {parseMontant(form.pourcentage_interessement) > 0 &&
-              ` (${form.pourcentage_interessement} % · ${form.heures_travaillees || 0} h)`}
+              ` (${form.pourcentage_interessement} %${nbPartageurs > 1 ? ` · CA ÷ ${nbPartageurs}` : ''})`}
           </span>
           <strong>{formatEuros(resume.interessement)}</strong>
         </div>

@@ -31,6 +31,7 @@ alter table public.clients             enable row level security;
 alter table public.caisse_jour         enable row level security;
 alter table public.chromes             enable row level security;
 alter table public.paiements_employes  enable row level security;
+alter table public.caisse_partage      enable row level security;
 
 -- ---------------------------------------------------------------------------
 -- users : chacun voit son profil ; l'admin voit/gère tout.
@@ -76,7 +77,12 @@ create policy clients_admin_delete on public.clients for delete to authenticated
 -- ---------------------------------------------------------------------------
 drop policy if exists caisse_select on public.caisse_jour;
 create policy caisse_select on public.caisse_jour for select to authenticated
-  using (employe_id = auth.uid() or public.est_admin());
+  using (
+    employe_id = auth.uid()
+    or public.est_admin()
+    or exists (select 1 from public.caisse_partage p
+               where p.caisse_id = caisse_jour.id and p.employe_id = auth.uid())
+  );
 
 drop policy if exists caisse_insert on public.caisse_jour;
 create policy caisse_insert on public.caisse_jour for insert to authenticated
@@ -131,3 +137,32 @@ create policy paiements_admin_update on public.paiements_employes for update to 
 drop policy if exists paiements_admin_delete on public.paiements_employes;
 create policy paiements_admin_delete on public.paiements_employes for delete to authenticated
   using (public.est_admin());
+
+-- ---------------------------------------------------------------------------
+-- caisse_partage : géré par le propriétaire de la clôture (ou l'admin) ;
+-- visible aussi par le co-participant concerné.
+-- ---------------------------------------------------------------------------
+drop policy if exists partage_select on public.caisse_partage;
+create policy partage_select on public.caisse_partage for select to authenticated
+  using (
+    employe_id = auth.uid()
+    or public.est_admin()
+    or exists (select 1 from public.caisse_jour c
+               where c.id = caisse_id and c.employe_id = auth.uid())
+  );
+
+drop policy if exists partage_insert on public.caisse_partage;
+create policy partage_insert on public.caisse_partage for insert to authenticated
+  with check (
+    public.est_admin()
+    or exists (select 1 from public.caisse_jour c
+               where c.id = caisse_id and c.employe_id = auth.uid())
+  );
+
+drop policy if exists partage_delete on public.caisse_partage;
+create policy partage_delete on public.caisse_partage for delete to authenticated
+  using (
+    public.est_admin()
+    or exists (select 1 from public.caisse_jour c
+               where c.id = caisse_id and c.employe_id = auth.uid())
+  );

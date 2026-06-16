@@ -366,6 +366,35 @@ hr {
   text-align: right;
   padding: 0.4rem 0.5rem;
 }
+
+/* ----- Journée partagée ----- */
+.liste-partage {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.ligne-partage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.case-partage {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+.case-partage input {
+  width: auto;
+}
+.tag-partage {
+  margin-left: 0.4rem;
+  font-size: 0.7rem;
+}
 .vide {
   color: var(--texte-doux);
   text-align: center;

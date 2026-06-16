@@ -12,6 +12,7 @@ export default function Dashboard() {
   const [employeFiltre, setEmployeFiltre] = useState('');
   const [employes, setEmployes] = useState([]);
   const [caRows, setCaRows] = useState([]);
+  const [intRows, setIntRows] = useState([]);
   const [totalPaiements, setTotalPaiements] = useState(0);
 
   const [debut, fin] = intervallePeriode(periode, reference);
@@ -43,6 +44,16 @@ export default function Dashboard() {
     if (employeFiltre) qp = qp.eq('employe_id', employeFiltre);
     const { data: pay } = await qp;
     setTotalPaiements(somme((pay ?? []).map((p) => p.montant)));
+
+    // Intéressement + heures par employé (propriétaires + co-participants).
+    let qi = supabase
+      .from('v_interessement_employe')
+      .select('employe_id, interessement, heures_travaillees')
+      .gte('date', debut)
+      .lte('date', fin);
+    if (employeFiltre) qi = qi.eq('employe_id', employeFiltre);
+    const { data: ir } = await qi;
+    setIntRows(ir ?? []);
   }, [debut, fin, employeFiltre]);
 
   useEffect(() => {
@@ -54,8 +65,9 @@ export default function Dashboard() {
     encaissements: somme(caRows.map((r) => r.encaissements)),
     avances: somme(caRows.map((r) => r.avances)),
     remboursements: somme(caRows.map((r) => r.remboursements)),
-    interessement: somme(caRows.map((r) => r.interessement)),
-    heures: somme(caRows.map((r) => r.heures_travaillees)),
+    // Intéressement et heures incluent les journées partagées (co-participants).
+    interessement: somme(intRows.map((r) => r.interessement)),
+    heures: somme(intRows.map((r) => r.heures_travaillees)),
   };
   const nomEmploye = (id) => employes.find((e) => e.id === id)?.nom ?? '—';
 
