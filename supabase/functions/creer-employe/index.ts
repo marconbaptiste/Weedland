@@ -50,8 +50,21 @@ Deno.serve(async (req) => {
       return json({ error: 'Accès réservé aux administrateurs' }, 403);
     }
 
+    const corps = await req.json();
+
+    // 3 bis. Réinitialisation du mot de passe d'un employé.
+    if (corps.action === 'reset') {
+      const { userId, motDePasse: nouveau } = corps;
+      if (!userId || !nouveau) return json({ error: 'Champs requis : userId, motDePasse' }, 400);
+      const { error: errReset } = await admin.auth.admin.updateUserById(userId, {
+        password: nouveau,
+      });
+      if (errReset) return json({ error: errReset.message }, 400);
+      return json({ ok: true }, 200);
+    }
+
     // 3. Créer le compte.
-    const { email, motDePasse, nom, role, pourcentage } = await req.json();
+    const { email, motDePasse, nom, role, pourcentage } = corps;
     if (!email || !motDePasse || !nom) {
       return json({ error: 'Champs requis : nom, email, mot de passe' }, 400);
     }

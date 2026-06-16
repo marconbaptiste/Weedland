@@ -10,7 +10,7 @@ import ChampMontant from '../components/ChampMontant';
 // RGPD : les clients sont identifiés par un SURNOM uniquement, jamais par leur
 // nom/prénom réel. La description est interne (visible seulement du personnel).
 export default function Chromes() {
-  const { utilisateur } = useAuth();
+  const { utilisateur, estAdmin } = useAuth();
   const [recherche, setRecherche] = useState('');
   const [clients, setClients] = useState([]);
   const [clientSel, setClientSel] = useState(null);
@@ -66,6 +66,12 @@ export default function Chromes() {
         solde: 0,
       });
     }
+  }
+
+  async function supprimerLigne(id) {
+    await supabase.from('chromes').delete().eq('id', id);
+    await ouvrirClient(clientSel);
+    await chargerClients();
   }
 
   async function ajouterLigne(e) {
@@ -205,6 +211,7 @@ export default function Chromes() {
                     <th>Type</th>
                     <th className="droite">Montant</th>
                     <th>Employé</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -216,11 +223,23 @@ export default function Chromes() {
                         {l.type === 'avance' ? '+' : '−'} {formatEuros(l.montant)}
                       </td>
                       <td>{l.users?.nom ?? '—'}</td>
+                      <td>
+                        {(estAdmin || l.employe_id === utilisateur.id) && (
+                          <button
+                            type="button"
+                            className="btn btn-discret"
+                            onClick={() => supprimerLigne(l.id)}
+                            aria-label="Supprimer la ligne"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {lignes.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="vide">
+                      <td colSpan={5} className="vide">
                         Aucune ligne.
                       </td>
                     </tr>

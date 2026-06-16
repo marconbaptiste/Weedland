@@ -42,10 +42,12 @@ const assainir = (v) => String(v ?? '').replace(ESPACES_SPECIALES, ' ');
  * @param {string} contenu.titre
  * @param {string} [contenu.sousTitre]
  * @param {Array<[string, string]>} [contenu.resume]  paires libellé / valeur
- * @param {string[]} contenu.entetes
- * @param {Array<Array<string|number>>} contenu.lignes
+ * @param {string[]} [contenu.entetes]
+ * @param {Array<Array<string|number>>} [contenu.lignes]
+ * @param {Array<{titre?:string, entetes:string[], lignes:Array<Array>}>} [contenu.sections]
+ *        Plusieurs tableaux successifs (sinon on utilise entetes/lignes).
  */
-export function telechargerPDF(nomFichier, { titre, sousTitre, resume = [], entetes, lignes }) {
+export function telechargerPDF(nomFichier, { titre, sousTitre, resume = [], entetes, lignes, sections }) {
   const doc = new jsPDF();
 
   doc.setFontSize(16);
@@ -71,12 +73,21 @@ export function telechargerPDF(nomFichier, { titre, sousTitre, resume = [], ente
     y = doc.lastAutoTable.finalY + 4;
   }
 
-  autoTable(doc, {
-    startY: y,
-    head: [entetes.map(assainir)],
-    body: lignes.map((ligne) => ligne.map(assainir)),
-    styles: { fontSize: 8 },
-    headStyles: { fillColor: [63, 174, 107] },
+  const tableaux = sections ?? (entetes ? [{ entetes, lignes }] : []);
+  tableaux.forEach((s) => {
+    if (s.titre) {
+      doc.setFontSize(11);
+      doc.text(assainir(s.titre), 14, y + 1);
+      y += 6;
+    }
+    autoTable(doc, {
+      startY: y,
+      head: [s.entetes.map(assainir)],
+      body: (s.lignes ?? []).map((ligne) => ligne.map(assainir)),
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [63, 174, 107] },
+    });
+    y = doc.lastAutoTable.finalY + 6;
   });
 
   doc.save(nomFichier);

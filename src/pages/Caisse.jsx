@@ -21,6 +21,7 @@ export default function Caisse() {
     commentaire: '',
   });
   const [chromesJour, setChromesJour] = useState([]);
+  const [caisseId, setCaisseId] = useState(null);
   const [collegues, setCollegues] = useState([]);
   // Co-participants sélectionnés : { employe_id, nom, heures }
   const [partageurs, setPartageurs] = useState([]);
@@ -54,6 +55,7 @@ export default function Caisse() {
       .eq('employe_id', utilisateur.id)
       .eq('date', date);
     setChromesJour(chromes ?? []);
+    setCaisseId(caisse?.id ?? null);
 
     if (caisse) {
       setForm({
@@ -150,6 +152,8 @@ export default function Caisse() {
       return;
     }
 
+    setCaisseId(ligne.id);
+
     // Remplace les co-participants de cette clôture.
     await supabase.from('caisse_partage').delete().eq('caisse_id', ligne.id);
     if (partageurs.length > 0) {
@@ -164,6 +168,28 @@ export default function Caisse() {
 
     setEnregistrement(false);
     setStatut('Clôture enregistrée ✅');
+  }
+
+  async function supprimerCloture() {
+    if (!caisseId) return;
+    if (!window.confirm('Supprimer cette clôture ? Cette action est irréversible.')) return;
+    const { error } = await supabase.from('caisse_jour').delete().eq('id', caisseId);
+    if (error) {
+      setStatut('Suppression impossible.');
+      return;
+    }
+    setCaisseId(null);
+    setPartageurs([]);
+    setForm({
+      ventes_directes: '',
+      cb: '',
+      especes: '',
+      fond_caisse: '',
+      heures_travaillees: '',
+      pourcentage_interessement: tauxParDefaut ? String(tauxParDefaut) : '',
+      commentaire: '',
+    });
+    setStatut('Clôture supprimée.');
   }
 
   const { reconciliation: reco } = resume;
@@ -213,6 +239,11 @@ export default function Caisse() {
         <button className="btn btn-primary" type="submit" disabled={enregistrement}>
           {enregistrement ? 'Enregistrement…' : 'Enregistrer la clôture'}
         </button>
+        {caisseId && (
+          <button type="button" className="btn btn-discret" onClick={supprimerCloture}>
+            Supprimer la clôture
+          </button>
+        )}
         {statut && <p className="statut">{statut}</p>}
       </form>
 

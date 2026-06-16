@@ -97,7 +97,7 @@ create policy caisse_update on public.caisse_jour for update to authenticated
 
 drop policy if exists caisse_delete on public.caisse_jour;
 create policy caisse_delete on public.caisse_jour for delete to authenticated
-  using (public.est_admin());
+  using (employe_id = auth.uid() or public.est_admin());
 
 -- ---------------------------------------------------------------------------
 -- chromes : registre partagé en lecture. Toute saisie est attribuée à

@@ -65,6 +65,31 @@ export default function Comptes() {
     charger();
   }
 
+  async function reinitialiserMdp(id, nom) {
+    const motDePasse = window.prompt(`Nouveau mot de passe pour ${nom} (min. 6 caractères) :`);
+    if (!motDePasse) return;
+    setStatut('');
+    const { data, error } = await supabase.functions.invoke('hyper-api', {
+      body: { action: 'reset', userId: id, motDePasse },
+    });
+    if (error) {
+      let message = 'Erreur (fonction à jour ?).';
+      try {
+        const corps = await error.context.json();
+        if (corps?.error) message = corps.error;
+      } catch {
+        /* message générique */
+      }
+      setStatut(message);
+      return;
+    }
+    if (data?.error) {
+      setStatut(data.error);
+      return;
+    }
+    setStatut(`Mot de passe de ${nom} réinitialisé ✅`);
+  }
+
   async function creer(e) {
     e.preventDefault();
     setEnvoi(true);
@@ -159,6 +184,7 @@ export default function Comptes() {
               <th>Nom</th>
               <th>Rôle</th>
               <th className="droite">% intéress.</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -193,11 +219,20 @@ export default function Comptes() {
                     onBlur={(e) => enregistrerPourcentage(u.id, e.target.value)}
                   />
                 </td>
+                <td>
+                  <button
+                    type="button"
+                    className="btn btn-discret"
+                    onClick={() => reinitialiserMdp(u.id, u.nom)}
+                  >
+                    Réinit. MDP
+                  </button>
+                </td>
               </tr>
             ))}
             {users.length === 0 && (
               <tr>
-                <td colSpan={3} className="vide">
+                <td colSpan={4} className="vide">
                   Aucun compte.
                 </td>
               </tr>

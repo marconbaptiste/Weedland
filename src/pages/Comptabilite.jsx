@@ -9,6 +9,7 @@ import {
   semaineDuMois,
 } from '../lib/dates';
 import { somme } from '../lib/comptabilite';
+import { telechargerPDF } from '../lib/export';
 import ListeMontants from '../components/ListeMontants';
 import { Courbe, Barres, Camembert } from '../components/Graphiques';
 
@@ -111,6 +112,38 @@ export default function Comptabilite() {
   ];
   const totalDepenses = somme([totalCharges, totalFournisseurs]);
 
+  function exporterPDF() {
+    telechargerPDF(`comptabilite-${mois.slice(0, 7)}.pdf`, {
+      titre: 'Weedland — Comptabilité',
+      sousTitre: `${formatDateFr(debut)} → ${formatDateFr(fin)}`,
+      resume: [
+        ['CA du mois', formatEuros(caMois)],
+        ['Encaissements', formatEuros(encaissementsMois)],
+        ['Charges', formatEuros(totalCharges)],
+        ['Fournisseurs', formatEuros(totalFournisseurs)],
+        ['Bénéfice', formatEuros(benefice)],
+        [`CA cumulé ${mois.slice(0, 4)}`, formatEuros(caAnnee)],
+      ],
+      sections: [
+        {
+          titre: 'CA par semaine',
+          entetes: ['Semaine', 'CA'],
+          lignes: semaines.map((s) => [`Semaine ${s.n}`, formatEuros(s.ca)]),
+        },
+        {
+          titre: 'Charges',
+          entetes: ['Libellé', 'Montant'],
+          lignes: charges.map((c) => [c.libelle || '—', formatEuros(parseMontant(c.montant))]),
+        },
+        {
+          titre: 'Fournisseurs',
+          entetes: ['Libellé', 'Montant'],
+          lignes: fournisseurs.map((f) => [f.libelle || '—', formatEuros(parseMontant(f.montant))]),
+        },
+      ],
+    });
+  }
+
   return (
     <div className="page">
       <h1>Comptabilité</h1>
@@ -124,6 +157,9 @@ export default function Comptabilite() {
             onChange={(e) => setMois(`${e.target.value}-01`)}
           />
         </label>
+        <button type="button" className="btn" onClick={exporterPDF}>
+          Export PDF
+        </button>
         <p className="periode-info">
           {formatDateFr(debut)} → {formatDateFr(fin)}
         </p>
