@@ -32,6 +32,8 @@ alter table public.caisse_jour         enable row level security;
 alter table public.chromes             enable row level security;
 alter table public.paiements_employes  enable row level security;
 alter table public.caisse_partage      enable row level security;
+alter table public.charges             enable row level security;
+alter table public.fournisseurs        enable row level security;
 
 -- ---------------------------------------------------------------------------
 -- users : chacun voit son profil ; l'admin voit/gère tout.
@@ -166,3 +168,14 @@ create policy partage_delete on public.caisse_partage for delete to authenticate
     or exists (select 1 from public.caisse_jour c
                where c.id = caisse_id and c.employe_id = auth.uid())
   );
+
+-- ---------------------------------------------------------------------------
+-- charges / fournisseurs : données financières réservées à l'admin.
+-- ---------------------------------------------------------------------------
+drop policy if exists charges_admin on public.charges;
+create policy charges_admin on public.charges for all to authenticated
+  using (public.est_admin()) with check (public.est_admin());
+
+drop policy if exists fournisseurs_admin on public.fournisseurs;
+create policy fournisseurs_admin on public.fournisseurs for all to authenticated
+  using (public.est_admin()) with check (public.est_admin());

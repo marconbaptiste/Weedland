@@ -9,6 +9,7 @@ import Paiements from './pages/Paiements';
 import Dashboard from './pages/Dashboard';
 import Comptes from './pages/Comptes';
 import Journal from './pages/Journal';
+import Comptabilite from './pages/Comptabilite';
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
           {/* Réservé à l'admin */}
           <Route element={<RequireAdmin />}>
             <Route path="dashboard" element={<Dashboard />} />
+            <Route path="comptabilite" element={<Comptabilite />} />
             <Route path="paiements" element={<Paiements />} />
             <Route path="journal" element={<Journal />} />
             <Route path="comptes" element={<Comptes />} />

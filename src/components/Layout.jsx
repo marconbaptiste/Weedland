@@ -33,6 +33,9 @@ export default function Layout() {
               <NavLink to="/dashboard" className={lienActif}>
                 Dashboard
               </NavLink>
+              <NavLink to="/comptabilite" className={lienActif}>
+                Comptabilité
+              </NavLink>
               <NavLink to="/paiements" className={lienActif}>
                 Paiements
               </NavLink>

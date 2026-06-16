@@ -35,3 +35,26 @@ export function intervallePeriode(periode, referenceISO = aujourdhuiISO()) {
   const fin = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
   return [versISO(debut), versISO(fin)];
 }
+
+/** Premier jour du mois (AAAA-MM-01) contenant la date de référence. */
+export function premierDuMois(referenceISO = aujourdhuiISO()) {
+  return `${referenceISO.slice(0, 7)}-01`;
+}
+
+/** Premier jour du mois précédent, à partir d'un premier-du-mois (AAAA-MM-01). */
+export function moisPrecedent(premierISO) {
+  const d = new Date(`${premierISO}T00:00:00`);
+  d.setMonth(d.getMonth() - 1);
+  return versISO(d);
+}
+
+/** Intervalle [1er janvier, 31 décembre] de l'année d'une date AAAA-MM-JJ. */
+export function intervalleAnnee(referenceISO = aujourdhuiISO()) {
+  const annee = referenceISO.slice(0, 4);
+  return [`${annee}-01-01`, `${annee}-12-31`];
+}
+
+/** Numéro de semaine dans le mois (1 à 5) d'après le jour du mois. */
+export function semaineDuMois(dateISO) {
+  return Math.ceil(Number(dateISO.slice(8, 10)) / 7);
+}
