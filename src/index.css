@@ -366,6 +366,9 @@ hr {
   text-align: right;
   padding: 0.4rem 0.5rem;
 }
+.champ-nom {
+  padding: 0.4rem 0.5rem;
+}
 
 /* ----- Journée partagée ----- */
 .liste-partage {

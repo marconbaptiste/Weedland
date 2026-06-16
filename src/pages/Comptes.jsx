@@ -50,6 +50,21 @@ export default function Comptes() {
     charger();
   }
 
+  // Nom : édition locale puis persistance au blur.
+  function majNomLocal(id, valeur) {
+    setUsers((liste) => liste.map((u) => (u.id === id ? { ...u, nom: valeur } : u)));
+  }
+
+  async function enregistrerNom(id, valeur) {
+    const nom = valeur.trim();
+    if (!nom) {
+      charger(); // restaure l'ancien nom si vidé
+      return;
+    }
+    await supabase.from('users').update({ nom }).eq('id', id);
+    charger();
+  }
+
   async function creer(e) {
     e.preventDefault();
     setEnvoi(true);
@@ -147,7 +162,15 @@ export default function Comptes() {
           <tbody>
             {users.map((u) => (
               <tr key={u.id}>
-                <td>{u.nom}</td>
+                <td>
+                  <input
+                    className="champ-nom"
+                    type="text"
+                    value={u.nom ?? ''}
+                    onChange={(e) => majNomLocal(u.id, e.target.value)}
+                    onBlur={(e) => enregistrerNom(u.id, e.target.value)}
+                  />
+                </td>
                 <td>
                   {u.id === utilisateur.id ? (
                     <span className="badge badge-solde">Admin (vous)</span>
