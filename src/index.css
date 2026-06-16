@@ -403,3 +403,57 @@ hr {
   font-size: 1.2rem;
   font-weight: 700;
 }
+
+/* ----- Journal ----- */
+.journal {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.journal-item {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.2rem;
+  border-bottom: 1px solid var(--bordure);
+  font-size: 0.9rem;
+}
+.journal-quand {
+  color: var(--texte-doux);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.journal-cat {
+  font-size: 0.72rem;
+  background: var(--fond-input);
+  color: var(--texte-doux);
+}
+.cat-avance {
+  background: rgba(229, 83, 75, 0.15);
+  color: var(--rouge);
+}
+.cat-remboursement,
+.cat-paiement {
+  background: rgba(63, 174, 107, 0.15);
+  color: var(--vert);
+}
+.journal-texte {
+  min-width: 0;
+}
+.journal-qui {
+  color: var(--texte-doux);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+@media (max-width: 560px) {
+  .journal-item {
+    grid-template-columns: 1fr auto;
+    row-gap: 0.2rem;
+  }
+  .journal-texte {
+    grid-column: 1 / -1;
+  }
+}

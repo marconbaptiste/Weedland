@@ -7,6 +7,8 @@ import Chromes from './pages/Chromes';
 import Historique from './pages/Historique';
 import Paiements from './pages/Paiements';
 import Dashboard from './pages/Dashboard';
+import Comptes from './pages/Comptes';
+import Journal from './pages/Journal';
 
 export default function App() {
   return (
@@ -23,6 +25,8 @@ export default function App() {
           <Route element={<RequireAdmin />}>
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="paiements" element={<Paiements />} />
+            <Route path="journal" element={<Journal />} />
+            <Route path="comptes" element={<Comptes />} />
           </Route>
         </Route>
       </Route>

@@ -28,10 +28,16 @@ npm run dev
    VITE_SUPABASE_URL=...
    VITE_SUPABASE_ANON_KEY=...
    ```
-4. Créer les comptes employés via Supabase Auth. Un profil `users` est créé automatiquement (rôle `employe`). Pour passer un compte en admin :
+4. Créer le premier compte admin via Supabase Auth, puis le promouvoir :
    ```sql
    update public.users set role = 'admin' where id = '<uuid-utilisateur>';
    ```
+   Les comptes suivants se créent ensuite depuis l'app (page **Comptes**).
+5. Déployer l'Edge Function de création de comptes :
+   ```bash
+   supabase functions deploy creer-employe
+   ```
+   (`SUPABASE_URL`, `SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY` sont fournies automatiquement au runtime des functions.)
 
 ## Scripts
 
@@ -59,3 +65,5 @@ La logique est centralisée et testée dans `src/lib/comptabilite.js`. Voir `CLA
 - **Historique** — clôtures de l'employé connecté.
 - **Paiements** *(admin)* — versements aux employés, totaux du mois.
 - **Dashboard** *(admin)* — vue consolidée jour/semaine/mois, filtres, exports CSV/Excel et PDF.
+- **Journal** *(admin)* — flux chronologique de toutes les saisies (caisse, chromes, paiements).
+- **Comptes** *(admin)* — liste des employés, changement de rôle, et création de compte via l'Edge Function `creer-employe`.

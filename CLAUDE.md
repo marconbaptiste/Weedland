@@ -80,7 +80,8 @@ Un « chrome » = une avance (crédit) faite à un client.
 - `src/auth/AuthProvider.jsx` : contexte d'auth. Expose `session`, `utilisateur`, `profil`, `estAdmin`, `chargement`, `connexion()`, `deconnexion()`. Le rôle vient de la table `users`. Utiliser `useAuth()`.
 - `src/App.jsx` : routes. Tout est protégé par `RequireAuth` ; `/dashboard` et `/paiements` sont en plus derrière `RequireAdmin` (voir `src/components/Gardes.jsx`). `/connexion` est la page publique.
 - `src/components/Layout.jsx` : en-tête + nav (liens admin conditionnés par `estAdmin`) + `<Outlet>`.
-- `src/pages/` : un fichier par module — `Caisse.jsx` (clôture journalière), `Chromes.jsx` (avances/remboursements clients), `Historique.jsx` (clôtures de l'employé), `Paiements.jsx` (admin), `Dashboard.jsx` (admin, vue consolidée + export CSV).
+- `src/pages/` : un fichier par module — `Caisse.jsx` (clôture journalière), `Chromes.jsx` (avances/remboursements clients), `Historique.jsx` (clôtures de l'employé), `Paiements.jsx` (admin), `Dashboard.jsx` (admin, vue consolidée + export CSV/PDF), `Journal.jsx` (admin, flux d'activité), `Comptes.jsx` (admin, gestion des comptes).
+- `supabase/functions/creer-employe/` : Edge Function (Deno) qui crée un compte Auth + profil. Vérifie que l'appelant est admin, puis utilise la clé `service_role` (jamais exposée au front). Le front l'appelle via `supabase.functions.invoke('creer-employe', …)`. Déploiement : `supabase functions deploy creer-employe`.
 - `src/lib/` : `comptabilite.js` (logique métier), `format.js` (euros/dates FR + `parseMontant`), `dates.js` (ISO local, intervalles jour/semaine/mois), `export.js` (CSV Excel via `telechargerCSV` + PDF via `telechargerPDF` avec jsPDF/autotable), `supabase.js` (client).
 
 ### Conventions front
@@ -96,4 +97,4 @@ Les clients ne sont **jamais** identifiés par leur nom/prénom réel. La table 
 
 ## État du projet
 
-Fondation complète et fonctionnelle : schéma + RLS, auth par rôle, et les modules Caisse, Chromes, Historique, Paiements, Dashboard (exports **CSV/Excel et PDF**). Restant à faire si demandé : journal/logs dédié au-delà des `created_at` + `employe_id` déjà horodatés sur chaque saisie.
+Application complète : schéma + RLS, auth par rôle, et tous les modules — Caisse, Chromes, Historique, Paiements, Dashboard (exports **CSV/Excel et PDF**), Journal (flux d'activité) et Comptes (gestion + création via Edge Function). Le journal est dérivé des `created_at`/`employe_id` existants (pas de table de logs redondante).
