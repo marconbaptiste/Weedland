@@ -69,7 +69,9 @@ export default function Comptes() {
     e.preventDefault();
     setEnvoi(true);
     setStatut('');
-    const { data, error } = await supabase.functions.invoke('creer-employe', { body: form });
+    // NB : le slug de l'Edge Function déployée est « hyper-api » (le nom affiché
+    // « creer-employe » n'est qu'une étiquette ; le slug ne peut pas changer).
+    const { data, error } = await supabase.functions.invoke('hyper-api', { body: form });
     setEnvoi(false);
     if (error) {
       let message = 'Erreur lors de la création (la fonction creer-employe est-elle déployée ?).';
