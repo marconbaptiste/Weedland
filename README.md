@@ -55,7 +55,7 @@ La logique est centralisée et testée dans `src/lib/comptabilite.js`. Voir `CLA
 ## Modules
 
 - **Caisse** — clôture journalière par employé, calculs et voyant de cohérence en temps réel.
-- **Chromes** — fiche client, avances (+) / remboursements (−), solde et statut en direct.
+- **Chromes** — fiche client par **surnom** uniquement (+ description interne, jamais de nom réel), avances (+) / remboursements (−), solde et statut en direct.
 - **Historique** — clôtures de l'employé connecté.
 - **Paiements** *(admin)* — versements aux employés, totaux du mois.
-- **Dashboard** *(admin)* — vue consolidée jour/semaine/mois, filtres, export CSV/Excel.
+- **Dashboard** *(admin)* — vue consolidée jour/semaine/mois, filtres, exports CSV/Excel et PDF.

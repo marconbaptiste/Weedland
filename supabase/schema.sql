@@ -20,12 +20,15 @@ create table if not exists public.users (
 );
 
 -- ---------------------------------------------------------------------------
--- clients : RGPD — on ne stocke QUE le nom. Le solde est calculé (v_solde_client).
+-- clients : RGPD — on n'enregistre JAMAIS de nom/prénom réel. Uniquement un
+-- surnom et une description interne (visibles seulement par le personnel via
+-- la RLS). Le solde est calculé (v_solde_client).
 -- ---------------------------------------------------------------------------
 create table if not exists public.clients (
-  id         uuid primary key default gen_random_uuid(),
-  nom        text not null,
-  created_at timestamptz not null default now()
+  id          uuid primary key default gen_random_uuid(),
+  surnom      text not null,
+  description text,
+  created_at  timestamptz not null default now()
 );
 
 -- ---------------------------------------------------------------------------
@@ -126,12 +129,13 @@ create or replace view public.v_solde_client
 with (security_invoker = on) as
 select
   cl.id  as client_id,
-  cl.nom,
+  cl.surnom,
+  cl.description,
   coalesce(sum(ch.montant) filter (where ch.type = 'avance'), 0)
     - coalesce(sum(ch.montant) filter (where ch.type = 'remboursement'), 0) as solde
 from public.clients cl
 left join public.chromes ch on ch.client_id = cl.id
-group by cl.id, cl.nom;
+group by cl.id, cl.surnom, cl.description;
 
 -- ============================================================================
 -- DÉCLENCHEUR : crée automatiquement le profil public.users à l'inscription.

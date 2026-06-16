@@ -7,13 +7,17 @@ import { soldeClient, statutSolde } from '../lib/comptabilite';
 import ChampMontant from '../components/ChampMontant';
 
 // Module 2 — Chromes (avances / crédits clients).
+// RGPD : les clients sont identifiés par un SURNOM uniquement, jamais par leur
+// nom/prénom réel. La description est interne (visible seulement du personnel).
 export default function Chromes() {
   const { utilisateur } = useAuth();
   const [recherche, setRecherche] = useState('');
   const [clients, setClients] = useState([]);
   const [clientSel, setClientSel] = useState(null);
   const [lignes, setLignes] = useState([]);
-  const [nouveauNom, setNouveauNom] = useState('');
+
+  const [nouveau, setNouveau] = useState({ surnom: '', description: '' });
+  const [creationOuverte, setCreationOuverte] = useState(false);
 
   const [type, setType] = useState('avance');
   const [montant, setMontant] = useState('');
@@ -22,8 +26,8 @@ export default function Chromes() {
   const chargerClients = useCallback(async () => {
     const { data } = await supabase
       .from('v_solde_client')
-      .select('client_id, nom, solde')
-      .order('nom');
+      .select('client_id, surnom, description, solde')
+      .order('surnom');
     setClients(data ?? []);
   }, []);
 
@@ -44,13 +48,23 @@ export default function Chromes() {
 
   async function creerClient(e) {
     e.preventDefault();
-    const nom = nouveauNom.trim();
-    if (!nom) return;
-    const { data, error } = await supabase.from('clients').insert({ nom }).select().single();
-    setNouveauNom('');
+    const surnom = nouveau.surnom.trim();
+    if (!surnom) return;
+    const { data, error } = await supabase
+      .from('clients')
+      .insert({ surnom, description: nouveau.description.trim() || null })
+      .select()
+      .single();
     if (!error && data) {
+      setNouveau({ surnom: '', description: '' });
+      setCreationOuverte(false);
       await chargerClients();
-      ouvrirClient({ client_id: data.id, nom: data.nom, solde: 0 });
+      ouvrirClient({
+        client_id: data.id,
+        surnom: data.surnom,
+        description: data.description,
+        solde: 0,
+      });
     }
   }
 
@@ -73,7 +87,7 @@ export default function Chromes() {
   }
 
   const clientsFiltres = clients.filter((c) =>
-    c.nom.toLowerCase().includes(recherche.toLowerCase()),
+    (c.surnom ?? '').toLowerCase().includes(recherche.toLowerCase()),
   );
   const solde = clientSel ? soldeClient(lignes) : 0;
 
@@ -85,7 +99,7 @@ export default function Chromes() {
         <div className="card">
           <input
             type="search"
-            placeholder="Rechercher un client…"
+            placeholder="Rechercher un surnom…"
             value={recherche}
             onChange={(e) => setRecherche(e.target.value)}
           />
@@ -96,7 +110,7 @@ export default function Chromes() {
                   className={`ligne-client ${clientSel?.client_id === c.client_id ? 'actif' : ''}`}
                   onClick={() => ouvrirClient(c)}
                 >
-                  <span>{c.nom}</span>
+                  <span>{c.surnom}</span>
                   <span className={Number(c.solde) > 0 ? 'dette' : 'solde-ok'}>
                     {formatEuros(c.solde)}
                   </span>
@@ -105,16 +119,41 @@ export default function Chromes() {
             ))}
             {clientsFiltres.length === 0 && <li className="vide">Aucun client.</li>}
           </ul>
-          <form className="form-inline" onSubmit={creerClient}>
-            <input
-              placeholder="Nouveau client (nom)"
-              value={nouveauNom}
-              onChange={(e) => setNouveauNom(e.target.value)}
-            />
-            <button className="btn" type="submit">
-              Ajouter
+
+          {creationOuverte ? (
+            <form className="form-chrome" onSubmit={creerClient}>
+              <label className="field">
+                <span>Surnom</span>
+                <input
+                  autoFocus
+                  value={nouveau.surnom}
+                  onChange={(e) => setNouveau((n) => ({ ...n, surnom: e.target.value }))}
+                  placeholder="ex. Le Grand"
+                />
+              </label>
+              <label className="field">
+                <span>Description (interne)</span>
+                <textarea
+                  rows={2}
+                  value={nouveau.description}
+                  onChange={(e) => setNouveau((n) => ({ ...n, description: e.target.value }))}
+                  placeholder="Signe distinctif, repère… (jamais de nom réel)"
+                />
+              </label>
+              <div className="form-inline">
+                <button className="btn btn-primary" type="submit">
+                  Créer la fiche
+                </button>
+                <button className="btn" type="button" onClick={() => setCreationOuverte(false)}>
+                  Annuler
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button className="btn" onClick={() => setCreationOuverte(true)}>
+              + Nouvelle fiche client
             </button>
-          </form>
+          )}
         </div>
 
         <div className="card">
@@ -123,11 +162,14 @@ export default function Chromes() {
           ) : (
             <>
               <div className="entete-client">
-                <h2>{clientSel.nom}</h2>
+                <h2>{clientSel.surnom}</h2>
                 <span className={`badge ${solde > 0 ? 'badge-dette' : 'badge-solde'}`}>
                   {statutSolde(solde)} · {formatEuros(solde)}
                 </span>
               </div>
+              {clientSel.description && (
+                <p className="description-client">{clientSel.description}</p>
+              )}
 
               <form className="form-chrome" onSubmit={ajouterLigne}>
                 <div className="bascule">

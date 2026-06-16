@@ -81,7 +81,7 @@ Un « chrome » = une avance (crédit) faite à un client.
 - `src/App.jsx` : routes. Tout est protégé par `RequireAuth` ; `/dashboard` et `/paiements` sont en plus derrière `RequireAdmin` (voir `src/components/Gardes.jsx`). `/connexion` est la page publique.
 - `src/components/Layout.jsx` : en-tête + nav (liens admin conditionnés par `estAdmin`) + `<Outlet>`.
 - `src/pages/` : un fichier par module — `Caisse.jsx` (clôture journalière), `Chromes.jsx` (avances/remboursements clients), `Historique.jsx` (clôtures de l'employé), `Paiements.jsx` (admin), `Dashboard.jsx` (admin, vue consolidée + export CSV).
-- `src/lib/` : `comptabilite.js` (logique métier), `format.js` (euros/dates FR + `parseMontant`), `dates.js` (ISO local, intervalles jour/semaine/mois), `export.js` (CSV compatible Excel), `supabase.js` (client).
+- `src/lib/` : `comptabilite.js` (logique métier), `format.js` (euros/dates FR + `parseMontant`), `dates.js` (ISO local, intervalles jour/semaine/mois), `export.js` (CSV Excel via `telechargerCSV` + PDF via `telechargerPDF` avec jsPDF/autotable), `supabase.js` (client).
 
 ### Conventions front
 
@@ -92,8 +92,8 @@ Un « chrome » = une avance (crédit) faite à un client.
 
 ### RGPD
 
-Pour les clients, ne stocker que le **nom** (et le solde, qui est calculé). Ne pas ajouter de coordonnées/identifiants personnels au modèle `clients`.
+Les clients ne sont **jamais** identifiés par leur nom/prénom réel. La table `clients` ne contient qu'un **`surnom`** et une **`description`** interne (repère pour le personnel, visible uniquement via la RLS), plus le solde calculé. Ne pas ajouter de coordonnées ou d'identifiants personnels réels au modèle `clients`.
 
 ## État du projet
 
-Fondation complète et fonctionnelle : schéma + RLS, auth par rôle, et les modules Caisse, Chromes, Historique, Paiements, Dashboard (avec export CSV). Restant à faire si demandé : export **PDF** du récap journalier (seul le CSV/Excel est implémenté), et journal/logs dédié au-delà des `created_at` + `employe_id` déjà horodatés sur chaque saisie.
+Fondation complète et fonctionnelle : schéma + RLS, auth par rôle, et les modules Caisse, Chromes, Historique, Paiements, Dashboard (exports **CSV/Excel et PDF**). Restant à faire si demandé : journal/logs dédié au-delà des `created_at` + `employe_id` déjà horodatés sur chaque saisie.

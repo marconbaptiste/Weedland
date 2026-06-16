@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { formatEuros, formatDateFr } from '../lib/format';
 import { aujourdhuiISO, intervallePeriode } from '../lib/dates';
 import { somme } from '../lib/comptabilite';
-import { telechargerCSV } from '../lib/export';
+import { telechargerCSV, telechargerPDF } from '../lib/export';
 
 // Module 4 — Dashboard employeur (réservé admin). Vue consolidée jour/semaine/mois.
 export default function Dashboard() {
@@ -69,6 +69,35 @@ export default function Dashboard() {
     telechargerCSV(`recap-${debut}_${fin}.csv`, entetes, lignes);
   }
 
+  function exporterPDF() {
+    const sousTitre =
+      `Période : ${formatDateFr(debut)} → ${formatDateFr(fin)} · ` +
+      (employeFiltre ? nomEmploye(employeFiltre) : 'Tous les employés');
+    const resume = [
+      ['CA', formatEuros(totaux.ca)],
+      ['Encaissements', formatEuros(totaux.encaissements)],
+      ['Avances', formatEuros(totaux.avances)],
+      ['Remboursements', formatEuros(totaux.remboursements)],
+      ['Paiements employés', formatEuros(totalPaiements)],
+    ];
+    const entetes = [
+      'Date', 'Employé', 'Ventes', 'Avances', 'Rembours.',
+      'CA', 'CB', 'Espèces', 'Encaiss.', 'Écart',
+    ];
+    const lignes = caRows.map((r) => [
+      formatDateFr(r.date), nomEmploye(r.employe_id), formatEuros(r.ventes_directes),
+      formatEuros(r.avances), formatEuros(r.remboursements), formatEuros(r.ca_jour),
+      formatEuros(r.cb), formatEuros(r.especes), formatEuros(r.encaissements), formatEuros(r.ecart),
+    ]);
+    telechargerPDF(`recap-${debut}_${fin}.pdf`, {
+      titre: 'Weedland — Récapitulatif',
+      sousTitre,
+      resume,
+      entetes,
+      lignes,
+    });
+  }
+
   return (
     <div className="page">
       <h1>Dashboard</h1>
@@ -96,9 +125,14 @@ export default function Dashboard() {
             ))}
           </select>
         </label>
-        <button className="btn" onClick={exporter}>
-          Exporter (CSV / Excel)
-        </button>
+        <div className="form-inline">
+          <button className="btn" onClick={exporter}>
+            Export CSV / Excel
+          </button>
+          <button className="btn" onClick={exporterPDF}>
+            Export PDF
+          </button>
+        </div>
         <p className="periode-info">
           Période : {formatDateFr(debut)} → {formatDateFr(fin)}
         </p>
