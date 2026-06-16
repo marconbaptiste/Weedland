@@ -26,7 +26,7 @@ export default function Login() {
   return (
     <div className="page-connexion">
       <form className="card carte-connexion" onSubmit={soumettre}>
-        <h1 className="logo-connexion">🌿 Weedland</h1>
+        <h1 className="logo-connexion">Gestion</h1>
         <label className="field">
           <span>Email</span>
           <input

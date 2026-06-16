@@ -10,7 +10,7 @@ export default function Layout() {
     <div className="app">
       <header className="entete">
         <div className="entete-haut">
-          <span className="logo">🌿 Weedland</span>
+          <span className="logo">Gestion</span>
           <div className="entete-droite">
             <span className="profil">{profil?.nom}</span>
             <button className="btn btn-discret" onClick={deconnexion}>

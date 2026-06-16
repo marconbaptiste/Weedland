@@ -5,7 +5,7 @@ export default function ConfigManquante() {
   return (
     <div className="page-connexion">
       <div className="card carte-connexion">
-        <h1 className="logo-connexion">🌿 Weedland</h1>
+        <h1 className="logo-connexion">Gestion</h1>
         <p>Configuration Supabase manquante.</p>
         <p className="statut">
           Définissez <code>VITE_SUPABASE_URL</code> et <code>VITE_SUPABASE_ANON_KEY</code>,
