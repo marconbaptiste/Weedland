@@ -110,7 +110,8 @@ group by date, employe_id;
 --   encaissements  = cb + especes (argent réellement entré)
 --   attendu        = ventes_directes + remboursements (ce qui DOIT être en caisse)
 --   ecart          = encaissements - attendu (0 => cohérent)
-create or replace view public.v_ca_jour
+drop view if exists public.v_ca_jour;
+create view public.v_ca_jour
 with (security_invoker = on) as
 select
   c.id          as caisse_id,

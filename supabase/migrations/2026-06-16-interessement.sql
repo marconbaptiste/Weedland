@@ -19,7 +19,10 @@ alter table public.caisse_jour
   check (pourcentage_interessement >= 0);
 
 -- 3. Recréer la vue v_ca_jour avec heures, taux et intéressement calculé.
-create or replace view public.v_ca_jour
+-- On la supprime d'abord : `create or replace view` interdit d'insérer de
+-- nouvelles colonnes ailleurs qu'à la fin.
+drop view if exists public.v_ca_jour;
+create view public.v_ca_jour
 with (security_invoker = on) as
 select
   c.id          as caisse_id,
