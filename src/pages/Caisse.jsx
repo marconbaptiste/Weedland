@@ -1,9 +1,10 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros } from '../lib/format';
 import { aujourdhuiISO } from '../lib/dates';
 import { resumeJour } from '../lib/comptabilite';
+import { lireBrouillon, ecrireBrouillon, effacerBrouillon } from '../lib/brouillon';
 import ChampMontant from '../components/ChampMontant';
 
 // Module 1 — Clôture de caisse journalière (par employé / par jour).
@@ -28,6 +29,11 @@ export default function Caisse() {
   const [statut, setStatut] = useState('');
   const [enregistrement, setEnregistrement] = useState(false);
 
+  // Brouillon (survit au changement d'onglet) : prêt seulement après chargement,
+  // pour ne pas écraser le brouillon avec l'état vide initial.
+  const cleBrouillon = `brouillon-caisse:${utilisateur.id}:${date}`;
+  const pret = useRef(false);
+
   const maj = (champ) => (valeur) => setForm((f) => ({ ...f, [champ]: valeur }));
 
   // Liste des collègues (hors soi-même) pour le partage de journée.
@@ -40,8 +46,12 @@ export default function Caisse() {
   }, [utilisateur.id]);
 
   // Charge la clôture existante + chromes du jour + co-participants éventuels.
+  // Si un brouillon non enregistré existe pour ce jour, il est restauré en priorité.
   const charger = useCallback(async () => {
     setStatut('');
+    pret.current = false;
+    const cle = `brouillon-caisse:${utilisateur.id}:${date}`;
+
     const { data: caisse } = await supabase
       .from('caisse_jour')
       .select('*')
@@ -57,7 +67,11 @@ export default function Caisse() {
     setChromesJour(chromes ?? []);
     setCaisseId(caisse?.id ?? null);
 
-    if (caisse) {
+    const brouillon = lireBrouillon(cle);
+    if (brouillon?.form) {
+      setForm(brouillon.form);
+      setPartageurs(brouillon.partageurs ?? []);
+    } else if (caisse) {
       setForm({
         ventes_directes: String(caisse.ventes_directes),
         cb: String(caisse.cb),
@@ -89,11 +103,18 @@ export default function Caisse() {
       });
       setPartageurs([]);
     }
+    pret.current = true;
   }, [utilisateur.id, date, tauxParDefaut]);
 
   useEffect(() => {
     charger();
   }, [charger]);
+
+  // Sauvegarde le brouillon à chaque modification (après le chargement initial).
+  useEffect(() => {
+    if (!pret.current) return;
+    ecrireBrouillon(cleBrouillon, { form, partageurs });
+  }, [form, partageurs, cleBrouillon]);
 
   const nbPartageurs = 1 + partageurs.length;
 
@@ -167,6 +188,7 @@ export default function Caisse() {
     }
 
     setEnregistrement(false);
+    effacerBrouillon(cleBrouillon);
     setStatut('Clôture enregistrée ✅');
   }
 

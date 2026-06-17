@@ -97,6 +97,7 @@ Un « chrome » = une avance (crédit) faite à un client.
 - **Format français** : virgule décimale en saisie et à l'affichage. `parseMontant` accepte `"1 234,56 €"`, `"12,50"`, `"12.5"`.
 - **Accès données** : appels Supabase directs dans les composants (pas de couche service séparée). Les agrégats de lecture passent par les vues `v_*`. Filtrer par employé via `employe_id` ; la RLS fait respecter les droits côté serveur (ne pas s'y substituer côté client pour la sécurité).
 - **Minimum de clics** : l'UX est pensée pour le comptoir mobile (formulaires courts, calculs en temps réel).
+- **Brouillons** : les longs formulaires (Caisse, Fiches de paie) conservent leur saisie non enregistrée via `src/lib/brouillon.js` (sessionStorage) pour survivre au changement d'onglet. Garde-fou anti-écrasement : un `useRef(pret)` empêche d'écrire le brouillon avant la fin du chargement initial ; le brouillon est effacé après enregistrement.
 
 ### RGPD
 

@@ -1,10 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { parseMontant, formatEuros, formatNombre } from '../lib/format';
 import { premierDuMois, intervallePeriode } from '../lib/dates';
 import { somme } from '../lib/comptabilite';
 import { calculerBulletin, bulletinVierge } from '../lib/bulletin';
 import { telechargerBulletinPaie } from '../lib/export';
+import { lireBrouillon, ecrireBrouillon, effacerBrouillon } from '../lib/brouillon';
 
 const labelMois = (m) =>
   new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(
@@ -22,6 +23,10 @@ export default function FichesPaie() {
   const [statut, setStatut] = useState('');
   const [activite, setActivite] = useState({ interessement: 0, heures: 0, jours: 0 });
 
+  // Brouillon (survit au changement d'onglet) du bulletin en cours d'édition.
+  const cleBrouillon = `brouillon-fiche:${employeId}:${mois}`;
+  const pret = useRef(false);
+
   // Chargement initial : employés + infos employeur mémorisées.
   useEffect(() => {
     supabase.from('users').select('id, nom').order('nom').then(({ data }) => setEmployes(data ?? []));
@@ -37,6 +42,8 @@ export default function FichesPaie() {
   const charger = useCallback(async () => {
     if (!employeId) return;
     setStatut('');
+    pret.current = false;
+    const cle = `brouillon-fiche:${employeId}:${mois}`;
     const { data } = await supabase
       .from('fiches_paie')
       .select('id, data')
@@ -45,23 +52,33 @@ export default function FichesPaie() {
       .maybeSingle();
     const [dM, fM] = intervallePeriode('mois', mois);
     const periodeDefaut = { date_paiement: '', debut: dM, fin: fM, heures: '', jours: '' };
-    if (data) {
+    setFicheId(data?.id ?? null);
+
+    const brouillon = lireBrouillon(cle);
+    if (brouillon) {
+      setFiche(brouillon);
+    } else if (data) {
       const d = { ...bulletinVierge(), ...data.data };
       d.periode = { ...periodeDefaut, ...(data.data.periode || {}) };
       setFiche(d);
-      setFicheId(data.id);
     } else {
       const vierge = bulletinVierge();
       vierge.salarie.nom = employes.find((e) => e.id === employeId)?.nom ?? '';
       vierge.periode = periodeDefaut;
       setFiche(vierge);
-      setFicheId(null);
     }
+    pret.current = true;
   }, [employeId, mois, employes]);
 
   useEffect(() => {
     charger();
   }, [charger]);
+
+  // Sauvegarde le brouillon à chaque modification (après chargement).
+  useEffect(() => {
+    if (!pret.current || !employeId) return;
+    ecrireBrouillon(cleBrouillon, fiche);
+  }, [fiche, employeId, cleBrouillon]);
 
   // Active = intéressement + heures + jours de l'employé sur la période choisie
   // (inclut clôtures et journées partagées, via v_interessement_employe).
@@ -178,6 +195,7 @@ export default function FichesPaie() {
       .single();
     if (!error && data) {
       setFicheId(data.id);
+      effacerBrouillon(cleBrouillon);
       setStatut('Bulletin enregistré ✅');
     } else {
       setStatut('Erreur lors de l’enregistrement.');
