@@ -11,6 +11,7 @@ import Comptes from './pages/Comptes';
 import Journal from './pages/Journal';
 import Comptabilite from './pages/Comptabilite';
 import FichesPaie from './pages/FichesPaie';
+import Import from './pages/Import';
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
             <Route path="fiches-paie" element={<FichesPaie />} />
             <Route path="journal" element={<Journal />} />
             <Route path="comptes" element={<Comptes />} />
+            <Route path="import" element={<Import />} />
           </Route>
         </Route>
       </Route>

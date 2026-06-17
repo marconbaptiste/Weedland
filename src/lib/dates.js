@@ -58,3 +58,33 @@ export function intervalleAnnee(referenceISO = aujourdhuiISO()) {
 export function semaineDuMois(dateISO) {
   return Math.ceil(Number(dateISO.slice(8, 10)) / 7);
 }
+
+/**
+ * Normalise une date saisie (AAAA-MM-JJ, JJ/MM/AAAA, JJ-MM-AA…) en AAAA-MM-JJ.
+ * Renvoie null si non reconnue.
+ */
+export function normaliserDateISO(valeur) {
+  const s = (valeur ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const m = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
+  if (m) {
+    let [, j, mo, a] = m;
+    if (a.length === 2) a = `20${a}`;
+    return `${a}-${mo.padStart(2, '0')}-${j.padStart(2, '0')}`;
+  }
+  return null;
+}
+
+/** Normalise un mois (AAAA-MM, MM/AAAA, ou une date) en 1er du mois AAAA-MM-01. */
+export function normaliserMoisISO(valeur) {
+  const s = (valeur ?? '').trim();
+  if (/^\d{4}-\d{2}/.test(s)) return `${s.slice(0, 7)}-01`;
+  const m = s.match(/^(\d{1,2})[/\-.](\d{2,4})$/);
+  if (m) {
+    let [, mo, a] = m;
+    if (a.length === 2) a = `20${a}`;
+    return `${a}-${mo.padStart(2, '0')}-01`;
+  }
+  const d = normaliserDateISO(s);
+  return d ? `${d.slice(0, 7)}-01` : null;
+}

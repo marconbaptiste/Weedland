@@ -48,6 +48,9 @@ export default function Layout() {
               <NavLink to="/comptes" className={lienActif}>
                 Comptes
               </NavLink>
+              <NavLink to="/import" className={lienActif}>
+                Import
+              </NavLink>
             </>
           )}
         </nav>
