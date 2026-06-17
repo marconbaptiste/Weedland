@@ -11,6 +11,7 @@ import {
 import { somme } from '../lib/comptabilite';
 import { telechargerPDF } from '../lib/export';
 import { compresserImage } from '../lib/image';
+import { lireMontant } from '../lib/ocr';
 import ListeMontants from '../components/ListeMontants';
 import { Courbe, Barres, Camembert } from '../components/Graphiques';
 
@@ -22,6 +23,7 @@ export default function Comptabilite() {
   const [caAnnee, setCaAnnee] = useState(0);
   const [charges, setCharges] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
+  const [statutOcr, setStatutOcr] = useState('');
 
   const [debut, fin] = intervallePeriode('mois', mois);
 
@@ -87,6 +89,27 @@ export default function Comptabilite() {
     }
     await supabase.from(table).update({ justificatif: chemin }).eq('id', id);
     setteur[table]((prev) => prev.map((x) => (x.id === id ? { ...x, justificatif: chemin } : x)));
+
+    // OCR : lit le montant du ticket et pré-remplit la ligne si elle est vide.
+    const ligne = donnees[table].find((x) => x.id === id);
+    const dejaRempli = ligne && parseMontant(ligne.montant) > 0;
+    setStatutOcr('Lecture du ticket en cours…');
+    try {
+      const { montant } = await lireMontant(blob);
+      if (montant != null) {
+        if (!dejaRempli) {
+          await supabase.from(table).update({ montant }).eq('id', id);
+          setteur[table]((prev) =>
+            prev.map((x) => (x.id === id ? { ...x, montant: String(montant) } : x)),
+          );
+        }
+        setStatutOcr(`Montant détecté : ${formatEuros(montant)} (à vérifier).`);
+      } else {
+        setStatutOcr('Montant non détecté sur la photo — saisis-le à la main.');
+      }
+    } catch {
+      setStatutOcr('Lecture automatique indisponible — saisis le montant à la main.');
+    }
   }
 
   async function voirJustificatif(chemin) {
@@ -279,6 +302,8 @@ export default function Comptabilite() {
         onJustificatif={(id, file) => ajouterJustificatif('fournisseurs', id, file)}
         onVoirJustificatif={voirJustificatif}
       />
+
+      {statutOcr && <p className="statut">📷 {statutOcr}</p>}
 
       <div className="card recap">
         <div className="recap-ligne">
