@@ -169,7 +169,7 @@ export default function Caisse() {
 
     if (error || !ligne) {
       setEnregistrement(false);
-      setStatut('Erreur lors de l’enregistrement.');
+      setStatut(`Erreur : ${error?.message ?? 'enregistrement impossible'}`);
       return;
     }
 
@@ -178,17 +178,24 @@ export default function Caisse() {
     // Remplace les co-participants de cette clôture.
     await supabase.from('caisse_partage').delete().eq('caisse_id', ligne.id);
     if (partageurs.length > 0) {
-      await supabase.from('caisse_partage').insert(
+      const { error: errPartage } = await supabase.from('caisse_partage').insert(
         partageurs.map((p) => ({
           caisse_id: ligne.id,
           employe_id: p.employe_id,
           heures_travaillees: parseMontant(p.heures),
         })),
       );
+      if (errPartage) {
+        setEnregistrement(false);
+        setStatut(`Clôture enregistrée, mais partage en erreur : ${errPartage.message}`);
+        return;
+      }
     }
 
-    setEnregistrement(false);
+    // Recharge depuis la base pour confirmer la persistance et rafraîchir le récap.
     effacerBrouillon(cleBrouillon);
+    await charger();
+    setEnregistrement(false);
     setStatut('Clôture enregistrée ✅');
   }
 
