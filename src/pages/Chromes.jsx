@@ -18,6 +18,7 @@ export default function Chromes() {
   const [promos, setPromos] = useState([]);
   const [clientsAvecPromo, setClientsAvecPromo] = useState(new Set());
   const [nouvellePromo, setNouvellePromo] = useState({ description: '', date: aujourdhuiISO() });
+  const [msgClient, setMsgClient] = useState('');
 
   const [nouveau, setNouveau] = useState({ surnom: '', description: '' });
   const [creationOuverte, setCreationOuverte] = useState(false);
@@ -41,6 +42,7 @@ export default function Chromes() {
 
   const ouvrirClient = useCallback(async (client) => {
     setClientSel(client);
+    setMsgClient('');
     const [{ data: chr }, { data: pr }] = await Promise.all([
       supabase
         .from('chromes')
@@ -79,6 +81,37 @@ export default function Chromes() {
         solde: 0,
       });
     }
+  }
+
+  async function renommerClient() {
+    const surnom = window.prompt('Nouveau surnom du client :', clientSel.surnom);
+    if (surnom == null) return;
+    const s = surnom.trim();
+    if (!s) return;
+    const { error } = await supabase.from('clients').update({ surnom: s }).eq('id', clientSel.client_id);
+    if (error) {
+      setMsgClient(`Renommage impossible : ${error.message}`);
+      return;
+    }
+    setClientSel((c) => ({ ...c, surnom: s }));
+    setMsgClient('Client renommé ✅');
+    chargerClients();
+  }
+
+  async function supprimerClient() {
+    if (!window.confirm(`Supprimer définitivement la fiche « ${clientSel.surnom} » ?`)) return;
+    const { error } = await supabase.from('clients').delete().eq('id', clientSel.client_id);
+    if (error) {
+      setMsgClient(
+        'Suppression impossible : ce client a un historique de chromes. Soldez/supprimez ses lignes d’abord.',
+      );
+      return;
+    }
+    setClientSel(null);
+    setLignes([]);
+    setPromos([]);
+    setMsgClient('');
+    chargerClients();
   }
 
   async function supprimerLigne(id) {
@@ -215,6 +248,17 @@ export default function Chromes() {
               {clientSel.description && (
                 <p className="description-client">{clientSel.description}</p>
               )}
+              {estAdmin && (
+                <div className="form-inline">
+                  <button type="button" className="btn" onClick={renommerClient}>
+                    Renommer
+                  </button>
+                  <button type="button" className="btn btn-discret" onClick={supprimerClient}>
+                    Supprimer la fiche
+                  </button>
+                </div>
+              )}
+              {msgClient && <p className="statut">{msgClient}</p>}
 
               <div className="section-promos">
                 <h3>★ Promos / traitements de faveur</h3>
