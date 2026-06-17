@@ -101,20 +101,22 @@ create index if not exists idx_caisse_partage_employe on public.caisse_partage (
 -- Sert au calcul du bénéfice = CA − charges − fournisseurs.
 -- ---------------------------------------------------------------------------
 create table if not exists public.charges (
-  id         uuid primary key default gen_random_uuid(),
-  libelle    text not null default '',
-  montant    numeric(10, 2) not null default 0,
-  mois       date not null,
-  created_at timestamptz not null default now()
+  id          uuid primary key default gen_random_uuid(),
+  libelle     text not null default '',
+  montant     numeric(10, 2) not null default 0,
+  mois        date not null,
+  justificatif text,            -- chemin dans le bucket Storage "justificatifs"
+  created_at  timestamptz not null default now()
 );
 create index if not exists idx_charges_mois on public.charges (mois);
 
 create table if not exists public.fournisseurs (
-  id         uuid primary key default gen_random_uuid(),
-  libelle    text not null default '',
-  montant    numeric(10, 2) not null default 0,
-  mois       date not null,
-  created_at timestamptz not null default now()
+  id          uuid primary key default gen_random_uuid(),
+  libelle     text not null default '',
+  montant     numeric(10, 2) not null default 0,
+  mois        date not null,
+  justificatif text,            -- chemin dans le bucket Storage "justificatifs"
+  created_at  timestamptz not null default now()
 );
 create index if not exists idx_fournisseurs_mois on public.fournisseurs (mois);
 

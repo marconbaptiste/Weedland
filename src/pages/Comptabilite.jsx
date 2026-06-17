@@ -10,6 +10,7 @@ import {
 } from '../lib/dates';
 import { somme } from '../lib/comptabilite';
 import { telechargerPDF } from '../lib/export';
+import { compresserImage } from '../lib/image';
 import ListeMontants from '../components/ListeMontants';
 import { Courbe, Barres, Camembert } from '../components/Graphiques';
 
@@ -29,8 +30,8 @@ export default function Comptabilite() {
     const [ca, an, ch, fo] = await Promise.all([
       supabase.from('v_ca_jour').select('date, ca_jour, encaissements').gte('date', debut).lte('date', fin),
       supabase.from('v_ca_jour').select('ca_jour').gte('date', anneeDebut).lte('date', anneeFin),
-      supabase.from('charges').select('id, libelle, montant').eq('mois', mois).order('created_at'),
-      supabase.from('fournisseurs').select('id, libelle, montant').eq('mois', mois).order('created_at'),
+      supabase.from('charges').select('id, libelle, montant, justificatif').eq('mois', mois).order('created_at'),
+      supabase.from('fournisseurs').select('id, libelle, montant, justificatif').eq('mois', mois).order('created_at'),
     ]);
     setCaRows(ca.data ?? []);
     setCaAnnee(somme((an.data ?? []).map((r) => r.ca_jour)));
@@ -71,6 +72,32 @@ export default function Comptabilite() {
   async function supprimer(table, id) {
     await supabase.from(table).delete().eq('id', id);
     setteur[table]((prev) => prev.filter((x) => x.id !== id));
+  }
+
+  // Justificatifs (photos de factures/tickets) — bucket privé "justificatifs".
+  async function ajouterJustificatif(table, id, file) {
+    const blob = await compresserImage(file);
+    const chemin = `${table}/${id}.jpg`;
+    const { error: up } = await supabase.storage
+      .from('justificatifs')
+      .upload(chemin, blob, { upsert: true, contentType: blob.type || 'image/jpeg' });
+    if (up) {
+      window.alert(`Échec de l'envoi : ${up.message}`);
+      return;
+    }
+    await supabase.from(table).update({ justificatif: chemin }).eq('id', id);
+    setteur[table]((prev) => prev.map((x) => (x.id === id ? { ...x, justificatif: chemin } : x)));
+  }
+
+  async function voirJustificatif(chemin) {
+    const { data, error } = await supabase.storage
+      .from('justificatifs')
+      .createSignedUrl(chemin, 120);
+    if (error || !data?.signedUrl) {
+      window.alert("Impossible d'ouvrir le justificatif.");
+      return;
+    }
+    window.open(data.signedUrl, '_blank');
   }
 
   async function copierPrecedent(table) {
@@ -236,6 +263,8 @@ export default function Comptabilite() {
         onEnregistrer={(id) => enregistrer('charges', id)}
         onSupprimer={(id) => supprimer('charges', id)}
         onCopierPrecedent={() => copierPrecedent('charges')}
+        onJustificatif={(id, file) => ajouterJustificatif('charges', id, file)}
+        onVoirJustificatif={voirJustificatif}
       />
 
       <ListeMontants
@@ -247,6 +276,8 @@ export default function Comptabilite() {
         onEnregistrer={(id) => enregistrer('fournisseurs', id)}
         onSupprimer={(id) => supprimer('fournisseurs', id)}
         onCopierPrecedent={() => copierPrecedent('fournisseurs')}
+        onJustificatif={(id, file) => ajouterJustificatif('fournisseurs', id, file)}
+        onVoirJustificatif={voirJustificatif}
       />
 
       <div className="card recap">

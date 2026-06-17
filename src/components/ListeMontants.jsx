@@ -1,7 +1,8 @@
 import { formatEuros } from '../lib/format';
 
 // Liste éditable de montants (charges ou fournisseurs) : libellé + montant par
-// ligne, total, ajout/suppression et reprise du mois précédent.
+// ligne, justificatif (photo de facture/ticket), total, ajout/suppression et
+// reprise du mois précédent.
 export default function ListeMontants({
   titre,
   items,
@@ -11,6 +12,8 @@ export default function ListeMontants({
   onEnregistrer,
   onSupprimer,
   onCopierPrecedent,
+  onJustificatif,
+  onVoirJustificatif,
 }) {
   return (
     <div className="card">
@@ -42,6 +45,31 @@ export default function ListeMontants({
                 />
               </td>
               <td>
+                <label className="btn btn-discret" title="Ajouter une facture (photo)">
+                  📷
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) onJustificatif(it.id, f);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                {it.justificatif && (
+                  <button
+                    type="button"
+                    className="btn btn-discret"
+                    onClick={() => onVoirJustificatif(it.justificatif)}
+                  >
+                    Voir
+                  </button>
+                )}
+              </td>
+              <td>
                 <button
                   type="button"
                   className="btn btn-discret"
@@ -55,7 +83,7 @@ export default function ListeMontants({
           ))}
           {items.length === 0 && (
             <tr>
-              <td colSpan={3} className="vide">
+              <td colSpan={4} className="vide">
                 Aucune ligne.
               </td>
             </tr>
