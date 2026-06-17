@@ -8,4 +8,13 @@ const cleAnon = import.meta.env.VITE_SUPABASE_ANON_KEY;
 // qu'un écran blanc (voir main.jsx + ConfigManquante).
 export const configSupabaseOk = Boolean(url && cleAnon);
 
-export const supabase = configSupabaseOk ? createClient(url, cleAnon) : null;
+// `cache: 'no-store'` sur toutes les requêtes : évite que le navigateur ressorte
+// une réponse en cache (données périmées) après un enregistrement, ce qui
+// donnait l'impression que les autres onglets « ne suivaient pas ».
+export const supabase = configSupabaseOk
+  ? createClient(url, cleAnon, {
+      global: {
+        fetch: (input, init = {}) => fetch(input, { ...init, cache: 'no-store' }),
+      },
+    })
+  : null;
