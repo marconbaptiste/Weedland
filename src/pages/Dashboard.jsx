@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [caRows, setCaRows] = useState([]);
   const [intRows, setIntRows] = useState([]);
   const [totalPaiements, setTotalPaiements] = useState(0);
+  const [erreur, setErreur] = useState('');
 
   const [debut, fin] = intervallePeriode(periode, reference);
 
@@ -26,6 +27,7 @@ export default function Dashboard() {
   }, []);
 
   const charger = useCallback(async () => {
+    setErreur('');
     let q = supabase
       .from('v_ca_jour')
       .select('caisse_id, date, employe_id, ventes_directes, cb, especes, avances, remboursements, ca_jour, encaissements, ecart, heures_travaillees, pourcentage_interessement, interessement')
@@ -33,7 +35,8 @@ export default function Dashboard() {
       .lte('date', fin)
       .order('date', { ascending: false });
     if (employeFiltre) q = q.eq('employe_id', employeFiltre);
-    const { data: ca } = await q;
+    const { data: ca, error: errCa } = await q;
+    if (errCa) setErreur(`v_ca_jour : ${errCa.message}`);
     setCaRows(ca ?? []);
 
     let qp = supabase
@@ -52,7 +55,8 @@ export default function Dashboard() {
       .gte('date', debut)
       .lte('date', fin);
     if (employeFiltre) qi = qi.eq('employe_id', employeFiltre);
-    const { data: ir } = await qi;
+    const { data: ir, error: errInt } = await qi;
+    if (errInt) setErreur((e) => `${e ? e + ' · ' : ''}v_interessement_employe : ${errInt.message}`);
     setIntRows(ir ?? []);
   }, [debut, fin, employeFiltre]);
 
@@ -119,6 +123,8 @@ export default function Dashboard() {
   return (
     <div className="page">
       <h1>Dashboard</h1>
+
+      {erreur && <div className="voyant voyant-rouge">Erreur de lecture — {erreur}</div>}
 
       <div className="card filtres">
         <div className="bascule">
