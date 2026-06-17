@@ -236,6 +236,16 @@ create or replace view public.v_collegues as
   select id, nom from public.users;
 grant select on public.v_collegues to authenticated;
 
+-- IMPORTANT : un DROP VIEW supprime les droits SELECT. On (re)donne explicitement
+-- l'accès en lecture aux vues pour les rôles applicatifs (la RLS des tables
+-- sous-jacentes reste appliquée via security_invoker).
+grant select on
+  public.v_chromes_jour,
+  public.v_ca_jour,
+  public.v_interessement_employe,
+  public.v_collegues
+to anon, authenticated;
+
 -- Solde dû par client (Σ avances - Σ remboursements).
 create or replace view public.v_solde_client
 with (security_invoker = on) as
@@ -248,6 +258,7 @@ select
 from public.clients cl
 left join public.chromes ch on ch.client_id = cl.id
 group by cl.id, cl.surnom, cl.description;
+grant select on public.v_solde_client to anon, authenticated;
 
 -- ============================================================================
 -- DÉCLENCHEUR : crée automatiquement le profil public.users à l'inscription.

@@ -125,4 +125,13 @@ join public.users u on u.id = p.employe_id;
 -- Vue NON security_invoker : contourne la RLS de users pour n'exposer que id+nom.
 create or replace view public.v_collegues as
   select id, nom from public.users;
-grant select on public.v_collegues to authenticated;
+
+-- IMPORTANT : le DROP VIEW ci-dessus a retiré les droits SELECT ; on les
+-- redonne explicitement (sinon Dashboard/Comptabilité/Historique lisent « vide »).
+grant select on
+  public.v_chromes_jour,
+  public.v_ca_jour,
+  public.v_solde_client,
+  public.v_interessement_employe,
+  public.v_collegues
+to anon, authenticated;
