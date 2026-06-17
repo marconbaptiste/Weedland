@@ -25,6 +25,24 @@ as $$
   );
 $$;
 
+-- Vérifications croisées caisse_jour <-> caisse_partage en SECURITY DEFINER :
+-- contournent la RLS pour éviter une récursion infinie entre les deux policies.
+create or replace function public.est_coparticipant(p_caisse uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.caisse_partage
+    where caisse_id = p_caisse and employe_id = auth.uid()
+  );
+$$;
+
+create or replace function public.est_proprietaire_caisse(p_caisse uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.caisse_jour
+    where id = p_caisse and employe_id = auth.uid()
+  );
+$$;
+
 -- Activation de la RLS sur toutes les tables.
 alter table public.users               enable row level security;
 alter table public.clients             enable row level security;
@@ -85,8 +103,7 @@ create policy caisse_select on public.caisse_jour for select to authenticated
   using (
     employe_id = auth.uid()
     or public.est_admin()
-    or exists (select 1 from public.caisse_partage p
-               where p.caisse_id = caisse_jour.id and p.employe_id = auth.uid())
+    or public.est_coparticipant(id)
   );
 
 drop policy if exists caisse_insert on public.caisse_jour;
@@ -152,24 +169,21 @@ create policy partage_select on public.caisse_partage for select to authenticate
   using (
     employe_id = auth.uid()
     or public.est_admin()
-    or exists (select 1 from public.caisse_jour c
-               where c.id = caisse_id and c.employe_id = auth.uid())
+    or public.est_proprietaire_caisse(caisse_id)
   );
 
 drop policy if exists partage_insert on public.caisse_partage;
 create policy partage_insert on public.caisse_partage for insert to authenticated
   with check (
     public.est_admin()
-    or exists (select 1 from public.caisse_jour c
-               where c.id = caisse_id and c.employe_id = auth.uid())
+    or public.est_proprietaire_caisse(caisse_id)
   );
 
 drop policy if exists partage_delete on public.caisse_partage;
 create policy partage_delete on public.caisse_partage for delete to authenticated
   using (
     public.est_admin()
-    or exists (select 1 from public.caisse_jour c
-               where c.id = caisse_id and c.employe_id = auth.uid())
+    or public.est_proprietaire_caisse(caisse_id)
   );
 
 -- ---------------------------------------------------------------------------

@@ -19,42 +19,38 @@ create index if not exists idx_caisse_partage_employe on public.caisse_partage (
 
 alter table public.caisse_partage enable row level security;
 
+-- Vérifications croisées en SECURITY DEFINER pour éviter une récursion infinie
+-- entre les policies de caisse_jour et caisse_partage.
+create or replace function public.est_coparticipant(p_caisse uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.caisse_partage
+                 where caisse_id = p_caisse and employe_id = auth.uid());
+$$;
+
+create or replace function public.est_proprietaire_caisse(p_caisse uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.caisse_jour
+                 where id = p_caisse and employe_id = auth.uid());
+$$;
+
 -- Lecture : le propriétaire de la clôture, le co-participant lui-même, ou l'admin.
 drop policy if exists partage_select on public.caisse_partage;
 create policy partage_select on public.caisse_partage for select to authenticated
-  using (
-    employe_id = auth.uid()
-    or public.est_admin()
-    or exists (select 1 from public.caisse_jour c
-               where c.id = caisse_id and c.employe_id = auth.uid())
-  );
+  using (employe_id = auth.uid() or public.est_admin() or public.est_proprietaire_caisse(caisse_id));
 
 -- Écriture : uniquement le propriétaire de la clôture (ou l'admin).
 drop policy if exists partage_insert on public.caisse_partage;
 create policy partage_insert on public.caisse_partage for insert to authenticated
-  with check (
-    public.est_admin()
-    or exists (select 1 from public.caisse_jour c
-               where c.id = caisse_id and c.employe_id = auth.uid())
-  );
+  with check (public.est_admin() or public.est_proprietaire_caisse(caisse_id));
 
 drop policy if exists partage_delete on public.caisse_partage;
 create policy partage_delete on public.caisse_partage for delete to authenticated
-  using (
-    public.est_admin()
-    or exists (select 1 from public.caisse_jour c
-               where c.id = caisse_id and c.employe_id = auth.uid())
-  );
+  using (public.est_admin() or public.est_proprietaire_caisse(caisse_id));
 
 -- 2. Un co-participant doit pouvoir LIRE la clôture qu'il partage (pour son CA).
 drop policy if exists caisse_select on public.caisse_jour;
 create policy caisse_select on public.caisse_jour for select to authenticated
-  using (
-    employe_id = auth.uid()
-    or public.est_admin()
-    or exists (select 1 from public.caisse_partage p
-               where p.caisse_id = caisse_jour.id and p.employe_id = auth.uid())
-  );
+  using (employe_id = auth.uid() or public.est_admin() or public.est_coparticipant(id));
 
 -- 3. v_ca_jour : ajoute nb_partageurs et divise l'intéressement par ce nombre.
 drop view if exists public.v_interessement_employe;
