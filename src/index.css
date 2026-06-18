@@ -44,7 +44,7 @@ h2 {
 
 /* ----- Mise en page ----- */
 .app {
-  max-width: 960px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 .entete {
@@ -600,5 +600,86 @@ details > summary {
   }
   .journal-texte {
     grid-column: 1 / -1;
+  }
+}
+
+/* ============================================================================
+   Optimisations mobile / tablette
+   ============================================================================ */
+
+/* Cibles tactiles confortables partout */
+input,
+select,
+textarea,
+.btn,
+.nav-lien,
+.ligne-client {
+  min-height: 44px;
+}
+.btn-discret {
+  min-height: 36px;
+}
+
+/* Indicateurs : s'adaptent automatiquement au nombre de colonnes possible */
+.cartes-kpi {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+/* Caisse : 2 colonnes sur tablette (saisie à gauche, récap visible à droite) */
+.grille-caisse {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.grille-caisse .col {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .grille-caisse {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    align-items: start;
+  }
+  .grille-caisse .recap {
+    position: sticky;
+    top: 92px;
+  }
+}
+
+/* Tablette et plus : on respire davantage + formulaires sur 2 colonnes */
+@media (min-width: 768px) {
+  .contenu {
+    padding: 1.5rem;
+  }
+  h1 {
+    font-size: 1.7rem;
+  }
+  .nav {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .nav-lien {
+    font-size: 1rem;
+  }
+  .bloc-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem 1rem;
+  }
+  .recap-valeur {
+    font-size: 1.5rem;
+  }
+}
+
+/* Téléphone : les tableaux défilent horizontalement au lieu de déborder */
+@media (max-width: 640px) {
+  .tableau {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
   }
 }

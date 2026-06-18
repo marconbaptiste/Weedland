@@ -232,7 +232,9 @@ export default function Caisse() {
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </label>
 
-      <form className="card" onSubmit={enregistrer}>
+      <div className="grille-caisse">
+        <div className="col">
+          <form className="card" onSubmit={enregistrer}>
         <ChampMontant label="Ventes directes" valeur={form.ventes_directes} onChange={maj('ventes_directes')} autoFocus />
         <ChampMontant label="Encaissements CB" valeur={form.cb} onChange={maj('cb')} />
         <ChampMontant label="Espèces (Moro)" valeur={form.especes} onChange={maj('especes')} />
@@ -312,7 +314,9 @@ export default function Caisse() {
           {collegues.length === 0 && <li className="vide">Aucun autre employé.</li>}
         </ul>
       </div>
+        </div>
 
+        <div className="col">
       <div className="card recap">
         <h2>Récapitulatif du jour</h2>
         <div className="recap-ligne">
@@ -347,6 +351,8 @@ export default function Caisse() {
               ` (${form.pourcentage_interessement} %${nbPartageurs > 1 ? ` · CA ÷ ${nbPartageurs}` : ''})`}
           </span>
           <strong>{formatEuros(resume.interessement)}</strong>
+        </div>
+      </div>
         </div>
       </div>
     </div>
