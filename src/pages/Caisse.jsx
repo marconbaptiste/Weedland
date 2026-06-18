@@ -2,14 +2,14 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros } from '../lib/format';
-import { aujourdhuiISO } from '../lib/dates';
-import { resumeJour } from '../lib/comptabilite';
+import { aujourdhuiISO, intervallePeriode, intervalleAnnee } from '../lib/dates';
+import { resumeJour, somme } from '../lib/comptabilite';
 import { lireBrouillon, ecrireBrouillon, effacerBrouillon } from '../lib/brouillon';
 import ChampMontant from '../components/ChampMontant';
 
 // Module 1 — Clôture de caisse journalière (par employé / par jour).
 export default function Caisse() {
-  const { utilisateur, profil } = useAuth();
+  const { utilisateur, profil, estAdmin } = useAuth();
   const tauxParDefaut = profil?.pourcentage_interessement ?? 0;
   const [date, setDate] = useState(aujourdhuiISO());
   const [form, setForm] = useState({
@@ -28,6 +28,7 @@ export default function Caisse() {
   const [partageurs, setPartageurs] = useState([]);
   const [statut, setStatut] = useState('');
   const [enregistrement, setEnregistrement] = useState(false);
+  const [stats, setStats] = useState({ caMois: 0, intMois: 0, caAnnee: 0, intAnnee: 0 });
 
   // Brouillon (survit au changement d'onglet) : prêt seulement après chargement,
   // pour ne pas écraser le brouillon avec l'état vide initial.
@@ -44,6 +45,30 @@ export default function Caisse() {
       .order('nom')
       .then(({ data }) => setCollegues((data ?? []).filter((c) => c.id !== utilisateur.id)));
   }, [utilisateur.id]);
+
+  // Statistiques personnelles (CA + intéressement, mois et année en cours).
+  const chargerStats = useCallback(async () => {
+    const [aDeb, aFin] = intervalleAnnee();
+    const [mDeb, mFin] = intervallePeriode('mois');
+    const { data } = await supabase
+      .from('v_interessement_employe')
+      .select('date, est_proprietaire, ca_jour, interessement')
+      .eq('employe_id', utilisateur.id)
+      .gte('date', aDeb)
+      .lte('date', aFin);
+    const lignes = data ?? [];
+    const dansMois = (d) => d >= mDeb && d <= mFin;
+    setStats({
+      caMois: somme(lignes.filter((l) => l.est_proprietaire && dansMois(l.date)).map((l) => l.ca_jour)),
+      intMois: somme(lignes.filter((l) => dansMois(l.date)).map((l) => l.interessement)),
+      caAnnee: somme(lignes.filter((l) => l.est_proprietaire).map((l) => l.ca_jour)),
+      intAnnee: somme(lignes.map((l) => l.interessement)),
+    });
+  }, [utilisateur.id]);
+
+  useEffect(() => {
+    chargerStats();
+  }, [chargerStats]);
 
   // Charge la clôture existante + chromes du jour + co-participants éventuels.
   // Si un brouillon non enregistré existe pour ce jour, il est restauré en priorité.
@@ -195,6 +220,7 @@ export default function Caisse() {
     // Recharge depuis la base pour confirmer la persistance et rafraîchir le récap.
     effacerBrouillon(cleBrouillon);
     await charger();
+    await chargerStats();
     setEnregistrement(false);
     setStatut('Clôture enregistrée ✅');
   }
@@ -219,6 +245,7 @@ export default function Caisse() {
       commentaire: '',
     });
     setStatut('Clôture supprimée.');
+    chargerStats();
   }
 
   const { reconciliation: reco } = resume;
@@ -226,6 +253,31 @@ export default function Caisse() {
   return (
     <div className="page">
       <h1>Clôture de caisse</h1>
+
+      <div className="card">
+        <div className="histo-tete">
+          <strong>{profil?.nom}</strong>
+          <span className="badge badge-solde">{estAdmin ? 'Admin' : 'Employé'}</span>
+        </div>
+        <div className="cartes-kpi">
+          <div className="kpi">
+            <span className="kpi-label">CA du mois</span>
+            <span className="kpi-valeur">{formatEuros(stats.caMois)}</span>
+          </div>
+          <div className="kpi">
+            <span className="kpi-label">Intéressement du mois</span>
+            <span className="kpi-valeur">{formatEuros(stats.intMois)}</span>
+          </div>
+          <div className="kpi">
+            <span className="kpi-label">CA de l’année</span>
+            <span className="kpi-valeur">{formatEuros(stats.caAnnee)}</span>
+          </div>
+          <div className="kpi">
+            <span className="kpi-label">Intéressement de l’année</span>
+            <span className="kpi-valeur">{formatEuros(stats.intAnnee)}</span>
+          </div>
+        </div>
+      </div>
 
       <label className="field">
         <span>Date</span>
