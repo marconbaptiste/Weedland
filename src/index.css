@@ -456,6 +456,38 @@ details > summary {
   font-size: 0.7rem;
 }
 
+/* ----- Historique (fiches admin) ----- */
+.histo-tete {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.histo-date {
+  color: var(--texte-doux);
+}
+.histo-grille {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1rem;
+  margin-top: 0.5rem;
+}
+.histo-bloc {
+  margin-top: 0.6rem;
+  border-top: 1px solid var(--bordure);
+  padding-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.histo-titre {
+  color: var(--texte-doux);
+  font-size: 0.85rem;
+}
+.histo-chrome {
+  display: flex;
+  justify-content: space-between;
+}
+
 /* ----- Graphiques ----- */
 .graph {
   width: 100%;
