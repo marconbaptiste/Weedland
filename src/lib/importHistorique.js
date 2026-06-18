@@ -1,6 +1,6 @@
 // Analyse d'un export de tableur (un CSV par tableau) et dispatch automatique
 // vers caisse / charges / fournisseurs. Fonctions pures (testées).
-import { parseCSV, cleEntete } from './csv';
+import { parseCSV, parseCSVObjets, cleEntete } from './csv';
 import { normaliserDateISO, moisFrancaisVersISO } from './dates';
 import { parseMontant } from './format';
 
@@ -80,4 +80,29 @@ export function analyserFichiers(fichiers) {
     }
   }
   return res;
+}
+
+/**
+ * Analyse un CSV détaillé de chromes (colonnes : date, client, type,
+ * montant_eur…). Renvoie des lignes prêtes à insérer.
+ * - type contenant « rembours » -> remboursement, sinon avance (dette/chrome/
+ *   manquement/encaissement oublié = le client doit / argent manquant).
+ * - ignore les lignes sans date/client valides, montant <= 0, ou « non spécifié »
+ *   (perte de caisse, pas un client).
+ * @returns {Array<{date:string, surnom:string, type:string, montant:number}>}
+ */
+export function analyserChromes(texte) {
+  const objets = parseCSVObjets(texte);
+  const out = [];
+  for (const o of objets) {
+    const date = normaliserDateISO(o.date);
+    const surnom = (o.client ?? '').trim();
+    if (!date || !surnom) continue;
+    if (/non\s*sp[ée]cifi/i.test(surnom)) continue;
+    const montant = parseMontant(o.montant_eur ?? o.montant ?? '0');
+    if (montant <= 0) continue;
+    const type = /rembours/i.test(o.type ?? '') ? 'remboursement' : 'avance';
+    out.push({ date, surnom, type, montant });
+  }
+  return out;
 }

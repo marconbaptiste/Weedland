@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifier, analyserFichiers } from './importHistorique.js';
+import { classifier, analyserFichiers, analyserChromes } from './importHistorique.js';
 import { parseCSV } from './csv.js';
 
 const REVENUS = `Date;CA;CB;Moro
@@ -50,5 +50,22 @@ describe('analyserFichiers', () => {
 
     // Le tableau hebdo est ignoré
     expect(r.ignores).toContain('Mars 2026-Mars.csv');
+  });
+});
+
+describe('analyserChromes', () => {
+  const CSV = `date,client,type,montant_eur,produit,note
+2026-06-08,Adam,Dette,359,,consolide
+2026-06-11,Costaud (pote de Redouane),Manquement,5.4,"Candy 3,77g + preroll","Paye 67€ au lieu de 72,80€"
+2026-06-05,Non specifie,Encaissement oublie,33,,perte caisse
+2026-06-13,Mel,Remboursement,20,,`;
+
+  it('mappe les types et ignore « Non spécifié »', () => {
+    const r = analyserChromes(CSV);
+    expect(r).toHaveLength(3); // Non specifie exclu
+    expect(r).toContainEqual({ date: '2026-06-08', surnom: 'Adam', type: 'avance', montant: 359 });
+    // montant avec virgule décimale dans un champ, séparateur ailleurs
+    expect(r).toContainEqual({ date: '2026-06-11', surnom: 'Costaud (pote de Redouane)', type: 'avance', montant: 5.4 });
+    expect(r).toContainEqual({ date: '2026-06-13', surnom: 'Mel', type: 'remboursement', montant: 20 });
   });
 });
