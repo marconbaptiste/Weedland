@@ -1,5 +1,20 @@
 // Utilitaires de dates (heure locale, format ISO court AAAA-MM-JJ).
 
+const sansAccent = (x) => (x ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+// Mois français (sans accents) -> numéro sur 2 chiffres.
+export const MOIS_FR = {
+  janvier: '01', fevrier: '02', mars: '03', avril: '04', mai: '05', juin: '06',
+  juillet: '07', aout: '08', septembre: '09', octobre: '10', novembre: '11', decembre: '12',
+};
+
+/** Convertit un libellé « Mars 2026 » (n'importe où dans la chaîne) en AAAA-MM-01. */
+export function moisFrancaisVersISO(texte) {
+  const t = sansAccent(texte).toLowerCase();
+  const m = t.match(/(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})/);
+  return m ? `${m[2]}-${MOIS_FR[m[1]]}-01` : null;
+}
+
 /** Date du jour en AAAA-MM-JJ (heure locale, sans décalage UTC). */
 export function aujourdhuiISO() {
   return versISO(new Date());
@@ -60,8 +75,8 @@ export function semaineDuMois(dateISO) {
 }
 
 /**
- * Normalise une date saisie (AAAA-MM-JJ, JJ/MM/AAAA, JJ-MM-AA…) en AAAA-MM-JJ.
- * Renvoie null si non reconnue.
+ * Normalise une date saisie (AAAA-MM-JJ, JJ/MM/AAAA, JJ-MM-AA, « 1 mars 2026 »…)
+ * en AAAA-MM-JJ. Renvoie null si non reconnue.
  */
 export function normaliserDateISO(valeur) {
   const s = (valeur ?? '').trim();
@@ -71,6 +86,12 @@ export function normaliserDateISO(valeur) {
     let [, j, mo, a] = m;
     if (a.length === 2) a = `20${a}`;
     return `${a}-${mo.padStart(2, '0')}-${j.padStart(2, '0')}`;
+  }
+  // Date en toutes lettres : « 1 mars 2026 », « 09 août 2026 »
+  const f = s.match(/^(\d{1,2})\s+([^\s\d]+)\s+(\d{4})$/);
+  if (f) {
+    const mois = MOIS_FR[sansAccent(f[2]).toLowerCase()];
+    if (mois) return `${f[3]}-${mois}-${f[1].padStart(2, '0')}`;
   }
   return null;
 }
