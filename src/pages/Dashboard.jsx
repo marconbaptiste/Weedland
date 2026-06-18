@@ -128,9 +128,14 @@ export default function Dashboard() {
 
       <div className="card filtres">
         <div className="bascule">
-          {['jour', 'semaine', 'mois'].map((p) => (
+          {[
+            ['jour', 'Jour'],
+            ['semaine', 'Semaine'],
+            ['mois', 'Mois'],
+            ['annee', 'Année'],
+          ].map(([p, libelle]) => (
             <button key={p} className={periode === p ? 'actif' : ''} onClick={() => setPeriode(p)}>
-              {p[0].toUpperCase() + p.slice(1)}
+              {libelle}
             </button>
           ))}
         </div>

@@ -45,6 +45,10 @@ export function intervallePeriode(periode, referenceISO = aujourdhuiISO()) {
     fin.setDate(debut.getDate() + 6);
     return [versISO(debut), versISO(fin)];
   }
+  if (periode === 'annee') {
+    const a = referenceISO.slice(0, 4);
+    return [`${a}-01-01`, `${a}-12-31`];
+  }
   // mois
   const debut = new Date(ref.getFullYear(), ref.getMonth(), 1);
   const fin = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
