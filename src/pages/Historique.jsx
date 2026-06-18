@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
-import { formatEuros, formatNombre, formatDateFr } from '../lib/format';
+import { parseMontant, formatEuros, formatNombre, formatDateFr } from '../lib/format';
 import { premierDuMois, intervallePeriode } from '../lib/dates';
+import ChampMontant from '../components/ChampMontant';
 
 // Module Historique.
 // - Admin : historique GÉNÉRAL (toutes les clôtures, tous les employés) en
@@ -28,6 +29,8 @@ export default function Historique() {
   const [closures, setClosures] = useState([]);
   const [noms, setNoms] = useState({});
   const [chromes, setChromes] = useState({}); // clé `employe|date` -> {avances, remboursements}
+  const [editId, setEditId] = useState(null);
+  const [editForm, setEditForm] = useState({ ventes_directes: '', cb: '', especes: '', fond_caisse: '' });
 
   const chargerAdmin = useCallback(async () => {
     const [debut, fin] = intervallePeriode('mois', mois);
@@ -103,6 +106,39 @@ export default function Historique() {
     );
   }
 
+  // --- Admin : édition d'une clôture ---
+  function ouvrirEdition(c) {
+    setEditId(c.caisse_id);
+    setEditForm({
+      ventes_directes: String(c.ventes_directes),
+      cb: String(c.cb),
+      especes: String(c.especes),
+      fond_caisse: String(c.fond_caisse),
+    });
+  }
+  const majEdit = (champ) => (v) => setEditForm((f) => ({ ...f, [champ]: v }));
+
+  async function enregistrerEdition(id) {
+    await supabase
+      .from('caisse_jour')
+      .update({
+        ventes_directes: parseMontant(editForm.ventes_directes),
+        cb: parseMontant(editForm.cb),
+        especes: parseMontant(editForm.especes),
+        fond_caisse: parseMontant(editForm.fond_caisse),
+      })
+      .eq('id', id);
+    setEditId(null);
+    chargerAdmin();
+  }
+
+  async function supprimerCloture(id) {
+    if (!window.confirm('Supprimer cette clôture ? Action irréversible.')) return;
+    await supabase.from('caisse_jour').delete().eq('id', id);
+    setEditId(null);
+    chargerAdmin();
+  }
+
   // --- Admin : fiches par clôture ---
   return (
     <div className="page">
@@ -118,45 +154,66 @@ export default function Historique() {
 
       {closures.map((c) => {
         const det = chromes[`${c.employe_id}|${c.date}`] || { avances: [], remboursements: [] };
+        const enEdition = editId === c.caisse_id;
         return (
           <div key={c.caisse_id} className="card histo">
             <div className="histo-tete">
               <strong>{noms[c.employe_id] ?? '—'}</strong>
               <span className="histo-date">{formatDateFr(c.date)}</span>
             </div>
-            <div className="histo-grille">
-              <span>CA</span><strong>{formatEuros(c.ca_jour)}</strong>
-              <span>CB</span><span>{formatEuros(c.cb)}</span>
-              <span>Espèces (Moro)</span><span>{formatEuros(c.especes)}</span>
-              <span>Fond de caisse</span><span>{formatEuros(c.fond_caisse)}</span>
-            </div>
 
-            {det.avances.length > 0 && (
-              <div className="histo-bloc">
-                <span className="histo-titre">Chromes — avances</span>
-                {det.avances.map((a, i) => (
-                  <div key={i} className="histo-chrome">
-                    <span>{a.surnom}</span>
-                    <span className="dette">+ {formatEuros(a.montant)}</span>
-                  </div>
-                ))}
+            {enEdition ? (
+              <div className="bloc-form">
+                <ChampMontant label="Ventes directes" valeur={editForm.ventes_directes} onChange={majEdit('ventes_directes')} />
+                <ChampMontant label="Encaissements CB" valeur={editForm.cb} onChange={majEdit('cb')} />
+                <ChampMontant label="Espèces (Moro)" valeur={editForm.especes} onChange={majEdit('especes')} />
+                <ChampMontant label="Fond de caisse" valeur={editForm.fond_caisse} onChange={majEdit('fond_caisse')} />
+                <div className="form-inline">
+                  <button className="btn btn-primary" onClick={() => enregistrerEdition(c.caisse_id)}>Enregistrer</button>
+                  <button className="btn" onClick={() => setEditId(null)}>Annuler</button>
+                  <button className="btn btn-discret" onClick={() => supprimerCloture(c.caisse_id)}>Supprimer</button>
+                </div>
+                <p className="statut">Les avances/remboursements se corrigent dans l’onglet Chromes.</p>
               </div>
-            )}
+            ) : (
+              <>
+                <div className="histo-grille">
+                  <span>CA</span><strong>{formatEuros(c.ca_jour)}</strong>
+                  <span>CB</span><span>{formatEuros(c.cb)}</span>
+                  <span>Espèces (Moro)</span><span>{formatEuros(c.especes)}</span>
+                  <span>Fond de caisse</span><span>{formatEuros(c.fond_caisse)}</span>
+                </div>
 
-            {det.remboursements.length > 0 && (
-              <div className="histo-bloc">
-                <span className="histo-titre">Chromes — remboursements</span>
-                {det.remboursements.map((r, i) => (
-                  <div key={i} className="histo-chrome">
-                    <span>{r.surnom}</span>
-                    <span className="solde-ok">− {formatEuros(r.montant)}</span>
+                {det.avances.length > 0 && (
+                  <div className="histo-bloc">
+                    <span className="histo-titre">Chromes — avances</span>
+                    {det.avances.map((a, i) => (
+                      <div key={i} className="histo-chrome">
+                        <span>{a.surnom}</span>
+                        <span className="dette">+ {formatEuros(a.montant)}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                )}
 
-            {Number(c.ecart) !== 0 && (
-              <div className="voyant voyant-rouge">Écart de caisse : {formatEuros(c.ecart)}</div>
+                {det.remboursements.length > 0 && (
+                  <div className="histo-bloc">
+                    <span className="histo-titre">Chromes — remboursements</span>
+                    {det.remboursements.map((r, i) => (
+                      <div key={i} className="histo-chrome">
+                        <span>{r.surnom}</span>
+                        <span className="solde-ok">− {formatEuros(r.montant)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {Number(c.ecart) !== 0 && (
+                  <div className="voyant voyant-rouge">Écart de caisse : {formatEuros(c.ecart)}</div>
+                )}
+
+                <button className="btn btn-discret" onClick={() => ouvrirEdition(c)}>Modifier</button>
+              </>
             )}
           </div>
         );
