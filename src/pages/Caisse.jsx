@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros } from '../lib/format';
 import { aujourdhuiISO, intervallePeriode, intervalleAnnee } from '../lib/dates';
-import { resumeJour, somme } from '../lib/comptabilite';
+import { resumeJour, somme, interessement } from '../lib/comptabilite';
 import { lireBrouillon, ecrireBrouillon, effacerBrouillon } from '../lib/brouillon';
 import ChampMontant from '../components/ChampMontant';
 
@@ -28,13 +28,19 @@ export default function Caisse() {
   const [statut, setStatut] = useState('');
   const [enregistrement, setEnregistrement] = useState(false);
   const [stats, setStats] = useState({ caMois: 0, intMois: 0, caAnnee: 0, intAnnee: 0 });
+  // CA « tel que déclaré » d'une clôture existante (avant toute modification).
+  const [ventesDeclarees, setVentesDeclarees] = useState(null);
+  const [modifie, setModifie] = useState(false);
 
   // Brouillon (survit au changement d'onglet) : prêt seulement après chargement,
   // pour ne pas écraser le brouillon avec l'état vide initial.
   const cleBrouillon = `brouillon-caisse:${utilisateur.id}:${date}`;
   const pret = useRef(false);
 
-  const maj = (champ) => (valeur) => setForm((f) => ({ ...f, [champ]: valeur }));
+  const maj = (champ) => (valeur) => {
+    setModifie(true);
+    setForm((f) => ({ ...f, [champ]: valeur }));
+  };
 
   // Liste des collègues (hors soi-même) pour le partage de journée.
   useEffect(() => {
@@ -92,9 +98,11 @@ export default function Caisse() {
     setCaisseId(caisse?.id ?? null);
 
     const brouillon = lireBrouillon(cle);
+    setVentesDeclarees(caisse ? caisse.ventes_directes : null);
     if (brouillon?.form) {
       setForm(brouillon.form);
       setPartageurs(brouillon.partageurs ?? []);
+      setModifie(true); // brouillon = saisie en cours, on recalcule
     } else if (caisse) {
       setForm({
         cb: String(caisse.cb),
@@ -104,6 +112,7 @@ export default function Caisse() {
         pourcentage_interessement: String(caisse.pourcentage_interessement ?? ''),
         commentaire: caisse.commentaire ?? '',
       });
+      setModifie(false); // clôture existante affichée telle que déclarée
       const { data: parts } = await supabase
         .from('caisse_partage')
         .select('employe_id, heures_travaillees')
@@ -124,6 +133,7 @@ export default function Caisse() {
         commentaire: '',
       });
       setPartageurs([]);
+      setModifie(false);
     }
     pret.current = true;
   }, [utilisateur.id, date, tauxParDefaut]);
@@ -168,6 +178,16 @@ export default function Caisse() {
     },
     chromesJour,
   );
+
+  // Clôture existante non modifiée -> on affiche le CA tel qu'il a été déclaré
+  // (et non recalculé). Dès qu'on édite un champ, on repasse au calcul auto.
+  const afficherDeclare = Boolean(caisseId) && !modifie && ventesDeclarees != null;
+  const caAffiche = afficherDeclare
+    ? somme([ventesDeclarees, resume.avances, -resume.remboursements])
+    : resume.ca;
+  const intAffiche = afficherDeclare
+    ? interessement(caAffiche, parseMontant(form.pourcentage_interessement), nbPartageurs)
+    : resume.interessement;
 
   async function enregistrer(e) {
     e.preventDefault();
@@ -378,8 +398,8 @@ export default function Caisse() {
         <hr />
         <div className="recap-paire">
           <div className="recap-bloc">
-            <span className="recap-label">CA du jour</span>
-            <span className="recap-valeur">{formatEuros(resume.ca)}</span>
+            <span className="recap-label">CA du jour{afficherDeclare ? ' (déclaré)' : ''}</span>
+            <span className="recap-valeur">{formatEuros(caAffiche)}</span>
           </div>
           <div className="recap-bloc">
             <span className="recap-label">Encaissements</span>
@@ -394,7 +414,7 @@ export default function Caisse() {
             {parseMontant(form.pourcentage_interessement) > 0 &&
               ` (${form.pourcentage_interessement} %${nbPartageurs > 1 ? ` · CA ÷ ${nbPartageurs}` : ''})`}
           </span>
-          <strong>{formatEuros(resume.interessement)}</strong>
+          <strong>{formatEuros(intAffiche)}</strong>
         </div>
       </div>
         </div>
