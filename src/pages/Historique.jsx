@@ -30,7 +30,7 @@ export default function Historique() {
   const [noms, setNoms] = useState({});
   const [chromes, setChromes] = useState({}); // clé `employe|date` -> {avances, remboursements}
   const [editId, setEditId] = useState(null);
-  const [editForm, setEditForm] = useState({ ventes_directes: '', cb: '', especes: '', fond_caisse: '' });
+  const [editForm, setEditForm] = useState({ cb: '', especes: '', fond_caisse: '' });
 
   const chargerAdmin = useCallback(async () => {
     const [debut, fin] = intervallePeriode('mois', mois);
@@ -75,7 +75,6 @@ export default function Historique() {
                 <th>Date</th>
                 <th className="droite">CA</th>
                 <th className="droite">Encaissements</th>
-                <th className="droite">Écart</th>
                 <th className="droite">Heures</th>
                 <th className="droite">Intéress.</th>
               </tr>
@@ -89,15 +88,12 @@ export default function Historique() {
                   </td>
                   <td className="droite">{l.est_proprietaire ? formatEuros(l.ca_jour) : '—'}</td>
                   <td className="droite">{l.est_proprietaire ? formatEuros(l.encaissements) : '—'}</td>
-                  <td className={`droite ${l.est_proprietaire && Number(l.ecart) !== 0 ? 'dette' : 'solde-ok'}`}>
-                    {l.est_proprietaire ? formatEuros(l.ecart) : '—'}
-                  </td>
                   <td className="droite">{formatNombre(l.heures_travaillees)}</td>
                   <td className="droite">{formatEuros(l.interessement)}</td>
                 </tr>
               ))}
               {perso.length === 0 && (
-                <tr><td colSpan={6} className="vide">Aucune clôture enregistrée.</td></tr>
+                <tr><td colSpan={5} className="vide">Aucune clôture enregistrée.</td></tr>
               )}
             </tbody>
           </table>
@@ -110,7 +106,6 @@ export default function Historique() {
   function ouvrirEdition(c) {
     setEditId(c.caisse_id);
     setEditForm({
-      ventes_directes: String(c.ventes_directes),
       cb: String(c.cb),
       especes: String(c.especes),
       fond_caisse: String(c.fond_caisse),
@@ -119,10 +114,11 @@ export default function Historique() {
   const majEdit = (champ) => (v) => setEditForm((f) => ({ ...f, [champ]: v }));
 
   async function enregistrerEdition(id) {
+    // CA recalculé automatiquement : ventes_directes = CB + espèces.
     await supabase
       .from('caisse_jour')
       .update({
-        ventes_directes: parseMontant(editForm.ventes_directes),
+        ventes_directes: parseMontant(editForm.cb) + parseMontant(editForm.especes),
         cb: parseMontant(editForm.cb),
         especes: parseMontant(editForm.especes),
         fond_caisse: parseMontant(editForm.fond_caisse),
@@ -164,7 +160,6 @@ export default function Historique() {
 
             {enEdition ? (
               <div className="bloc-form">
-                <ChampMontant label="Ventes directes" valeur={editForm.ventes_directes} onChange={majEdit('ventes_directes')} />
                 <ChampMontant label="Encaissements CB" valeur={editForm.cb} onChange={majEdit('cb')} />
                 <ChampMontant label="Espèces (Moro)" valeur={editForm.especes} onChange={majEdit('especes')} />
                 <ChampMontant label="Fond de caisse" valeur={editForm.fond_caisse} onChange={majEdit('fond_caisse')} />
@@ -206,10 +201,6 @@ export default function Historique() {
                       </div>
                     ))}
                   </div>
-                )}
-
-                {Number(c.ecart) !== 0 && (
-                  <div className="voyant voyant-rouge">Écart de caisse : {formatEuros(c.ecart)}</div>
                 )}
 
                 <button className="btn btn-discret" onClick={() => ouvrirEdition(c)}>Modifier</button>

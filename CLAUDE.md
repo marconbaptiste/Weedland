@@ -65,10 +65,10 @@ Toute la règle métier sensible est centralisée dans **`src/lib/comptabilite.j
 
 Un « chrome » = une avance (crédit) faite à un client.
 
-- **CA du jour** = `ventes_directes + Σ avances du jour − Σ remboursements du jour`
-- **Encaissements du jour** = `CB + espèces` (argent réellement entré ; le champ « Moro » de l'UI = espèces)
-- **Solde client** = `Σ avances − Σ remboursements` (statut « Dette en cours » si > 0, sinon « Soldé »)
-- **Contrôle de cohérence de caisse** : `(CB + espèces)` doit égaler `(ventes_directes + remboursements du jour)`. Voyant vert si écart = 0, rouge + écart chiffré sinon. Raison : une avance gonfle le CA mais **n'entre pas en caisse** ; un remboursement entre en caisse.
+- **CA du jour** = `CB + espèces + Σ avances du jour − Σ remboursements du jour`. À la saisie, l'employé entre **CB**, **espèces (Moro)** et les chromes ; le CA est **calculé automatiquement** (pas de champ « ventes directes » manuel). En base, `caisse_jour.ventes_directes` est stocké = `CB + espèces`, donc la vue `v_ca_jour` (`ca_jour = ventes_directes + avances − remboursements`) reste correcte sans changement de schéma.
+- **Encaissements du jour** = `CB + espèces` (argent réellement entré ; le champ « Moro » de l'UI = espèces).
+- **Solde client** = `Σ avances − Σ remboursements` (statut « Dette en cours » si > 0, sinon « Soldé »).
+- **Pas de contrôle d'écart de caisse** : retiré à la demande du client (le CA découle directement de la caisse + chromes). `v_ca_jour.ecart`/`encaissements_attendus` et `reconciliation()` existent encore mais ne sont plus affichés.
 
 **CA ≠ Encaissements dès qu'il y a des chromes** — les deux chiffres sont toujours affichés séparément, jamais confondus.
 

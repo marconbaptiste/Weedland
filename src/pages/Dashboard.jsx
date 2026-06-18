@@ -82,12 +82,12 @@ export default function Dashboard() {
 
   function exporter() {
     const entetes = [
-      'Date', 'Employé', 'Ventes directes', 'Avances', 'Remboursements',
-      'CA', 'CB', 'Espèces', 'Encaissements', 'Écart', 'Heures', '% intéress.', 'Intéressement',
+      'Date', 'Employé', 'Avances', 'Remboursements',
+      'CA', 'CB', 'Espèces', 'Encaissements', 'Heures', '% intéress.', 'Intéressement',
     ];
     const lignes = caRows.map((r) => [
-      r.date, nomEmploye(r.employe_id), r.ventes_directes, r.avances,
-      r.remboursements, r.ca_jour, r.cb, r.especes, r.encaissements, r.ecart,
+      r.date, nomEmploye(r.employe_id), r.avances,
+      r.remboursements, r.ca_jour, r.cb, r.especes, r.encaissements,
       r.heures_travaillees, r.pourcentage_interessement, r.interessement,
     ]);
     telechargerCSV(`recap-${debut}_${fin}.csv`, entetes, lignes);
@@ -108,12 +108,12 @@ export default function Dashboard() {
     ];
     const entetes = [
       'Date', 'Employé', 'CA', 'Encaiss.', 'Avances', 'Rembours.',
-      'Écart', 'Heures', '%', 'Intéress.',
+      'Heures', '%', 'Intéress.',
     ];
     const lignes = caRows.map((r) => [
       formatDateFr(r.date), nomEmploye(r.employe_id), formatEuros(r.ca_jour),
       formatEuros(r.encaissements), formatEuros(r.avances), formatEuros(r.remboursements),
-      formatEuros(r.ecart), formatNombre(r.heures_travaillees),
+      formatNombre(r.heures_travaillees),
       `${r.pourcentage_interessement} %`, formatEuros(r.interessement),
     ]);
     telechargerPDF(`recap-${debut}_${fin}.pdf`, {
@@ -228,7 +228,6 @@ export default function Dashboard() {
               <th className="droite">Encaissements</th>
               <th className="droite">Avances</th>
               <th className="droite">Rembours.</th>
-              <th className="droite">Écart</th>
               <th className="droite">Heures</th>
               <th className="droite">Intéress.</th>
             </tr>
@@ -242,16 +241,13 @@ export default function Dashboard() {
                 <td className="droite">{formatEuros(r.encaissements)}</td>
                 <td className="droite">{formatEuros(r.avances)}</td>
                 <td className="droite">{formatEuros(r.remboursements)}</td>
-                <td className={`droite ${Number(r.ecart) === 0 ? 'solde-ok' : 'dette'}`}>
-                  {formatEuros(r.ecart)}
-                </td>
                 <td className="droite">{formatNombre(r.heures_travaillees)}</td>
                 <td className="droite">{formatEuros(r.interessement)}</td>
               </tr>
             ))}
             {caRows.length === 0 && (
               <tr>
-                <td colSpan={9} className="vide">
+                <td colSpan={8} className="vide">
                   Aucune donnée sur la période.
                 </td>
               </tr>

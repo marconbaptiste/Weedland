@@ -13,7 +13,6 @@ export default function Caisse() {
   const tauxParDefaut = profil?.pourcentage_interessement ?? 0;
   const [date, setDate] = useState(aujourdhuiISO());
   const [form, setForm] = useState({
-    ventes_directes: '',
     cb: '',
     especes: '',
     fond_caisse: '',
@@ -98,7 +97,6 @@ export default function Caisse() {
       setPartageurs(brouillon.partageurs ?? []);
     } else if (caisse) {
       setForm({
-        ventes_directes: String(caisse.ventes_directes),
         cb: String(caisse.cb),
         especes: String(caisse.especes),
         fond_caisse: String(caisse.fond_caisse),
@@ -118,7 +116,6 @@ export default function Caisse() {
       );
     } else {
       setForm({
-        ventes_directes: '',
         cb: '',
         especes: '',
         fond_caisse: '',
@@ -157,12 +154,15 @@ export default function Caisse() {
     );
   }
 
-  // Calculs temps réel (CA/chromes/intéressement, divisé par le nb de personnes).
+  // Calculs temps réel. CA du jour = CB + espèces + avances − remboursements.
+  // (« ventes directes » = encaissé sur place = CB + espèces.)
+  const cbNum = parseMontant(form.cb);
+  const especesNum = parseMontant(form.especes);
   const resume = resumeJour(
     {
-      ventes_directes: parseMontant(form.ventes_directes),
-      cb: parseMontant(form.cb),
-      especes: parseMontant(form.especes),
+      ventes_directes: cbNum + especesNum,
+      cb: cbNum,
+      especes: especesNum,
       pourcentage_interessement: parseMontant(form.pourcentage_interessement),
       nb_partageurs: nbPartageurs,
     },
@@ -179,7 +179,7 @@ export default function Caisse() {
         {
           employe_id: utilisateur.id,
           date,
-          ventes_directes: parseMontant(form.ventes_directes),
+          ventes_directes: parseMontant(form.cb) + parseMontant(form.especes),
           cb: parseMontant(form.cb),
           especes: parseMontant(form.especes),
           fond_caisse: parseMontant(form.fond_caisse),
@@ -236,7 +236,6 @@ export default function Caisse() {
     setCaisseId(null);
     setPartageurs([]);
     setForm({
-      ventes_directes: '',
       cb: '',
       especes: '',
       fond_caisse: '',
@@ -247,8 +246,6 @@ export default function Caisse() {
     setStatut('Clôture supprimée.');
     chargerStats();
   }
-
-  const { reconciliation: reco } = resume;
 
   return (
     <div className="page">
@@ -287,8 +284,7 @@ export default function Caisse() {
       <div className="grille-caisse">
         <div className="col">
           <form className="card" onSubmit={enregistrer}>
-        <ChampMontant label="Ventes directes" valeur={form.ventes_directes} onChange={maj('ventes_directes')} autoFocus />
-        <ChampMontant label="Encaissements CB" valeur={form.cb} onChange={maj('cb')} />
+        <ChampMontant label="Encaissements CB" valeur={form.cb} onChange={maj('cb')} autoFocus />
         <ChampMontant label="Espèces (Moro)" valeur={form.especes} onChange={maj('especes')} />
         <ChampMontant label="Fond de caisse" valeur={form.fond_caisse} onChange={maj('fond_caisse')} />
         <label className="field">
@@ -390,11 +386,7 @@ export default function Caisse() {
             <span className="recap-valeur">{formatEuros(resume.encaissements)}</span>
           </div>
         </div>
-        <div className={`voyant ${reco.coherent ? 'voyant-vert' : 'voyant-rouge'}`}>
-          {reco.coherent
-            ? '● Caisse cohérente'
-            : `● Écart de caisse : ${formatEuros(reco.ecart)} (attendu ${formatEuros(reco.attendu)})`}
-        </div>
+        <p className="statut">CA = CB + espèces + avances − remboursements.</p>
         <hr />
         <div className="recap-ligne">
           <span>
