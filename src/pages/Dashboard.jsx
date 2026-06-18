@@ -9,6 +9,10 @@ import { telechargerCSV, telechargerPDF } from '../lib/export';
 export default function Dashboard() {
   const [periode, setPeriode] = useState('jour');
   const [reference, setReference] = useState(aujourdhuiISO());
+  const [perso, setPerso] = useState(() => {
+    const [d, f] = intervallePeriode('mois');
+    return { debut: d, fin: f };
+  });
   const [employeFiltre, setEmployeFiltre] = useState('');
   const [employes, setEmployes] = useState([]);
   const [caRows, setCaRows] = useState([]);
@@ -16,7 +20,8 @@ export default function Dashboard() {
   const [totalPaiements, setTotalPaiements] = useState(0);
   const [erreur, setErreur] = useState('');
 
-  const [debut, fin] = intervallePeriode(periode, reference);
+  const [debut, fin] =
+    periode === 'perso' ? [perso.debut, perso.fin] : intervallePeriode(periode, reference);
 
   useEffect(() => {
     supabase
@@ -133,16 +138,30 @@ export default function Dashboard() {
             ['semaine', 'Semaine'],
             ['mois', 'Mois'],
             ['annee', 'Année'],
+            ['perso', 'Période'],
           ].map(([p, libelle]) => (
             <button key={p} className={periode === p ? 'actif' : ''} onClick={() => setPeriode(p)}>
               {libelle}
             </button>
           ))}
         </div>
-        <label className="field">
-          <span>Date de référence</span>
-          <input type="date" value={reference} onChange={(e) => setReference(e.target.value)} />
-        </label>
+        {periode === 'perso' ? (
+          <div className="form-inline">
+            <label className="field">
+              <span>Du</span>
+              <input type="date" value={perso.debut} onChange={(e) => setPerso((p) => ({ ...p, debut: e.target.value }))} />
+            </label>
+            <label className="field">
+              <span>Au</span>
+              <input type="date" value={perso.fin} onChange={(e) => setPerso((p) => ({ ...p, fin: e.target.value }))} />
+            </label>
+          </div>
+        ) : (
+          <label className="field">
+            <span>Date de référence</span>
+            <input type="date" value={reference} onChange={(e) => setReference(e.target.value)} />
+          </label>
+        )}
         <label className="field">
           <span>Employé</span>
           <select value={employeFiltre} onChange={(e) => setEmployeFiltre(e.target.value)}>
