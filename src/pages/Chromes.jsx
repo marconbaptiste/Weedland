@@ -27,6 +27,10 @@ export default function Chromes() {
   const [montant, setMontant] = useState('');
   const [date, setDate] = useState(aujourdhuiISO());
 
+  // Édition en ligne d'une ligne de chrome (admin ou auteur).
+  const [editChrome, setEditChrome] = useState(null); // id
+  const [editChromeForm, setEditChromeForm] = useState({ type: 'avance', montant: '', date: '' });
+
   const chargerClients = useCallback(async () => {
     const [{ data }, { data: pr }] = await Promise.all([
       supabase.from('v_solde_client').select('client_id, surnom, description, solde').order('surnom'),
@@ -115,9 +119,29 @@ export default function Chromes() {
   }
 
   async function supprimerLigne(id) {
+    if (!window.confirm('Supprimer cette ligne ?')) return;
     await supabase.from('chromes').delete().eq('id', id);
     await ouvrirClient(clientSel);
     await chargerClients();
+  }
+
+  function commencerEditChrome(l) {
+    setEditChrome(l.id);
+    setEditChromeForm({ type: l.type, montant: String(l.montant), date: l.date });
+  }
+
+  async function enregistrerEditChrome(id) {
+    const valeur = parseMontant(editChromeForm.montant);
+    if (valeur <= 0) return;
+    const { error } = await supabase
+      .from('chromes')
+      .update({ type: editChromeForm.type, montant: valeur, date: editChromeForm.date })
+      .eq('id', id);
+    if (!error) {
+      setEditChrome(null);
+      await ouvrirClient(clientSel);
+      await chargerClients();
+    }
   }
 
   async function creerPromo(e) {
@@ -337,28 +361,84 @@ export default function Chromes() {
                   </tr>
                 </thead>
                 <tbody>
-                  {lignes.map((l) => (
-                    <tr key={l.id}>
-                      <td>{formatDateFr(l.date)}</td>
-                      <td>{l.type === 'avance' ? 'Avance' : 'Remboursement'}</td>
-                      <td className={`droite ${l.type === 'avance' ? 'dette' : 'solde-ok'}`}>
-                        {l.type === 'avance' ? '+' : '−'} {formatEuros(l.montant)}
-                      </td>
-                      <td>{l.users?.nom ?? '—'}</td>
-                      <td>
-                        {(estAdmin || l.employe_id === utilisateur.id) && (
+                  {lignes.map((l) =>
+                    editChrome === l.id ? (
+                      <tr key={l.id}>
+                        <td>
+                          <input
+                            type="date"
+                            value={editChromeForm.date}
+                            onChange={(e) => setEditChromeForm((f) => ({ ...f, date: e.target.value }))}
+                          />
+                        </td>
+                        <td>
+                          <select
+                            value={editChromeForm.type}
+                            onChange={(e) => setEditChromeForm((f) => ({ ...f, type: e.target.value }))}
+                          >
+                            <option value="avance">Avance</option>
+                            <option value="remboursement">Remboursement</option>
+                          </select>
+                        </td>
+                        <td className="droite">
+                          <input
+                            className="champ-pourcentage"
+                            type="text"
+                            inputMode="decimal"
+                            value={editChromeForm.montant}
+                            onChange={(e) => setEditChromeForm((f) => ({ ...f, montant: e.target.value }))}
+                          />
+                        </td>
+                        <td>{l.users?.nom ?? '—'}</td>
+                        <td className="actions-cellule">
                           <button
                             type="button"
                             className="btn btn-discret"
-                            onClick={() => supprimerLigne(l.id)}
-                            aria-label="Supprimer la ligne"
+                            onClick={() => enregistrerEditChrome(l.id)}
                           >
-                            ✕
+                            Enregistrer
                           </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                          <button
+                            type="button"
+                            className="btn btn-discret"
+                            onClick={() => setEditChrome(null)}
+                          >
+                            Annuler
+                          </button>
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr key={l.id}>
+                        <td>{formatDateFr(l.date)}</td>
+                        <td>{l.type === 'avance' ? 'Avance' : 'Remboursement'}</td>
+                        <td className={`droite ${l.type === 'avance' ? 'dette' : 'solde-ok'}`}>
+                          {l.type === 'avance' ? '+' : '−'} {formatEuros(l.montant)}
+                        </td>
+                        <td>{l.users?.nom ?? '—'}</td>
+                        <td className="actions-cellule">
+                          {(estAdmin || l.employe_id === utilisateur.id) && (
+                            <>
+                              <button
+                                type="button"
+                                className="btn btn-discret"
+                                onClick={() => commencerEditChrome(l)}
+                              >
+                                Modifier
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-discret"
+                                onClick={() => supprimerLigne(l.id)}
+                                aria-label="Supprimer la ligne"
+                              >
+                                ✕
+                              </button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ),
+                  )}
                   {lignes.length === 0 && (
                     <tr>
                       <td colSpan={5} className="vide">
