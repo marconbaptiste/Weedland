@@ -30,7 +30,8 @@ export default function Historique() {
   const [noms, setNoms] = useState({});
   const [chromes, setChromes] = useState({}); // clé `employe|date` -> {avances, remboursements}
   const [editId, setEditId] = useState(null);
-  const [editForm, setEditForm] = useState({ cb: '', especes: '', fond_caisse: '' });
+  const [editForm, setEditForm] = useState({ cb: '', especes: '', fond_caisse: '', employe_id: '' });
+  const [editMsg, setEditMsg] = useState('');
 
   const chargerAdmin = useCallback(async () => {
     const [debut, fin] = intervallePeriode('mois', mois);
@@ -105,26 +106,38 @@ export default function Historique() {
   // --- Admin : édition d'une clôture ---
   function ouvrirEdition(c) {
     setEditId(c.caisse_id);
+    setEditMsg('');
     setEditForm({
       cb: String(c.cb),
       especes: String(c.especes),
       fond_caisse: String(c.fond_caisse),
+      employe_id: c.employe_id,
     });
   }
   const majEdit = (champ) => (v) => setEditForm((f) => ({ ...f, [champ]: v }));
 
   async function enregistrerEdition(id) {
     // CA recalculé automatiquement : ventes_directes = CB + espèces.
-    await supabase
+    const { error } = await supabase
       .from('caisse_jour')
       .update({
+        employe_id: editForm.employe_id,
         ventes_directes: parseMontant(editForm.cb) + parseMontant(editForm.especes),
         cb: parseMontant(editForm.cb),
         especes: parseMontant(editForm.especes),
         fond_caisse: parseMontant(editForm.fond_caisse),
       })
       .eq('id', id);
+    if (error) {
+      setEditMsg(
+        error.code === '23505'
+          ? 'Cet employé a déjà une clôture à cette date.'
+          : `Erreur : ${error.message}`,
+      );
+      return;
+    }
     setEditId(null);
+    setEditMsg('');
     chargerAdmin();
   }
 
@@ -160,6 +173,18 @@ export default function Historique() {
 
             {enEdition ? (
               <div className="bloc-form">
+                <label className="field">
+                  <span>Employé</span>
+                  <select value={editForm.employe_id} onChange={(e) => majEdit('employe_id')(e.target.value)}>
+                    {Object.entries(noms)
+                      .sort((a, b) => a[1].localeCompare(b[1]))
+                      .map(([id, nom]) => (
+                        <option key={id} value={id}>
+                          {nom}
+                        </option>
+                      ))}
+                  </select>
+                </label>
                 <ChampMontant label="Encaissements CB" valeur={editForm.cb} onChange={majEdit('cb')} />
                 <ChampMontant label="Espèces (Moro)" valeur={editForm.especes} onChange={majEdit('especes')} />
                 <ChampMontant label="Fond de caisse" valeur={editForm.fond_caisse} onChange={majEdit('fond_caisse')} />
@@ -168,6 +193,7 @@ export default function Historique() {
                   <button className="btn" onClick={() => setEditId(null)}>Annuler</button>
                   <button className="btn btn-discret" onClick={() => supprimerCloture(c.caisse_id)}>Supprimer</button>
                 </div>
+                {editMsg && <p className="message-erreur">{editMsg}</p>}
                 <p className="statut">Les avances/remboursements se corrigent dans l’onglet Chromes.</p>
               </div>
             ) : (
