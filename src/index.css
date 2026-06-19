@@ -509,8 +509,12 @@ details > summary {
   display: block;
 }
 .graph-label {
-  font-size: 9px;
+  font-size: 8px;
   fill: var(--texte-doux);
+}
+.graph-grille {
+  stroke: var(--bordure);
+  stroke-width: 0.5;
 }
 .camembert {
   display: flex;

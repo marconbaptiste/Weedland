@@ -7,46 +7,107 @@ const COULEURS = [
   '#9b5de5', '#2dd4bf', '#f97316', '#ec4899', '#94a3b8',
 ];
 
-/** Courbe (ligne) — ex. CA jour par jour. */
+// Arrondit une valeur « au beau chiffre » supérieur (1, 2, 5 × 10ⁿ) pour
+// des graduations lisibles.
+function pasArrondi(v) {
+  if (v <= 0) return 1;
+  const exp = Math.pow(10, Math.floor(Math.log10(v)));
+  const f = v / exp;
+  const nice = f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10;
+  return nice * exp;
+}
+
+// Étiquette d'axe compacte : « 1,2 k€ » au-delà de 1000, « 850 € » sinon.
+function labelAxe(v) {
+  if (v >= 1000) {
+    const k = v / 1000;
+    return `${(Math.round(k * 10) / 10).toString().replace('.', ',')} k€`;
+  }
+  return `${Math.round(v)} €`;
+}
+
+// Calcule les graduations Y (0 → un peu au-dessus du max) et le haut du graphe.
+function graduations(max) {
+  const pas = pasArrondi(Math.max(max, 1) / 4);
+  const haut = Math.max(pas, Math.ceil(Math.max(max, 1) / pas) * pas);
+  const ticks = [];
+  for (let v = 0; v <= haut + 1e-6; v += pas) ticks.push(v);
+  return { ticks, haut };
+}
+
+/** Courbe (ligne) — ex. CA jour par jour. Axe Y gradué en euros, dates en X. */
 export function Courbe({ points }) {
-  const W = 320;
-  const H = 110;
-  const P = 6;
+  const W = 340;
+  const H = 170;
+  const ML = 42; // marge gauche (labels Y)
+  const MR = 10;
+  const MT = 10;
+  const MB = 22; // marge bas (labels X)
   const valeurs = points.map((p) => Number(p.valeur) || 0);
   const n = points.length;
   if (n === 0) return <p className="vide">Aucune donnée.</p>;
-  const max = Math.max(1, ...valeurs);
-  const x = (i) => P + (n > 1 ? (i / (n - 1)) * (W - 2 * P) : (W - 2 * P) / 2);
-  const y = (v) => H - P - (v / max) * (H - 2 * P);
-  const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(valeurs[i]).toFixed(1)}`).join(' ');
-  const aire = `${d} L${x(n - 1).toFixed(1)},${H - P} L${x(0).toFixed(1)},${H - P} Z`;
+  const { ticks, haut } = graduations(Math.max(...valeurs));
+  const x = (i) => ML + (n > 1 ? (i / (n - 1)) * (W - ML - MR) : (W - ML - MR) / 2);
+  const y = (v) => MT + (1 - v / haut) * (H - MT - MB);
+  const d = points
+    .map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(valeurs[i]).toFixed(1)}`)
+    .join(' ');
+  const aire = `${d} L${x(n - 1).toFixed(1)},${y(0)} L${x(0).toFixed(1)},${y(0)} Z`;
+  const pasX = Math.max(1, Math.ceil(n / 7)); // ~7 dates max en X
   return (
-    <svg className="graph" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img">
+    <svg className="graph" viewBox={`0 0 ${W} ${H}`} role="img">
+      {ticks.map((t) => (
+        <g key={t}>
+          <line x1={ML} y1={y(t)} x2={W - MR} y2={y(t)} className="graph-grille" />
+          <text x={ML - 5} y={y(t) + 3} textAnchor="end" className="graph-label">
+            {labelAxe(t)}
+          </text>
+        </g>
+      ))}
       <path d={aire} fill="rgba(63,174,107,0.12)" stroke="none" />
       <path d={d} fill="none" stroke="#3fae6b" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      {points.map((p, i) =>
+        i % pasX === 0 || i === n - 1 ? (
+          <text key={p.label + i} x={x(i)} y={H - 7} textAnchor="middle" className="graph-label">
+            {p.label}
+          </text>
+        ) : null,
+      )}
     </svg>
   );
 }
 
-/** Barres verticales — ex. CA par semaine. */
+/** Barres verticales — ex. CA par semaine. Axe Y gradué en euros. */
 export function Barres({ items }) {
-  const W = 320;
-  const H = 130;
-  const P = 18;
+  const W = 340;
+  const H = 180;
+  const ML = 42;
+  const MR = 10;
+  const MT = 12;
+  const MB = 22;
   const n = items.length || 1;
-  const max = Math.max(1, ...items.map((i) => Number(i.valeur) || 0));
-  const pas = (W - 2 * P) / n;
-  const largeur = pas * 0.6;
+  const { ticks, haut } = graduations(Math.max(1, ...items.map((i) => Number(i.valeur) || 0)));
+  const y = (v) => MT + (1 - v / haut) * (H - MT - MB);
+  const pas = (W - ML - MR) / n;
+  const largeur = Math.min(pas * 0.6, 46);
   return (
     <svg className="graph" viewBox={`0 0 ${W} ${H}`} role="img">
+      {ticks.map((t) => (
+        <g key={t}>
+          <line x1={ML} y1={y(t)} x2={W - MR} y2={y(t)} className="graph-grille" />
+          <text x={ML - 5} y={y(t) + 3} textAnchor="end" className="graph-label">
+            {labelAxe(t)}
+          </text>
+        </g>
+      ))}
       {items.map((it, i) => {
         const v = Number(it.valeur) || 0;
-        const h = (v / max) * (H - 2 * P - 10);
-        const xc = P + i * pas + (pas - largeur) / 2;
+        const yh = y(v);
+        const xc = ML + i * pas + (pas - largeur) / 2;
         return (
           <g key={it.label}>
-            <rect x={xc} y={H - P - h} width={largeur} height={h} rx="3" fill="#4f9cf9" />
-            <text x={xc + largeur / 2} y={H - P + 12} textAnchor="middle" className="graph-label">
+            <rect x={xc} y={yh} width={largeur} height={Math.max(0, y(0) - yh)} rx="3" fill="#4f9cf9" />
+            <text x={xc + largeur / 2} y={H - 7} textAnchor="middle" className="graph-label">
               {it.label}
             </text>
           </g>
