@@ -79,18 +79,20 @@ export default function Caisse() {
     pret.current = false;
     const cle = `brouillon-caisse:${utilisateur.id}:${date}`;
 
-    const { data: caisse } = await supabase
-      .from('caisse_jour')
-      .select('*')
-      .eq('employe_id', utilisateur.id)
-      .eq('date', date)
-      .maybeSingle();
-
-    const { data: chromes } = await supabase
-      .from('chromes')
-      .select('type, montant')
-      .eq('employe_id', utilisateur.id)
-      .eq('date', date);
+    // Les deux lectures sont indépendantes → en parallèle.
+    const [{ data: caisse }, { data: chromes }] = await Promise.all([
+      supabase
+        .from('caisse_jour')
+        .select('*')
+        .eq('employe_id', utilisateur.id)
+        .eq('date', date)
+        .maybeSingle(),
+      supabase
+        .from('chromes')
+        .select('type, montant')
+        .eq('employe_id', utilisateur.id)
+        .eq('date', date),
+    ]);
     setChromesJour(chromes ?? []);
     setCaisseId(caisse?.id ?? null);
 

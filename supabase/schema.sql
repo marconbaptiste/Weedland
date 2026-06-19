@@ -161,7 +161,9 @@ create index if not exists idx_caisse_jour_employe on public.caisse_jour (employ
 create index if not exists idx_chromes_date on public.chromes (date);
 create index if not exists idx_chromes_client on public.chromes (client_id);
 create index if not exists idx_chromes_employe on public.chromes (employe_id);
+create index if not exists idx_chromes_employe_date on public.chromes (employe_id, date);
 create index if not exists idx_paiements_employe on public.paiements_employes (employe_id);
+create index if not exists idx_paiements_date on public.paiements_employes (date);
 
 -- ============================================================================
 -- VUES CALCULÉES (security_invoker = on => respectent la RLS de l'appelant)
