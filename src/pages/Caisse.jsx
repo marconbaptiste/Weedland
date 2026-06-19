@@ -17,7 +17,6 @@ export default function Caisse() {
     especes: '',
     fond_caisse: '',
     heures_travaillees: '',
-    pourcentage_interessement: '',
     commentaire: '',
   });
   const [chromesJour, setChromesJour] = useState([]);
@@ -107,7 +106,6 @@ export default function Caisse() {
         especes: String(caisse.especes),
         fond_caisse: String(caisse.fond_caisse),
         heures_travaillees: String(caisse.heures_travaillees ?? ''),
-        pourcentage_interessement: String(caisse.pourcentage_interessement ?? ''),
         commentaire: caisse.commentaire ?? '',
       });
       setModifie(false); // clôture existante affichée telle que déclarée
@@ -127,7 +125,6 @@ export default function Caisse() {
         especes: '',
         fond_caisse: '',
         heures_travaillees: '',
-        pourcentage_interessement: tauxParDefaut ? String(tauxParDefaut) : '',
         commentaire: '',
       });
       setPartageurs([]);
@@ -166,12 +163,13 @@ export default function Caisse() {
   // (« ventes directes » = encaissé sur place = CB + espèces.)
   const cbNum = parseMontant(form.cb);
   const especesNum = parseMontant(form.especes);
+  // Le taux d'intéressement vient du compte (Comptes), jamais saisi par clôture.
   const resume = resumeJour(
     {
       ventes_directes: cbNum + especesNum,
       cb: cbNum,
       especes: especesNum,
-      pourcentage_interessement: parseMontant(form.pourcentage_interessement),
+      pourcentage_interessement: tauxParDefaut,
       nb_partageurs: nbPartageurs,
     },
     chromesJour,
@@ -184,7 +182,7 @@ export default function Caisse() {
     ? somme([ventesDeclarees, resume.avances, -resume.remboursements])
     : resume.ca;
   const intAffiche = afficherDeclare
-    ? interessement(caAffiche, parseMontant(form.pourcentage_interessement), nbPartageurs)
+    ? interessement(caAffiche, tauxParDefaut, nbPartageurs)
     : resume.interessement;
 
   async function enregistrer(e) {
@@ -202,7 +200,7 @@ export default function Caisse() {
           especes: parseMontant(form.especes),
           fond_caisse: parseMontant(form.fond_caisse),
           heures_travaillees: parseMontant(form.heures_travaillees),
-          pourcentage_interessement: parseMontant(form.pourcentage_interessement),
+          pourcentage_interessement: tauxParDefaut,
           commentaire: form.commentaire || null,
         },
         { onConflict: 'employe_id,date' },
@@ -258,7 +256,6 @@ export default function Caisse() {
       especes: '',
       fond_caisse: '',
       heures_travaillees: '',
-      pourcentage_interessement: tauxParDefaut ? String(tauxParDefaut) : '',
       commentaire: '',
     });
     setStatut('Clôture supprimée.');
@@ -315,16 +312,10 @@ export default function Caisse() {
             onChange={(e) => maj('heures_travaillees')(e.target.value)}
           />
         </label>
-        <label className="field">
-          <span>% d’intéressement</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            placeholder="ex. 5"
-            value={form.pourcentage_interessement}
-            onChange={(e) => maj('pourcentage_interessement')(e.target.value)}
-          />
-        </label>
+        <p className="statut">
+          Taux d’intéressement : <strong>{tauxParDefaut} %</strong> (défini dans Comptes par
+          l’admin).
+        </p>
         <label className="field">
           <span>Commentaire</span>
           <textarea
@@ -362,7 +353,10 @@ export default function Caisse() {
                     checked={Boolean(sel)}
                     onChange={() => basculerCollegue(c.id)}
                   />
-                  <span>{c.nom}</span>
+                  <span>
+                    {c.nom}
+                    <span className="promo-qui"> · {c.pourcentage_interessement ?? 0} %</span>
+                  </span>
                 </label>
                 {sel && (
                   <input
@@ -409,8 +403,8 @@ export default function Caisse() {
         <div className="recap-ligne">
           <span>
             Votre intéressement
-            {parseMontant(form.pourcentage_interessement) > 0 &&
-              ` (${form.pourcentage_interessement} %${nbPartageurs > 1 ? ` · CA ÷ ${nbPartageurs}` : ''})`}
+            {tauxParDefaut > 0 &&
+              ` (${tauxParDefaut} %${nbPartageurs > 1 ? ` · CA ÷ ${nbPartageurs}` : ''})`}
           </span>
           <strong>{formatEuros(intAffiche)}</strong>
         </div>

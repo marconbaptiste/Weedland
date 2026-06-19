@@ -72,7 +72,7 @@ Un « chrome » = une avance (crédit) faite à un client.
 
 **CA ≠ Encaissements dès qu'il y a des chromes** — les deux chiffres sont toujours affichés séparément, jamais confondus.
 
-**Intéressement** : `interessement(ca, pourcentage, nbPersonnes=1) = (CA ÷ nbPersonnes) × % / 100` (arrondi au centime), répliqué dans `v_ca_jour`. Le taux par défaut vit sur `users.pourcentage_interessement` (fixé par l'admin) ; il est recopié et **ajustable par clôture** dans `caisse_jour.pourcentage_interessement`, avec `caisse_jour.heures_travaillees`.
+**Intéressement** : `interessement(ca, pourcentage, nbPersonnes=1) = (CA ÷ nbPersonnes) × % / 100` (arrondi au centime), répliqué dans `v_ca_jour`. **Le taux vient TOUJOURS du compte** (`users.pourcentage_interessement`, fixé par l'admin dans Comptes) et est lu **en direct** : `v_ca_jour` joint `users` et utilise `u.pourcentage_interessement` pour le propriétaire comme pour les co-participants — changer le taux dans Comptes recalcule immédiatement toutes les clôtures (pas de snapshot par clôture). Il n'y a **pas de champ % dans la Caisse** ; la colonne `caisse_jour.pourcentage_interessement` est conservée (recopiée à l'enregistrement) mais n'est plus la source du calcul. `caisse_jour.heures_travaillees` reste saisi (pour info, n'influe pas sur l'intéressement). La fonction `collegues()` renvoie aussi le taux de chaque collègue (affiché dans le sélecteur de journée partagée).
 
 **Journées partagées** — deux modes :
 - *Relais* (l'un après l'autre) : chaque employé saisit sa propre clôture (même date, `employe_id` différent) avec sa part de CA et ses heures.

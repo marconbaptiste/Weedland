@@ -196,7 +196,7 @@ select
   c.especes,
   c.fond_caisse,
   c.heures_travaillees,
-  c.pourcentage_interessement,
+  u.pourcentage_interessement,   -- taux du compte (Comptes), en direct
   1 + (select count(*) from public.caisse_partage p where p.caisse_id = c.id) as nb_partageurs,
   coalesce(ch.avances, 0)        as avances,
   coalesce(ch.remboursements, 0) as remboursements,
@@ -207,10 +207,11 @@ select
   round(
     (c.ventes_directes + coalesce(ch.avances, 0) - coalesce(ch.remboursements, 0))
       / (1 + (select count(*) from public.caisse_partage p where p.caisse_id = c.id))
-      * c.pourcentage_interessement / 100,
+      * u.pourcentage_interessement / 100,
     2
   ) as interessement
 from public.caisse_jour c
+join public.users u on u.id = c.employe_id
 left join public.v_chromes_jour ch
   on ch.date = c.date and ch.employe_id = c.employe_id;
 
@@ -236,14 +237,15 @@ join public.users u on u.id = p.employe_id;
 -- Fonction SECURITY DEFINER (et non une vue definer, signalée « critique » par
 -- l'analyseur Supabase) : n'expose que id + nom, sans le reste de users.
 drop view if exists public.v_collegues;
-create or replace function public.collegues()
-returns table (id uuid, nom text)
+drop function if exists public.collegues();
+create function public.collegues()
+returns table (id uuid, nom text, pourcentage_interessement numeric)
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select id, nom from public.users order by nom;
+  select id, nom, pourcentage_interessement from public.users order by nom;
 $$;
 grant execute on function public.collegues() to authenticated;
 
