@@ -143,7 +143,14 @@ export default function Caisse() {
     ecrireBrouillon(cleBrouillon, { form, partageurs });
   }, [form, partageurs, cleBrouillon]);
 
-  const nbPartageurs = 1 + partageurs.length;
+  // Diviseur de l'intéressement : seules les personnes au taux > 0 prennent
+  // une part (un collègue à 0 % ne dilue pas l'intéressement des autres).
+  const tauxCollegue = (id) =>
+    collegues.find((c) => c.id === id)?.pourcentage_interessement ?? 0;
+  const nbInteresses =
+    (tauxParDefaut > 0 ? 1 : 0) +
+    partageurs.filter((p) => tauxCollegue(p.employe_id) > 0).length;
+  const diviseur = Math.max(nbInteresses, 1);
 
   function basculerCollegue(id) {
     setPartageurs((liste) =>
@@ -170,7 +177,7 @@ export default function Caisse() {
       cb: cbNum,
       especes: especesNum,
       pourcentage_interessement: tauxParDefaut,
-      nb_partageurs: nbPartageurs,
+      nb_partageurs: diviseur,
     },
     chromesJour,
   );
@@ -182,7 +189,7 @@ export default function Caisse() {
     ? somme([ventesDeclarees, resume.avances, -resume.remboursements])
     : resume.ca;
   const intAffiche = afficherDeclare
-    ? interessement(caAffiche, tauxParDefaut, nbPartageurs)
+    ? interessement(caAffiche, tauxParDefaut, diviseur)
     : resume.interessement;
 
   async function enregistrer(e) {
@@ -404,7 +411,7 @@ export default function Caisse() {
           <span>
             Votre intéressement
             {tauxParDefaut > 0 &&
-              ` (${tauxParDefaut} %${nbPartageurs > 1 ? ` · CA ÷ ${nbPartageurs}` : ''})`}
+              ` (${tauxParDefaut} %${nbInteresses > 1 ? ` · CA ÷ ${nbInteresses}` : ''})`}
           </span>
           <strong>{formatEuros(intAffiche)}</strong>
         </div>

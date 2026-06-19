@@ -197,7 +197,13 @@ select
   c.fond_caisse,
   c.heures_travaillees,
   u.pourcentage_interessement,   -- taux du compte (Comptes), en direct
+  -- Total des personnes présentes (info / affichage).
   1 + (select count(*) from public.caisse_partage p where p.caisse_id = c.id) as nb_partageurs,
+  -- Diviseur réel : seules les personnes au taux > 0 prennent une part.
+  (case when u.pourcentage_interessement > 0 then 1 else 0 end)
+    + (select count(*) from public.caisse_partage p
+         join public.users up on up.id = p.employe_id
+         where p.caisse_id = c.id and up.pourcentage_interessement > 0) as nb_interesses,
   coalesce(ch.avances, 0)        as avances,
   coalesce(ch.remboursements, 0) as remboursements,
   c.ventes_directes + coalesce(ch.avances, 0) - coalesce(ch.remboursements, 0) as ca_jour,
@@ -206,7 +212,11 @@ select
   (c.cb + c.especes) - (c.ventes_directes + coalesce(ch.remboursements, 0))    as ecart,
   round(
     (c.ventes_directes + coalesce(ch.avances, 0) - coalesce(ch.remboursements, 0))
-      / (1 + (select count(*) from public.caisse_partage p where p.caisse_id = c.id))
+      / nullif(
+          (case when u.pourcentage_interessement > 0 then 1 else 0 end)
+          + (select count(*) from public.caisse_partage p
+               join public.users up on up.id = p.employe_id
+               where p.caisse_id = c.id and up.pourcentage_interessement > 0), 0)
       * u.pourcentage_interessement / 100,
     2
   ) as interessement
@@ -228,7 +238,7 @@ select
   p.employe_id, c.caisse_id, c.date, false as est_proprietaire,
   p.heures_travaillees, u.pourcentage_interessement,
   null::numeric, null::numeric, null::numeric,
-  round(c.ca_jour / c.nb_partageurs * u.pourcentage_interessement / 100, 2)
+  round(c.ca_jour / nullif(c.nb_interesses, 0) * u.pourcentage_interessement / 100, 2)
 from public.caisse_partage p
 join public.v_ca_jour c on c.caisse_id = p.caisse_id
 join public.users u on u.id = p.employe_id;
