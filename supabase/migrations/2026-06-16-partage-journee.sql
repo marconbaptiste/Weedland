@@ -118,9 +118,14 @@ join public.v_ca_jour c on c.caisse_id = p.caisse_id
 join public.users u on u.id = p.employe_id;
 
 -- 5. Liste minimale des collègues (id + nom) pour le sélecteur de partage.
--- Vue NON security_invoker : contourne la RLS de users pour n'exposer que id+nom.
-create or replace view public.v_collegues as
-  select id, nom from public.users;
+-- Fonction SECURITY DEFINER (cf. migration 2026-06-19) : n'expose que id + nom.
+drop view if exists public.v_collegues;
+create or replace function public.collegues()
+returns table (id uuid, nom text)
+language sql stable security definer set search_path = public as $$
+  select id, nom from public.users order by nom;
+$$;
+grant execute on function public.collegues() to authenticated;
 
 -- IMPORTANT : le DROP VIEW ci-dessus a retiré les droits SELECT ; on les
 -- redonne explicitement (sinon Dashboard/Comptabilité/Historique lisent « vide »).
@@ -128,6 +133,5 @@ grant select on
   public.v_chromes_jour,
   public.v_ca_jour,
   public.v_solde_client,
-  public.v_interessement_employe,
-  public.v_collegues
+  public.v_interessement_employe
 to anon, authenticated;

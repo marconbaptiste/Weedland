@@ -45,9 +45,7 @@ export default function Caisse() {
   // Liste des collègues (hors soi-même) pour le partage de journée.
   useEffect(() => {
     supabase
-      .from('v_collegues')
-      .select('id, nom')
-      .order('nom')
+      .rpc('collegues')
       .then(({ data }) => setCollegues((data ?? []).filter((c) => c.id !== utilisateur.id)));
   }, [utilisateur.id]);
 

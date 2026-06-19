@@ -76,7 +76,7 @@ Un « chrome » = une avance (crédit) faite à un client.
 
 **Journées partagées** — deux modes :
 - *Relais* (l'un après l'autre) : chaque employé saisit sa propre clôture (même date, `employe_id` différent) avec sa part de CA et ses heures.
-- *Simultané, même caisse* (à parts égales) : **une seule** clôture saisie par un employé ; les collègues présents sont ajoutés dans `caisse_partage` (un par ligne, le propriétaire n'y figure pas). `v_ca_jour.nb_partageurs = 1 + count(caisse_partage)` et l'intéressement du propriétaire est divisé par ce nombre. La vue `v_interessement_employe` unifie les lignes d'intéressement (propriétaires + co-participants) pour l'Historique et le Dashboard. Le sélecteur de collègues lit `v_collegues` (vue id+nom contournant la RLS de `users`).
+- *Simultané, même caisse* (à parts égales) : **une seule** clôture saisie par un employé ; les collègues présents sont ajoutés dans `caisse_partage` (un par ligne, le propriétaire n'y figure pas). `v_ca_jour.nb_partageurs = 1 + count(caisse_partage)` et l'intéressement du propriétaire est divisé par ce nombre. La vue `v_interessement_employe` unifie les lignes d'intéressement (propriétaires + co-participants) pour l'Historique et le Dashboard. Le sélecteur de collègues appelle la fonction `collegues()` (SECURITY DEFINER, renvoie id+nom — remplace l'ancienne vue `v_collegues` signalée « critique » par l'analyseur Supabase).
 
 **Arithmétique en centimes** : tous les calculs passent par `enCentimes()` (entiers) pour éviter les erreurs de virgule flottante (`0,1 + 0,2`). Toute nouvelle somme de montants doit utiliser `somme()` plutôt qu'un `+` direct.
 

@@ -233,10 +233,19 @@ join public.v_ca_jour c on c.caisse_id = p.caisse_id
 join public.users u on u.id = p.employe_id;
 
 -- Liste minimale des collègues (id + nom) pour le sélecteur de partage.
--- Vue NON security_invoker : n'expose que id + nom, sans le reste de users.
-create or replace view public.v_collegues as
-  select id, nom from public.users;
-grant select on public.v_collegues to authenticated;
+-- Fonction SECURITY DEFINER (et non une vue definer, signalée « critique » par
+-- l'analyseur Supabase) : n'expose que id + nom, sans le reste de users.
+drop view if exists public.v_collegues;
+create or replace function public.collegues()
+returns table (id uuid, nom text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select id, nom from public.users order by nom;
+$$;
+grant execute on function public.collegues() to authenticated;
 
 -- IMPORTANT : un DROP VIEW supprime les droits SELECT. On (re)donne explicitement
 -- l'accès en lecture aux vues pour les rôles applicatifs (la RLS des tables
@@ -244,8 +253,7 @@ grant select on public.v_collegues to authenticated;
 grant select on
   public.v_chromes_jour,
   public.v_ca_jour,
-  public.v_interessement_employe,
-  public.v_collegues
+  public.v_interessement_employe
 to anon, authenticated;
 
 -- Solde dû par client (Σ avances - Σ remboursements).
