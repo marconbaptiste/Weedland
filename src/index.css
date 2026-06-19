@@ -130,6 +130,19 @@ textarea {
   font-size: 1rem;
   width: 100%;
 }
+/* iOS/Safari : les champs date ont une largeur intrinsèque qui ignore
+   width:100% et débordent de l'écran. On force l'apparence neutre + min-width:0. */
+input[type='date'],
+input[type='month'],
+input[type='time'] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+}
+input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+}
 input:focus,
 select:focus,
 textarea:focus {
@@ -633,6 +646,80 @@ details > summary {
   .journal-texte {
     grid-column: 1 / -1;
   }
+}
+
+/* ----- Bouton d'aide « i » + fenêtre d'explication ----- */
+.btn-aide {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  flex: none;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--bordure);
+  background: var(--fond-input);
+  color: var(--texte-doux);
+  font-style: italic;
+  font-weight: 700;
+  font-family: Georgia, 'Times New Roman', serif;
+  cursor: pointer;
+  line-height: 1;
+}
+.btn-aide:hover {
+  border-color: var(--accent);
+  color: var(--texte);
+}
+.aide-fond {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1rem;
+  overflow-y: auto;
+}
+.aide-modale {
+  background: var(--fond-carte);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  max-width: 560px;
+  width: 100%;
+  margin: 3vh auto;
+  padding: 1.25rem;
+}
+.aide-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+.aide-tete h2 {
+  margin: 0;
+}
+.aide-corps {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.aide-corps h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+  color: var(--accent);
+}
+.aide-corps p {
+  margin: 0;
+  color: var(--texte-doux);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.aide-fermer {
+  flex: none;
 }
 
 /* ============================================================================

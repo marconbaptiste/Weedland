@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
+import Aide from './Aide';
 
 const lienActif = ({ isActive }) => (isActive ? 'nav-lien actif' : 'nav-lien');
 
@@ -13,6 +14,7 @@ export default function Layout() {
           <span className="logo">Gestion</span>
           <div className="entete-droite">
             <span className="profil">{profil?.nom}</span>
+            <Aide />
             <button className="btn btn-discret" onClick={deconnexion}>
               Déconnexion
             </button>
