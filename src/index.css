@@ -420,6 +420,14 @@ hr {
   padding: 0.4rem 0.5rem;
   min-width: 8rem;
 }
+.actions-cellule {
+  display: flex;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+.actions-cellule .btn {
+  padding: 0.35rem 0.6rem;
+}
 .champ-mini {
   width: 3.6rem;
   text-align: right;

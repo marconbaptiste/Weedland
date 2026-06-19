@@ -16,6 +16,9 @@ export default function Paiements() {
     motif: '',
     date: aujourdhuiISO(),
   });
+  // Édition en ligne d'un paiement existant (admin).
+  const [edition, setEdition] = useState(null); // id en cours d'édition
+  const [editForm, setEditForm] = useState({ employe_id: '', montant: '', motif: '', date: '' });
   const [debutMois, finMois] = intervallePeriode('mois');
 
   const charger = useCallback(async () => {
@@ -50,6 +53,40 @@ export default function Paiements() {
       setForm((f) => ({ ...f, montant: '', motif: '' }));
       charger();
     }
+  }
+
+  function commencerEdition(p) {
+    setEdition(p.id);
+    setEditForm({
+      employe_id: p.employe_id,
+      montant: String(p.montant),
+      motif: p.motif ?? '',
+      date: p.date,
+    });
+  }
+
+  async function enregistrerEdition(id) {
+    const valeur = parseMontant(editForm.montant);
+    if (!editForm.employe_id || valeur <= 0) return;
+    const { error } = await supabase
+      .from('paiements_employes')
+      .update({
+        employe_id: editForm.employe_id,
+        montant: valeur,
+        motif: editForm.motif || null,
+        date: editForm.date,
+      })
+      .eq('id', id);
+    if (!error) {
+      setEdition(null);
+      charger();
+    }
+  }
+
+  async function supprimer(id) {
+    if (!window.confirm('Supprimer ce paiement ? Cette action est irréversible.')) return;
+    const { error } = await supabase.from('paiements_employes').delete().eq('id', id);
+    if (!error) charger();
   }
 
   const totauxParEmploye = employes.map((emp) => ({
@@ -128,20 +165,77 @@ export default function Paiements() {
               <th>Employé</th>
               <th>Motif</th>
               <th className="droite">Montant</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            {paiements.map((p) => (
-              <tr key={p.id}>
-                <td>{formatDateFr(p.date)}</td>
-                <td>{p.users?.nom ?? '—'}</td>
-                <td>{p.motif ?? '—'}</td>
-                <td className="droite">{formatEuros(p.montant)}</td>
-              </tr>
-            ))}
+            {paiements.map((p) =>
+              edition === p.id ? (
+                <tr key={p.id}>
+                  <td>
+                    <input
+                      type="date"
+                      value={editForm.date}
+                      onChange={(e) => setEditForm((f) => ({ ...f, date: e.target.value }))}
+                    />
+                  </td>
+                  <td>
+                    <select
+                      value={editForm.employe_id}
+                      onChange={(e) => setEditForm((f) => ({ ...f, employe_id: e.target.value }))}
+                    >
+                      {employes.map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.nom}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      className="champ-nom"
+                      value={editForm.motif}
+                      onChange={(e) => setEditForm((f) => ({ ...f, motif: e.target.value }))}
+                    />
+                  </td>
+                  <td className="droite">
+                    <input
+                      className="champ-pourcentage"
+                      type="text"
+                      inputMode="decimal"
+                      value={editForm.montant}
+                      onChange={(e) => setEditForm((f) => ({ ...f, montant: e.target.value }))}
+                    />
+                  </td>
+                  <td className="actions-cellule">
+                    <button type="button" className="btn btn-discret" onClick={() => enregistrerEdition(p.id)}>
+                      Enregistrer
+                    </button>
+                    <button type="button" className="btn btn-discret" onClick={() => setEdition(null)}>
+                      Annuler
+                    </button>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={p.id}>
+                  <td>{formatDateFr(p.date)}</td>
+                  <td>{p.users?.nom ?? '—'}</td>
+                  <td>{p.motif ?? '—'}</td>
+                  <td className="droite">{formatEuros(p.montant)}</td>
+                  <td className="actions-cellule">
+                    <button type="button" className="btn btn-discret" onClick={() => commencerEdition(p)}>
+                      Modifier
+                    </button>
+                    <button type="button" className="btn btn-discret" onClick={() => supprimer(p.id)}>
+                      Supprimer
+                    </button>
+                  </td>
+                </tr>
+              ),
+            )}
             {paiements.length === 0 && (
               <tr>
-                <td colSpan={4} className="vide">
+                <td colSpan={5} className="vide">
                   Aucun paiement ce mois-ci.
                 </td>
               </tr>
