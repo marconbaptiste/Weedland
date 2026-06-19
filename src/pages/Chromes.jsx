@@ -18,6 +18,8 @@ export default function Chromes() {
   const [promos, setPromos] = useState([]);
   const [clientsAvecPromo, setClientsAvecPromo] = useState(new Set());
   const [nouvellePromo, setNouvellePromo] = useState({ description: '', date: aujourdhuiISO() });
+  const [editPromo, setEditPromo] = useState(null); // id
+  const [editPromoForm, setEditPromoForm] = useState({ description: '', date: '' });
   const [msgClient, setMsgClient] = useState('');
 
   const [nouveau, setNouveau] = useState({ surnom: '', description: '' });
@@ -162,9 +164,28 @@ export default function Chromes() {
   }
 
   async function supprimerPromo(id) {
+    if (!window.confirm('Supprimer cette promo ?')) return;
     await supabase.from('promos').delete().eq('id', id);
     await ouvrirClient(clientSel);
     await chargerClients();
+  }
+
+  function commencerEditPromo(p) {
+    setEditPromo(p.id);
+    setEditPromoForm({ description: p.description, date: p.date });
+  }
+
+  async function enregistrerEditPromo(id) {
+    const description = editPromoForm.description.trim();
+    if (!description) return;
+    const { error } = await supabase
+      .from('promos')
+      .update({ description, date: editPromoForm.date })
+      .eq('id', id);
+    if (!error) {
+      setEditPromo(null);
+      await ouvrirClient(clientSel);
+    }
   }
 
   async function ajouterLigne(e) {
@@ -302,23 +323,64 @@ export default function Chromes() {
                   </button>
                 </form>
                 <ul className="liste-promos">
-                  {promos.map((p) => (
-                    <li key={p.id}>
-                      <span className="promo-date">{formatDateFr(p.date)}</span>
-                      <span className="promo-desc">{p.description}</span>
-                      <span className="promo-qui">{p.users?.nom ?? '—'}</span>
-                      {(estAdmin || p.employe_id === utilisateur.id) && (
+                  {promos.map((p) =>
+                    editPromo === p.id ? (
+                      <li key={p.id}>
+                        <input
+                          type="date"
+                          value={editPromoForm.date}
+                          onChange={(e) => setEditPromoForm((f) => ({ ...f, date: e.target.value }))}
+                        />
+                        <input
+                          className="promo-desc"
+                          value={editPromoForm.description}
+                          onChange={(e) =>
+                            setEditPromoForm((f) => ({ ...f, description: e.target.value }))
+                          }
+                        />
                         <button
                           type="button"
                           className="btn btn-discret"
-                          onClick={() => supprimerPromo(p.id)}
-                          aria-label="Supprimer la promo"
+                          onClick={() => enregistrerEditPromo(p.id)}
+                        >
+                          OK
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-discret"
+                          onClick={() => setEditPromo(null)}
                         >
                           ✕
                         </button>
-                      )}
-                    </li>
-                  ))}
+                      </li>
+                    ) : (
+                      <li key={p.id}>
+                        <span className="promo-date">{formatDateFr(p.date)}</span>
+                        <span className="promo-desc">{p.description}</span>
+                        <span className="promo-qui">{p.users?.nom ?? '—'}</span>
+                        {(estAdmin || p.employe_id === utilisateur.id) && (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn-discret"
+                              onClick={() => commencerEditPromo(p)}
+                              aria-label="Modifier la promo"
+                            >
+                              ✎
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-discret"
+                              onClick={() => supprimerPromo(p.id)}
+                              aria-label="Supprimer la promo"
+                            >
+                              ✕
+                            </button>
+                          </>
+                        )}
+                      </li>
+                    ),
+                  )}
                   {promos.length === 0 && <li className="vide">Aucune promo enregistrée.</li>}
                 </ul>
               </div>
