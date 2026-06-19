@@ -56,9 +56,10 @@ export default function Dashboard() {
     // Intéressement + heures par employé (propriétaires + co-participants).
     let qi = supabase
       .from('v_interessement_employe')
-      .select('employe_id, interessement, heures_travaillees')
+      .select('caisse_id, employe_id, date, est_proprietaire, heures_travaillees, pourcentage_interessement, ca_jour, encaissements, interessement')
       .gte('date', debut)
-      .lte('date', fin);
+      .lte('date', fin)
+      .order('date', { ascending: false });
     if (employeFiltre) qi = qi.eq('employe_id', employeFiltre);
     const { data: ir, error: errInt } = await qi;
     if (errInt) setErreur((e) => `${e ? e + ' · ' : ''}v_interessement_employe : ${errInt.message}`);
@@ -80,15 +81,45 @@ export default function Dashboard() {
   };
   const nomEmploye = (id) => employes.find((e) => e.id === id)?.nom ?? '—';
 
+  // Détail par personne présente : propriétaire de clôture + co-participants
+  // (journée partagée). Le CA/encaissements/avances ne concernent que le
+  // propriétaire (le CA n'est compté qu'une fois) ; le co-participant n'a que
+  // ses heures et sa part d'intéressement.
+  const apportCaisse = new Map(caRows.map((r) => [r.caisse_id, r]));
+  const lignesDetail = intRows
+    .map((r) => {
+      const ca = apportCaisse.get(r.caisse_id);
+      return {
+        cle: `${r.caisse_id}:${r.employe_id}`,
+        date: r.date,
+        employe_id: r.employe_id,
+        est_proprietaire: r.est_proprietaire,
+        ca_jour: r.ca_jour,
+        encaissements: r.encaissements,
+        cb: r.est_proprietaire ? ca?.cb ?? 0 : null,
+        especes: r.est_proprietaire ? ca?.especes ?? 0 : null,
+        avances: r.est_proprietaire ? ca?.avances ?? 0 : null,
+        remboursements: r.est_proprietaire ? ca?.remboursements ?? 0 : null,
+        heures: r.heures_travaillees,
+        pourcentage: r.pourcentage_interessement,
+        interessement: r.interessement,
+      };
+    })
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return (b.est_proprietaire ? 1 : 0) - (a.est_proprietaire ? 1 : 0);
+    });
+  const nomLigne = (r) => nomEmploye(r.employe_id) + (r.est_proprietaire ? '' : ' (partagé)');
+
   function exporter() {
     const entetes = [
       'Date', 'Employé', 'Avances', 'Remboursements',
       'CA', 'CB', 'Espèces', 'Encaissements', 'Heures', '% intéress.', 'Intéressement',
     ];
-    const lignes = caRows.map((r) => [
-      r.date, nomEmploye(r.employe_id), r.avances,
-      r.remboursements, r.ca_jour, r.cb, r.especes, r.encaissements,
-      r.heures_travaillees, r.pourcentage_interessement, r.interessement,
+    const lignes = lignesDetail.map((r) => [
+      r.date, nomLigne(r), r.avances ?? '', r.remboursements ?? '',
+      r.ca_jour ?? '', r.cb ?? '', r.especes ?? '', r.encaissements ?? '',
+      r.heures, r.pourcentage, r.interessement,
     ]);
     telechargerCSV(`recap-${debut}_${fin}.csv`, entetes, lignes);
   }
@@ -110,11 +141,12 @@ export default function Dashboard() {
       'Date', 'Employé', 'CA', 'Encaiss.', 'Avances', 'Rembours.',
       'Heures', '%', 'Intéress.',
     ];
-    const lignes = caRows.map((r) => [
-      formatDateFr(r.date), nomEmploye(r.employe_id), formatEuros(r.ca_jour),
-      formatEuros(r.encaissements), formatEuros(r.avances), formatEuros(r.remboursements),
-      formatNombre(r.heures_travaillees),
-      `${r.pourcentage_interessement} %`, formatEuros(r.interessement),
+    const tiret = (v) => (v != null ? formatEuros(v) : '—');
+    const lignes = lignesDetail.map((r) => [
+      formatDateFr(r.date), nomLigne(r), tiret(r.ca_jour),
+      tiret(r.encaissements), tiret(r.avances), tiret(r.remboursements),
+      formatNombre(r.heures),
+      `${r.pourcentage} %`, formatEuros(r.interessement),
     ]);
     telechargerPDF(`recap-${debut}_${fin}.pdf`, {
       titre: 'Weedland — Récapitulatif',
@@ -233,19 +265,19 @@ export default function Dashboard() {
             </tr>
           </thead>
           <tbody>
-            {caRows.map((r) => (
-              <tr key={r.caisse_id}>
+            {lignesDetail.map((r) => (
+              <tr key={r.cle}>
                 <td>{formatDateFr(r.date)}</td>
-                <td>{nomEmploye(r.employe_id)}</td>
-                <td className="droite">{formatEuros(r.ca_jour)}</td>
-                <td className="droite">{formatEuros(r.encaissements)}</td>
-                <td className="droite">{formatEuros(r.avances)}</td>
-                <td className="droite">{formatEuros(r.remboursements)}</td>
-                <td className="droite">{formatNombre(r.heures_travaillees)}</td>
+                <td>{nomLigne(r)}</td>
+                <td className="droite">{r.ca_jour != null ? formatEuros(r.ca_jour) : '—'}</td>
+                <td className="droite">{r.encaissements != null ? formatEuros(r.encaissements) : '—'}</td>
+                <td className="droite">{r.avances != null ? formatEuros(r.avances) : '—'}</td>
+                <td className="droite">{r.remboursements != null ? formatEuros(r.remboursements) : '—'}</td>
+                <td className="droite">{formatNombre(r.heures)}</td>
                 <td className="droite">{formatEuros(r.interessement)}</td>
               </tr>
             ))}
-            {caRows.length === 0 && (
+            {lignesDetail.length === 0 && (
               <tr>
                 <td colSpan={8} className="vide">
                   Aucune donnée sur la période.

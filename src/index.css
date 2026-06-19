@@ -418,6 +418,7 @@ hr {
 }
 .champ-nom {
   padding: 0.4rem 0.5rem;
+  min-width: 8rem;
 }
 .champ-mini {
   width: 3.6rem;
