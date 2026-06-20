@@ -825,3 +825,64 @@ textarea,
     white-space: nowrap;
   }
 }
+
+/* Téléphone : on densifie l'affichage (moins d'espaces vides) pour faire
+   tenir un maximum d'outils à l'écran sans scroller. */
+@media (max-width: 640px) {
+  .contenu {
+    padding: 0.55rem;
+  }
+  .page {
+    gap: 0.55rem;
+  }
+  .card {
+    padding: 0.7rem;
+    gap: 0.5rem;
+  }
+  h1 {
+    font-size: 1.2rem;
+    margin: 0 0 0.35rem;
+  }
+  h2 {
+    font-size: 0.98rem;
+    margin: 0 0 0.4rem;
+  }
+  .field {
+    gap: 0.2rem;
+  }
+  .cartes-kpi {
+    gap: 0.45rem;
+  }
+  .kpi {
+    padding: 0.55rem 0.65rem;
+  }
+  .kpi-valeur {
+    font-size: 1.05rem;
+  }
+  .grille-caisse,
+  .grille-caisse .col,
+  .colonnes {
+    gap: 0.55rem;
+  }
+  .recap-paire {
+    gap: 0.45rem;
+  }
+  .recap-bloc {
+    padding: 0.55rem 0.65rem;
+  }
+  .entete-haut {
+    padding: 0.5rem 0.7rem;
+  }
+  /* Champs un peu plus compacts tout en restant confortables au doigt. */
+  input,
+  select,
+  textarea,
+  .btn {
+    min-height: 40px;
+  }
+  input,
+  select,
+  textarea {
+    padding: 0.55rem 0.7rem;
+  }
+}
