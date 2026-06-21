@@ -435,6 +435,15 @@ hr {
   gap: 0.4rem;
   white-space: nowrap;
 }
+.mouvement {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+.mouvement .btn {
+  padding: 0.3rem 0.6rem;
+  min-width: 2.2rem;
+}
 .actions-cellule .btn {
   padding: 0.35rem 0.6rem;
 }

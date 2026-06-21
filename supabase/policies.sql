@@ -224,3 +224,25 @@ create policy promos_update on public.promos for update to authenticated
 drop policy if exists promos_delete on public.promos;
 create policy promos_delete on public.promos for delete to authenticated
   using (employe_id = auth.uid() or public.est_admin());
+
+-- ---------------------------------------------------------------------------
+-- stocks : registre partagé (lecture / saisie / ajustement par tout employé).
+-- Suppression réservée à l'admin.
+-- ---------------------------------------------------------------------------
+alter table public.stocks enable row level security;
+
+drop policy if exists stocks_select on public.stocks;
+create policy stocks_select on public.stocks for select to authenticated
+  using (true);
+
+drop policy if exists stocks_insert on public.stocks;
+create policy stocks_insert on public.stocks for insert to authenticated
+  with check (true);
+
+drop policy if exists stocks_update on public.stocks;
+create policy stocks_update on public.stocks for update to authenticated
+  using (true) with check (true);
+
+drop policy if exists stocks_delete on public.stocks;
+create policy stocks_delete on public.stocks for delete to authenticated
+  using (public.est_admin());

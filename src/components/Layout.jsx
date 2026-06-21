@@ -27,6 +27,9 @@ export default function Layout() {
           <NavLink to="/chromes" className={lienActif}>
             Chromes
           </NavLink>
+          <NavLink to="/stocks" className={lienActif}>
+            Stocks
+          </NavLink>
           <NavLink to="/historique" className={lienActif}>
             Historique
           </NavLink>
@@ -40,9 +43,6 @@ export default function Layout() {
               </NavLink>
               <NavLink to="/paiements" className={lienActif}>
                 Paiements
-              </NavLink>
-              <NavLink to="/fiches-paie" className={lienActif}>
-                Fiches de paie
               </NavLink>
               <NavLink to="/journal" className={lienActif}>
                 Journal

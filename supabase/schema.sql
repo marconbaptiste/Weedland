@@ -155,6 +155,23 @@ create table if not exists public.promos (
 );
 create index if not exists idx_promos_client on public.promos (client_id);
 
+-- ---------------------------------------------------------------------------
+-- stocks : inventaire produits (registre partagé). Suppression réservée admin.
+-- ---------------------------------------------------------------------------
+create table if not exists public.stocks (
+  id           uuid primary key default gen_random_uuid(),
+  categorie    text not null default '',
+  nom          text not null,
+  quantite     numeric(12, 2) not null default 0 check (quantite >= 0),
+  unite        text not null default 'g',
+  seuil_alerte numeric(12, 2) not null default 0 check (seuil_alerte >= 0),
+  prix_achat   numeric(10, 2) not null default 0 check (prix_achat >= 0),
+  prix_vente   numeric(10, 2) not null default 0 check (prix_vente >= 0),
+  note         text,
+  created_at   timestamptz not null default now()
+);
+create index if not exists idx_stocks_categorie on public.stocks (categorie);
+
 -- Index utiles pour les filtres jour / employé.
 create index if not exists idx_caisse_jour_date on public.caisse_jour (date);
 create index if not exists idx_caisse_jour_employe on public.caisse_jour (employe_id);

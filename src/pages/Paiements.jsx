@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { parseMontant, formatEuros, formatDateFr } from '../lib/format';
 import { aujourdhuiISO, intervallePeriode } from '../lib/dates';
@@ -99,10 +98,6 @@ export default function Paiements() {
   return (
     <div className="page">
       <h1>Paiements employés</h1>
-
-      <Link to="/fiches-paie" className="btn">
-        🧾 Éditer une fiche de paie
-      </Link>
 
       <form className="card" onSubmit={ajouter}>
         <label className="field">
