@@ -665,6 +665,47 @@ details > summary {
   font-weight: 700;
 }
 
+/* ----- Guide de démarrage ----- */
+.guide {
+  border-color: var(--accent);
+}
+.guide-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.guide-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.guide-check {
+  width: 1.4rem;
+  height: 1.4rem;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-weight: 700;
+  background: var(--fond-input);
+  color: var(--texte-doux);
+}
+.guide-item.fait .guide-check {
+  background: rgba(63, 174, 107, 0.18);
+  color: var(--vert);
+}
+.guide-item.fait .guide-texte {
+  color: var(--texte-doux);
+  text-decoration: line-through;
+}
+.guide-texte {
+  flex: 1;
+}
+
 /* ----- Journal ----- */
 .journal {
   list-style: none;
