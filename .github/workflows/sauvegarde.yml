@@ -3,10 +3,12 @@ name: Sauvegarde base
 # Sauvegarde quotidienne de la base Supabase via pg_dump, chiffrée, stockée en
 # artefact GitHub (30 jours). Déclenchable aussi à la main (workflow_dispatch).
 #
-# Secrets requis (Settings → Secrets and variables → Actions) :
-#   - SUPABASE_DB_URL    : chaîne de connexion Postgres (Session pooler, port 5432)
-#   - BACKUP_PASSPHRASE  : mot de passe pour chiffrer/déchiffrer la sauvegarde
+# Secret requis (Settings → Secrets and variables → Actions) :
+#   - SUPABASE_DB_PASSWORD : le mot de passe de la base (tel quel, n'importe quels
+#       caractères — il n'est PAS mis dans une URL, donc aucun encodage requis)
+#   - BACKUP_PASSPHRASE    : mot de passe pour chiffrer/déchiffrer la sauvegarde
 #
+# L'hôte et l'utilisateur (non secrets) sont définis ci-dessous.
 # Restauration : voir SAUVEGARDE.md
 
 on:
@@ -17,6 +19,13 @@ on:
 jobs:
   dump:
     runs-on: ubuntu-latest
+    env:
+      PGHOST: aws-1-eu-central-2.pooler.supabase.com
+      PGPORT: '5432'
+      PGUSER: postgres.nshglljmfskvqxcogdjk
+      PGDATABASE: postgres
+      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PASS: ${{ secrets.BACKUP_PASSPHRASE }}
     steps:
       - name: Installer pg_dump 16
         run: |
@@ -26,16 +35,13 @@ jobs:
           sudo apt-get install -y postgresql-client-16
 
       - name: Dump + chiffrement
-        env:
-          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          PASS: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
-          if [ -z "$DB_URL" ] || [ -z "$PASS" ]; then
-            echo "Secrets SUPABASE_DB_URL / BACKUP_PASSPHRASE non définis — sauvegarde ignorée."
+          if [ -z "$PGPASSWORD" ] || [ -z "$PASS" ]; then
+            echo "Secrets SUPABASE_DB_PASSWORD / BACKUP_PASSPHRASE non définis — sauvegarde ignorée."
             exit 0
           fi
           ts=$(date +%Y%m%d-%H%M%S)
-          /usr/lib/postgresql/16/bin/pg_dump "$DB_URL" --no-owner --no-privileges -Fc -f dump.pgcustom
+          /usr/lib/postgresql/16/bin/pg_dump --no-owner --no-privileges -Fc -f dump.pgcustom
           openssl enc -aes-256-cbc -pbkdf2 -salt -in dump.pgcustom -out "weedland-$ts.sql.enc" -pass env:PASS
           rm -f dump.pgcustom
           echo "Sauvegarde créée : weedland-$ts.sql.enc ($(du -h weedland-$ts.sql.enc | cut -f1))"

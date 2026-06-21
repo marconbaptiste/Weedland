@@ -10,8 +10,11 @@ Dans GitHub → le dépôt → **Settings → Secrets and variables → Actions 
 
 | Nom | Valeur |
 |-----|--------|
-| `SUPABASE_DB_URL` | la chaîne de connexion Postgres **Session pooler** (Supabase → Connect → URI, port `5432`), avec le vrai mot de passe |
+| `SUPABASE_DB_PASSWORD` | le mot de passe de la base (tel quel — n'importe quels caractères, aucun encodage requis) |
 | `BACKUP_PASSPHRASE` | un mot de passe **fort** que tu gardes précieusement (il sert à déchiffrer ; sans lui, la sauvegarde est illisible) |
+
+> L'hôte et l'utilisateur de la base sont définis directement dans le workflow
+> (`PGHOST`, `PGUSER`) ; seul le **mot de passe** est un secret.
 
 > ⚠️ Garde `BACKUP_PASSPHRASE` ailleurs (gestionnaire de mots de passe). Si tu le perds, les sauvegardes sont irrécupérables — c'est le but du chiffrement.
 
