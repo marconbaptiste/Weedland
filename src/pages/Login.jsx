@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 
 export default function Login() {
@@ -65,6 +65,10 @@ export default function Login() {
           <span className="g-logo" aria-hidden="true">G</span>
           Se connecter avec Google
         </button>
+
+        <Link to="/inscription" className="statut" style={{ textAlign: 'center' }}>
+          Créer un nouveau magasin
+        </Link>
       </form>
     </div>
   );

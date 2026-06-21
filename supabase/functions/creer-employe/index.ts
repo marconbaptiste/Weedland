@@ -1,9 +1,14 @@
-// Edge Function : création d'un compte employé/admin.
-// Réservée aux administrateurs. Utilise la clé service_role (jamais exposée au
-// front). Déploiement : `supabase functions deploy creer-employe`.
+// Edge Function : création de comptes + inscription self-service d'un magasin.
+// Déploiement : `supabase functions deploy creer-employe` (slug déployé : hyper-api).
 //
-// Le trigger handle_new_user (schema.sql) crée automatiquement le profil
-// public.users à partir des user_metadata (nom, role) passés ici.
+// Trois usages :
+//  - action 'inscription' : PUBLIC (pas d'auth). Crée un magasin + son admin,
+//    protégé par un code secret (Deno.env CODE_INSCRIPTION). Anti-spam.
+//  - action 'reset' : admin/superadmin — réinitialise le mot de passe d'un employé.
+//  - défaut : admin/superadmin — crée un compte employé/admin.
+//
+// Le trigger handle_new_user (schema) crée le profil public.users à partir de
+// l'allowlist comptes_autorises (rôle + magasin_id) et des user_metadata (nom).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const cors = {
@@ -27,9 +32,67 @@ Deno.serve(async (req) => {
     const url = Deno.env.get('SUPABASE_URL')!;
     const anon = Deno.env.get('SUPABASE_ANON_KEY')!;
     const serviceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const authHeader = req.headers.get('Authorization') ?? '';
+    const corps = await req.json();
 
-    // 1. Identifier l'appelant via son JWT.
+    // ----------------------------------------------------------------------
+    // 1) Inscription self-service d'un magasin (PUBLIC, protégée par un code).
+    // ----------------------------------------------------------------------
+    if (corps.action === 'inscription') {
+      const code = Deno.env.get('CODE_INSCRIPTION');
+      if (!code || corps.code !== code) {
+        return json({ error: 'Code d’inscription invalide.' }, 403);
+      }
+      const nomMagasin = String(corps.nomMagasin ?? '').trim();
+      const nom = String(corps.nom ?? '').trim();
+      const email = String(corps.email ?? '').trim().toLowerCase();
+      const motDePasse = String(corps.motDePasse ?? '');
+      if (!nomMagasin || !nom || !email) {
+        return json({ error: 'Magasin, nom et email sont requis.' }, 400);
+      }
+      if (motDePasse.length < 8) {
+        return json({ error: 'Mot de passe trop court (8 caractères minimum).' }, 400);
+      }
+
+      const admin = createClient(url, serviceRole);
+
+      // Email déjà autorisé / utilisé ?
+      const { data: deja } = await admin
+        .from('comptes_autorises')
+        .select('email')
+        .eq('email', email)
+        .maybeSingle();
+      if (deja) return json({ error: 'Cet email est déjà utilisé.' }, 400);
+
+      // Créer le magasin (service_role => contourne la RLS).
+      const { data: mag, error: errMag } = await admin
+        .from('magasins')
+        .insert({ nom: nomMagasin })
+        .select('id')
+        .single();
+      if (errMag || !mag) return json({ error: errMag?.message ?? 'Création du magasin impossible' }, 400);
+
+      // Autoriser l'email en admin de ce magasin.
+      const { error: errAuth } = await admin
+        .from('comptes_autorises')
+        .insert({ email, role: 'admin', magasin_id: mag.id });
+      if (errAuth) return json({ error: errAuth.message }, 400);
+
+      // Créer le compte (le trigger crée le profil admin + magasin).
+      const { error: errUser } = await admin.auth.admin.createUser({
+        email,
+        password: motDePasse,
+        email_confirm: true,
+        user_metadata: { nom, role: 'admin' },
+      });
+      if (errUser) return json({ error: errUser.message }, 400);
+
+      return json({ ok: true }, 200);
+    }
+
+    // ----------------------------------------------------------------------
+    // 2) Reste : réservé aux administrateurs (et super-admin).
+    // ----------------------------------------------------------------------
+    const authHeader = req.headers.get('Authorization') ?? '';
     const clientAppelant = createClient(url, anon, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -39,7 +102,6 @@ Deno.serve(async (req) => {
     } = await clientAppelant.auth.getUser();
     if (errUser || !user) return json({ error: 'Non authentifié' }, 401);
 
-    // 2. Vérifier qu'il est admin (lecture avec service_role).
     const admin = createClient(url, serviceRole);
     const { data: profil } = await admin
       .from('users')
@@ -50,9 +112,7 @@ Deno.serve(async (req) => {
       return json({ error: 'Accès réservé aux administrateurs' }, 403);
     }
 
-    const corps = await req.json();
-
-    // 3 bis. Réinitialisation du mot de passe d'un employé.
+    // 2a. Réinitialisation du mot de passe d'un employé.
     if (corps.action === 'reset') {
       const { userId, motDePasse: nouveau } = corps;
       if (!userId || !nouveau) return json({ error: 'Champs requis : userId, motDePasse' }, 400);
@@ -63,7 +123,7 @@ Deno.serve(async (req) => {
       return json({ ok: true }, 200);
     }
 
-    // 3. Créer le compte.
+    // 2b. Créer le compte.
     const { email, motDePasse, nom, role, pourcentage } = corps;
     if (!email || !motDePasse || !nom) {
       return json({ error: 'Champs requis : nom, email, mot de passe' }, 400);

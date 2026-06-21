@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { RequireAuth, RequireAdmin, RequireSuperadmin } from './components/Gardes';
 import Layout from './components/Layout';
 import Login from './pages/Login';
+import Inscription from './pages/Inscription';
 import Caisse from './pages/Caisse';
 import Chromes from './pages/Chromes';
 import Stocks from './pages/Stocks';
@@ -18,6 +19,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/connexion" element={<Login />} />
+      <Route path="/inscription" element={<Inscription />} />
 
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
