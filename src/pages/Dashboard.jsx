@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [employeFiltre, setEmployeFiltre] = useState('');
   const [employes, setEmployes] = useState([]);
   const [caRows, setCaRows] = useState([]);
+  const [chromesAll, setChromesAll] = useState([]); // tous les chromes de la période
   const [intRows, setIntRows] = useState([]);
   const [totalPaiements, setTotalPaiements] = useState(0);
   const [erreur, setErreur] = useState('');
@@ -53,6 +54,13 @@ export default function Dashboard() {
     const { data: pay } = await qp;
     setTotalPaiements(somme((pay ?? []).map((p) => p.montant)));
 
+    // Tous les chromes de la période (y compris ceux saisis un jour sans
+    // clôture : montants dus oubliés). Ils ajustent le CA.
+    let qc = supabase.from('chromes').select('date, employe_id, type, montant').gte('date', debut).lte('date', fin);
+    if (employeFiltre) qc = qc.eq('employe_id', employeFiltre);
+    const { data: chr } = await qc;
+    setChromesAll(chr ?? []);
+
     // Intéressement + heures par employé (propriétaires + co-participants).
     let qi = supabase
       .from('v_interessement_employe')
@@ -70,15 +78,27 @@ export default function Dashboard() {
     charger();
   }, [charger]);
 
+  // Chromes agrégés par (employé|date) — sert au total ET à repérer les jours
+  // de chromes sans clôture (montants dus oubliés).
+  const chromeParCle = new Map();
+  chromesAll.forEach((c) => {
+    const cle = `${c.employe_id}|${c.date}`;
+    const v = chromeParCle.get(cle) ?? { avances: 0, remboursements: 0 };
+    if (c.type === 'avance') v.avances = somme([v.avances, c.montant]);
+    else v.remboursements = somme([v.remboursements, c.montant]);
+    chromeParCle.set(cle, v);
+  });
+
   const totaux = {
-    ca: somme(caRows.map((r) => r.ca_jour)),
     encaissements: somme(caRows.map((r) => r.encaissements)),
-    avances: somme(caRows.map((r) => r.avances)),
-    remboursements: somme(caRows.map((r) => r.remboursements)),
+    avances: somme(chromesAll.filter((c) => c.type === 'avance').map((c) => c.montant)),
+    remboursements: somme(chromesAll.filter((c) => c.type === 'remboursement').map((c) => c.montant)),
     // Intéressement et heures incluent les journées partagées (co-participants).
     interessement: somme(intRows.map((r) => r.interessement)),
     heures: somme(intRows.map((r) => r.heures_travaillees)),
   };
+  // CA = encaissements + avances − remboursements (chromes hors clôture inclus).
+  totaux.ca = somme([totaux.encaissements, totaux.avances, -totaux.remboursements]);
   const nomEmploye = (id) => employes.find((e) => e.id === id)?.nom ?? '—';
 
   // Détail par personne présente : propriétaire de clôture + co-participants
@@ -86,30 +106,51 @@ export default function Dashboard() {
   // propriétaire (le CA n'est compté qu'une fois) ; le co-participant n'a que
   // ses heures et sa part d'intéressement.
   const apportCaisse = new Map(caRows.map((r) => [r.caisse_id, r]));
-  const lignesDetail = intRows
-    .map((r) => {
-      const ca = apportCaisse.get(r.caisse_id);
+  const lignesCloture = intRows.map((r) => {
+    const ca = apportCaisse.get(r.caisse_id);
+    return {
+      cle: `${r.caisse_id}:${r.employe_id}`,
+      date: r.date,
+      employe_id: r.employe_id,
+      est_proprietaire: r.est_proprietaire,
+      ca_jour: r.ca_jour,
+      encaissements: r.encaissements,
+      cb: r.est_proprietaire ? ca?.cb ?? 0 : null,
+      especes: r.est_proprietaire ? ca?.especes ?? 0 : null,
+      avances: r.est_proprietaire ? ca?.avances ?? 0 : null,
+      remboursements: r.est_proprietaire ? ca?.remboursements ?? 0 : null,
+      heures: r.heures_travaillees,
+      pourcentage: r.pourcentage_interessement,
+      interessement: r.interessement,
+    };
+  });
+  // Jours de chromes SANS clôture → lignes « hors clôture » (CA = avances − remb.).
+  const closureCles = new Set(caRows.map((r) => `${r.employe_id}|${r.date}`));
+  const lignesOrphelines = [...chromeParCle.entries()]
+    .filter(([cle]) => !closureCles.has(cle))
+    .map(([cle, v]) => {
+      const [employe_id, date] = cle.split('|');
       return {
-        cle: `${r.caisse_id}:${r.employe_id}`,
-        date: r.date,
-        employe_id: r.employe_id,
-        est_proprietaire: r.est_proprietaire,
-        ca_jour: r.ca_jour,
-        encaissements: r.encaissements,
-        cb: r.est_proprietaire ? ca?.cb ?? 0 : null,
-        especes: r.est_proprietaire ? ca?.especes ?? 0 : null,
-        avances: r.est_proprietaire ? ca?.avances ?? 0 : null,
-        remboursements: r.est_proprietaire ? ca?.remboursements ?? 0 : null,
-        heures: r.heures_travaillees,
-        pourcentage: r.pourcentage_interessement,
-        interessement: r.interessement,
+        cle: `orphan:${cle}`,
+        date,
+        employe_id,
+        est_proprietaire: true,
+        orphelin: true,
+        ca_jour: somme([v.avances, -v.remboursements]),
+        encaissements: null,
+        avances: v.avances,
+        remboursements: v.remboursements,
+        heures: 0,
+        pourcentage: 0,
+        interessement: 0,
       };
-    })
-    .sort((a, b) => {
-      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-      return (b.est_proprietaire ? 1 : 0) - (a.est_proprietaire ? 1 : 0);
     });
-  const nomLigne = (r) => nomEmploye(r.employe_id) + (r.est_proprietaire ? '' : ' (partagé)');
+  const lignesDetail = [...lignesCloture, ...lignesOrphelines].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return (b.est_proprietaire ? 1 : 0) - (a.est_proprietaire ? 1 : 0);
+  });
+  const nomLigne = (r) =>
+    nomEmploye(r.employe_id) + (r.orphelin ? ' (hors clôture)' : r.est_proprietaire ? '' : ' (partagé)');
 
   function exporter() {
     const entetes = [

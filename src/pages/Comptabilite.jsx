@@ -28,7 +28,8 @@ export default function Comptabilite() {
     const [d, f] = intervallePeriode('mois');
     return { debut: d, fin: f };
   });
-  const [caRows, setCaRows] = useState([]);
+  const [encRows, setEncRows] = useState([]); // encaissements par clôture (date)
+  const [chromesRows, setChromesRows] = useState([]); // tous les chromes de la période
   const [caAnnee, setCaAnnee] = useState(0);
   const [charges, setCharges] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
@@ -51,14 +52,22 @@ export default function Comptabilite() {
       ? supabase.from('fournisseurs').select('id, libelle, montant, justificatif').eq('mois', mois).order('created_at')
       : supabase.from('fournisseurs').select('id, libelle, montant').gte('mois', premierDuMois(debut)).lte('mois', fin).order('mois');
 
-    const [ca, an, ch, fo] = await Promise.all([
-      supabase.from('v_ca_jour').select('date, ca_jour, encaissements').gte('date', debut).lte('date', fin),
-      supabase.from('v_ca_jour').select('ca_jour').gte('date', anneeDebut).lte('date', anneeFin),
+    // CA = encaissements (clôtures) + avances − remboursements (TOUS les chromes
+    // de la période, même ceux saisis un jour sans clôture : montants dus oubliés).
+    const [enc, an, chr, anChr, ch, fo] = await Promise.all([
+      supabase.from('v_ca_jour').select('date, encaissements').gte('date', debut).lte('date', fin),
+      supabase.from('v_ca_jour').select('encaissements').gte('date', anneeDebut).lte('date', anneeFin),
+      supabase.from('chromes').select('date, type, montant').gte('date', debut).lte('date', fin),
+      supabase.from('chromes').select('type, montant').gte('date', anneeDebut).lte('date', anneeFin),
       reqCharges,
       reqFourn,
     ]);
-    setCaRows(ca.data ?? []);
-    setCaAnnee(somme((an.data ?? []).map((r) => r.ca_jour)));
+    setEncRows(enc.data ?? []);
+    setChromesRows(chr.data ?? []);
+    const av = (rows) => somme((rows ?? []).filter((c) => c.type === 'avance').map((c) => c.montant));
+    const rb = (rows) => somme((rows ?? []).filter((c) => c.type === 'remboursement').map((c) => c.montant));
+    const anEnc = somme((an.data ?? []).map((r) => r.encaissements));
+    setCaAnnee(somme([anEnc, av(anChr.data), -rb(anChr.data)]));
     setCharges(ch.data ?? []);
     setFournisseurs(fo.data ?? []);
   }, [debut, fin, mois, enMois]);
@@ -140,8 +149,29 @@ export default function Comptabilite() {
   }
 
   // --- Totaux ---
-  const caPeriode = somme(caRows.map((r) => r.ca_jour));
-  const encaissements = somme(caRows.map((r) => r.encaissements));
+  // CA par jour = encaissements de la journée + avances − remboursements du jour,
+  // sur l'UNION des jours de clôture ET des jours de chromes (montants dus saisis
+  // en retard inclus). Pas de double comptage : encaissements ↔ clôtures,
+  // avances/remboursements ↔ table chromes.
+  const jours = (() => {
+    const map = {};
+    const j = (date) => (map[date] ??= { enc: 0, av: 0, rb: 0 });
+    encRows.forEach((r) => {
+      const d = j(r.date);
+      d.enc = somme([d.enc, r.encaissements]);
+    });
+    chromesRows.forEach((r) => {
+      const d = j(r.date);
+      if (r.type === 'avance') d.av = somme([d.av, r.montant]);
+      else d.rb = somme([d.rb, r.montant]);
+    });
+    return Object.entries(map)
+      .map(([date, v]) => ({ date, encaissements: v.enc, ca: somme([v.enc, v.av, -v.rb]) }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  })();
+
+  const caPeriode = somme(jours.map((d) => d.ca));
+  const encaissements = somme(jours.map((d) => d.encaissements));
   const totalCharges = somme(charges.map((c) => parseMontant(c.montant)));
   const totalFournisseurs = somme(fournisseurs.map((f) => parseMontant(f.montant)));
   const totalDepenses = somme([totalCharges, totalFournisseurs]);
@@ -150,20 +180,18 @@ export default function Comptabilite() {
   // Répartition CA : par semaine (mois) ou par mois (année/période).
   const semaines = [1, 2, 3, 4, 5].map((n) => ({
     n,
-    ca: somme(caRows.filter((r) => semaineDuMois(r.date) === n).map((r) => r.ca_jour)),
+    ca: somme(jours.filter((d) => semaineDuMois(d.date) === n).map((d) => d.ca)),
   }));
   const parMois = (() => {
     const map = {};
-    caRows.forEach((r) => {
-      const k = r.date.slice(0, 7);
-      map[k] = somme([map[k] || 0, r.ca_jour]);
+    jours.forEach((d) => {
+      const k = d.date.slice(0, 7);
+      map[k] = somme([map[k] || 0, d.ca]);
     });
     return Object.keys(map).sort().map((k) => ({ mois: k, ca: map[k] }));
   })();
 
-  const pointsCA = [...caRows]
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((r) => ({ label: r.date.slice(8, 10), valeur: r.ca_jour }));
+  const pointsCA = jours.map((d) => ({ label: d.date.slice(8, 10), valeur: d.ca }));
   const barres = enMois
     ? semaines.map((s) => ({ label: `S${s.n}`, valeur: s.ca }))
     : parMois.map((m) => ({ label: moisCourt(m.mois), valeur: m.ca }));
