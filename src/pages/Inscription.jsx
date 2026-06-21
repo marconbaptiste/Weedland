@@ -17,6 +17,7 @@ export default function Inscription() {
   });
   const [erreur, setErreur] = useState('');
   const [envoi, setEnvoi] = useState(false);
+  const [succes, setSucces] = useState(false); // écran de félicitations
 
   const maj = (champ) => (e) => setForm((f) => ({ ...f, [champ]: e.target.value }));
 
@@ -44,14 +45,37 @@ export default function Inscription() {
       setEnvoi(false);
       return;
     }
-    // Compte créé : on connecte directement.
+    // Compte créé : on connecte directement, puis on affiche les félicitations.
     const { error: errCo } = await connexion(form.email.trim().toLowerCase(), form.motDePasse);
     setEnvoi(false);
     if (errCo) {
       navigate('/connexion', { replace: true });
       return;
     }
-    navigate('/', { replace: true });
+    setSucces(true);
+  }
+
+  if (succes) {
+    return (
+      <div className="page-connexion">
+        <div className="card carte-connexion" style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '3rem' }}>🎉</div>
+          <h1 className="logo-connexion">Félicitations&nbsp;!</h1>
+          <p className="statut">
+            Le magasin <strong>{form.nomMagasin.trim()}</strong> est créé. Bienvenue
+            {form.nom.trim() ? `, ${form.nom.trim()}` : ''}&nbsp;! Tu es l’administrateur de ta
+            boutique — tu peux dès maintenant ajouter tes employés, tes clients et tes stocks.
+          </p>
+          <button
+            className="btn btn-primary"
+            type="button"
+            onClick={() => navigate('/', { replace: true })}
+          >
+            Accéder à mon magasin
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
