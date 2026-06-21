@@ -25,7 +25,12 @@ export default function Inscription() {
     setErreur('');
     setEnvoi(true);
     const { data, error } = await supabase.functions.invoke('hyper-api', {
-      body: { action: 'inscription', ...form, email: form.email.trim().toLowerCase() },
+      body: {
+        action: 'inscription',
+        ...form,
+        code: form.code.trim(),
+        email: form.email.trim().toLowerCase(),
+      },
     });
     if (error || data?.error) {
       let message = data?.error ?? 'Inscription impossible.';

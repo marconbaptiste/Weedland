@@ -38,8 +38,8 @@ Deno.serve(async (req) => {
     // 1) Inscription self-service d'un magasin (PUBLIC, protégée par un code).
     // ----------------------------------------------------------------------
     if (corps.action === 'inscription') {
-      const code = Deno.env.get('CODE_INSCRIPTION');
-      if (!code || corps.code !== code) {
+      const code = (Deno.env.get('CODE_INSCRIPTION') ?? '').trim();
+      if (!code || String(corps.code ?? '').trim() !== code) {
         return json({ error: 'Code d’inscription invalide.' }, 403);
       }
       const nomMagasin = String(corps.nomMagasin ?? '').trim();
