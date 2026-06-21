@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 
 export default function Login() {
-  const { connexion } = useAuth();
+  const { connexion, connexionGoogle } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [motDePasse, setMotDePasse] = useState('');
@@ -21,6 +21,13 @@ export default function Login() {
       return;
     }
     navigate('/', { replace: true });
+  }
+
+  async function google() {
+    setErreur('');
+    // Redirige vers Google ; au retour, la session est rétablie automatiquement.
+    const { error } = await connexionGoogle();
+    if (error) setErreur('Connexion Google indisponible.');
   }
 
   return (
@@ -50,6 +57,13 @@ export default function Login() {
         {erreur && <p className="message-erreur">{erreur}</p>}
         <button className="btn btn-primary" type="submit" disabled={envoi}>
           {envoi ? 'Connexion…' : 'Se connecter'}
+        </button>
+
+        <div className="separateur"><span>ou</span></div>
+
+        <button className="btn btn-google" type="button" onClick={google}>
+          <span className="g-logo" aria-hidden="true">G</span>
+          Se connecter avec Google
         </button>
       </form>
     </div>

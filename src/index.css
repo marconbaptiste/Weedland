@@ -211,6 +211,38 @@ textarea:focus {
   font-size: 0.9rem;
   margin: 0;
 }
+.separateur {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--texte-doux);
+  font-size: 0.8rem;
+}
+.separateur::before,
+.separateur::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--bordure);
+}
+.btn-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  background: #fff;
+  color: #1f1f1f;
+  border-color: #fff;
+  font-weight: 600;
+}
+.btn-google:hover {
+  background: #f1f1f1;
+  border-color: #f1f1f1;
+}
+.btn-google .g-logo {
+  font-weight: 800;
+  color: #4285f4;
+  font-family: Arial, sans-serif;
+}
 
 /* ----- Récap caisse ----- */
 .recap-ligne {

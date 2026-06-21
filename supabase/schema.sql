@@ -172,6 +172,18 @@ create table if not exists public.stocks (
 );
 create index if not exists idx_stocks_categorie on public.stocks (categorie);
 
+-- ---------------------------------------------------------------------------
+-- comptes_autorises : allowlist des emails autorisés à se connecter
+-- (mot de passe ou Google). Gérée par l'admin. Le trigger handle_new_user ne
+-- crée un profil que pour un email présent ici.
+-- ---------------------------------------------------------------------------
+create table if not exists public.comptes_autorises (
+  email                     text primary key,
+  role                      text not null default 'employe',
+  pourcentage_interessement numeric(5, 2) not null default 0,
+  created_at                timestamptz not null default now()
+);
+
 -- Index utiles pour les filtres jour / employé.
 create index if not exists idx_caisse_jour_date on public.caisse_jour (date);
 create index if not exists idx_caisse_jour_employe on public.caisse_jour (employe_id);
@@ -305,19 +317,27 @@ grant select on public.v_solde_client to anon, authenticated;
 -- DÉCLENCHEUR : crée automatiquement le profil public.users à l'inscription.
 -- Le nom vient de raw_user_meta_data.nom (passé à signUp) sinon de l'email.
 -- ============================================================================
+-- Le profil n'est créé QUE pour un email pré-autorisé (public.comptes_autorises),
+-- sinon la nouvelle inscription (ex. Google) n'obtient aucun accès.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v public.comptes_autorises%rowtype;
 begin
+  select * into v from public.comptes_autorises where email = lower(new.email);
+  if v.email is null then
+    return new; -- email non autorisé : pas de profil, donc pas d'accès
+  end if;
   insert into public.users (id, nom, role, pourcentage_interessement)
   values (
     new.id,
     coalesce(new.raw_user_meta_data ->> 'nom', split_part(new.email, '@', 1)),
-    coalesce(new.raw_user_meta_data ->> 'role', 'employe'),
-    coalesce((new.raw_user_meta_data ->> 'pourcentage_interessement')::numeric, 0)
+    coalesce(new.raw_user_meta_data ->> 'role', v.role, 'employe'),
+    coalesce((new.raw_user_meta_data ->> 'pourcentage_interessement')::numeric, v.pourcentage_interessement, 0)
   )
   on conflict (id) do nothing;
   return new;

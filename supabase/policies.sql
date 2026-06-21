@@ -25,6 +25,19 @@ as $$
   );
 $$;
 
+-- « Membre » = possède un profil public.users (donc email pré-autorisé). Sert à
+-- verrouiller les registres partagés : un compte connecté mais non autorisé
+-- (ex. Google hors allowlist) n'a pas de profil et ne voit donc rien.
+create or replace function public.est_membre()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (select 1 from public.users where id = auth.uid());
+$$;
+
 -- Vérifications croisées caisse_jour <-> caisse_partage en SECURITY DEFINER :
 -- contournent la RLS pour éviter une récursion infinie entre les deux policies.
 create or replace function public.est_coparticipant(p_caisse uuid)
@@ -81,11 +94,11 @@ create policy users_admin_delete on public.users for delete to authenticated
 -- ---------------------------------------------------------------------------
 drop policy if exists clients_select on public.clients;
 create policy clients_select on public.clients for select to authenticated
-  using (true);
+  using (public.est_membre());
 
 drop policy if exists clients_insert on public.clients;
 create policy clients_insert on public.clients for insert to authenticated
-  with check (true);
+  with check (public.est_membre());
 
 drop policy if exists clients_admin_update on public.clients;
 create policy clients_admin_update on public.clients for update to authenticated
@@ -126,7 +139,7 @@ create policy caisse_delete on public.caisse_jour for delete to authenticated
 -- ---------------------------------------------------------------------------
 drop policy if exists chromes_select on public.chromes;
 create policy chromes_select on public.chromes for select to authenticated
-  using (true);
+  using (public.est_membre());
 
 drop policy if exists chromes_insert on public.chromes;
 create policy chromes_insert on public.chromes for insert to authenticated
@@ -210,7 +223,7 @@ create policy fiches_paie_admin on public.fiches_paie for all to authenticated
 -- ---------------------------------------------------------------------------
 drop policy if exists promos_select on public.promos;
 create policy promos_select on public.promos for select to authenticated
-  using (true);
+  using (public.est_membre());
 
 drop policy if exists promos_insert on public.promos;
 create policy promos_insert on public.promos for insert to authenticated
@@ -233,16 +246,24 @@ alter table public.stocks enable row level security;
 
 drop policy if exists stocks_select on public.stocks;
 create policy stocks_select on public.stocks for select to authenticated
-  using (true);
+  using (public.est_membre());
 
 drop policy if exists stocks_insert on public.stocks;
 create policy stocks_insert on public.stocks for insert to authenticated
-  with check (true);
+  with check (public.est_membre());
 
 drop policy if exists stocks_update on public.stocks;
 create policy stocks_update on public.stocks for update to authenticated
-  using (true) with check (true);
+  using (public.est_membre()) with check (public.est_membre());
 
 drop policy if exists stocks_delete on public.stocks;
 create policy stocks_delete on public.stocks for delete to authenticated
   using (public.est_admin());
+
+-- ---------------------------------------------------------------------------
+-- comptes_autorises : allowlist gérée par l'admin uniquement.
+-- ---------------------------------------------------------------------------
+alter table public.comptes_autorises enable row level security;
+drop policy if exists autorises_admin on public.comptes_autorises;
+create policy autorises_admin on public.comptes_autorises for all to authenticated
+  using (public.est_admin()) with check (public.est_admin());

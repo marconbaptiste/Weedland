@@ -69,6 +69,11 @@ export function AuthProvider({ children }) {
     chargement,
     connexion: (email, motDePasse) =>
       supabase.auth.signInWithPassword({ email, password: motDePasse }),
+    connexionGoogle: () =>
+      supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin },
+      }),
     deconnexion: () => supabase.auth.signOut(),
   };
 

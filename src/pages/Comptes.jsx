@@ -18,18 +18,37 @@ export default function Comptes() {
   });
   const [statut, setStatut] = useState('');
   const [envoi, setEnvoi] = useState(false);
+  // Allowlist des emails autorisés à se connecter (notamment via Google).
+  const [autorises, setAutorises] = useState([]);
+  const [nouvelEmail, setNouvelEmail] = useState('');
 
   const charger = useCallback(async () => {
-    const { data } = await supabase
-      .from('users')
-      .select('id, nom, role, pourcentage_interessement')
-      .order('nom');
+    const [{ data }, { data: aut }] = await Promise.all([
+      supabase.from('users').select('id, nom, role, pourcentage_interessement').order('nom'),
+      supabase.from('comptes_autorises').select('email, role').order('email'),
+    ]);
     setUsers(data ?? []);
+    setAutorises(aut ?? []);
   }, []);
 
   useEffect(() => {
     charger();
   }, [charger]);
+
+  async function autoriserEmail(e) {
+    e.preventDefault();
+    const email = nouvelEmail.trim().toLowerCase();
+    if (!email) return;
+    await supabase.from('comptes_autorises').upsert({ email }, { onConflict: 'email' });
+    setNouvelEmail('');
+    charger();
+  }
+
+  async function retirerEmail(email) {
+    if (!window.confirm(`Retirer ${email} des comptes autorisés ?`)) return;
+    await supabase.from('comptes_autorises').delete().eq('email', email);
+    charger();
+  }
 
   async function changerRole(id, role) {
     await supabase.from('users').update({ role }).eq('id', id);
@@ -94,6 +113,16 @@ export default function Comptes() {
     e.preventDefault();
     setEnvoi(true);
     setStatut('');
+    // Le profil n'est créé que pour un email autorisé : on l'ajoute à l'allowlist
+    // AVANT de créer le compte (le trigger handle_new_user le lit à la création).
+    await supabase.from('comptes_autorises').upsert(
+      {
+        email: form.email.trim().toLowerCase(),
+        role: form.role,
+        pourcentage_interessement: parseMontant(form.pourcentage),
+      },
+      { onConflict: 'email' },
+    );
     // NB : le slug de l'Edge Function déployée est « hyper-api » (le nom affiché
     // « creer-employe » n'est qu'une étiquette ; le slug ne peut pas changer).
     const { data, error } = await supabase.functions.invoke('hyper-api', { body: form });
@@ -234,6 +263,58 @@ export default function Comptes() {
               <tr>
                 <td colSpan={4} className="vide">
                   Aucun compte.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="card">
+        <h2>Connexion Google — emails autorisés</h2>
+        <p className="statut">
+          Seuls ces emails peuvent se connecter (par Google ou mot de passe). Un email retiré ici
+          ne pourra plus créer de nouvelle session. Les comptes que tu crées ci-dessus sont ajoutés
+          automatiquement.
+        </p>
+        <form className="form-inline" onSubmit={autoriserEmail}>
+          <input
+            type="email"
+            placeholder="email@exemple.com"
+            value={nouvelEmail}
+            onChange={(e) => setNouvelEmail(e.target.value)}
+          />
+          <button className="btn" type="submit">
+            Autoriser
+          </button>
+        </form>
+        <table className="tableau">
+          <thead>
+            <tr>
+              <th>Email autorisé</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {autorises.map((a) => (
+              <tr key={a.email}>
+                <td>{a.email}</td>
+                <td className="droite">
+                  <button
+                    type="button"
+                    className="btn btn-discret"
+                    onClick={() => retirerEmail(a.email)}
+                    aria-label="Retirer l’autorisation"
+                  >
+                    ✕
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {autorises.length === 0 && (
+              <tr>
+                <td colSpan={2} className="vide">
+                  Aucun email autorisé.
                 </td>
               </tr>
             )}
