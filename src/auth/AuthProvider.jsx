@@ -18,6 +18,7 @@ export function AuthProvider({ children }) {
   const [sessionPrete, setSessionPrete] = useState(false); // getSession() a répondu
   const [profil, setProfil] = useState(null);
   const [profilPret, setProfilPret] = useState(false);
+  const [magasins, setMagasins] = useState([]); // liste (super-admin uniquement)
 
   // Suivi de la session Supabase (persistée ~30 j et rafraîchie automatiquement).
   useEffect(() => {
@@ -61,12 +62,36 @@ export function AuthProvider({ children }) {
   // évite de rediriger vers la connexion au rafraîchissement.
   const chargement = !sessionPrete || !profilPret;
 
+  // Liste des magasins (pour le sélecteur du super-admin).
+  useEffect(() => {
+    if (profil?.role !== 'superadmin') {
+      setMagasins([]);
+      return;
+    }
+    supabase
+      .from('magasins')
+      .select('id, nom')
+      .order('nom')
+      .then(({ data }) => setMagasins(data ?? []));
+  }, [profil?.role]);
+
+  // Super-admin : bascule le magasin actif (met à jour son propre magasin_id).
+  // Un rechargement garantit que toutes les pages relisent le bon magasin.
+  const changerMagasin = async (magasinId) => {
+    if (!session?.user || !magasinId) return;
+    await supabase.from('users').update({ magasin_id: magasinId }).eq('id', session.user.id);
+    window.location.reload();
+  };
+
   const value = {
     session,
     utilisateur: session?.user ?? null,
     profil,
     estAdmin: profil?.role === 'admin' || profil?.role === 'superadmin',
     estSuperadmin: profil?.role === 'superadmin',
+    magasins,
+    magasinId: profil?.magasin_id ?? null,
+    changerMagasin,
     chargement,
     connexion: (email, motDePasse) =>
       supabase.auth.signInWithPassword({ email, password: motDePasse }),

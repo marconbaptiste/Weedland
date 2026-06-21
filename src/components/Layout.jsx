@@ -5,7 +5,8 @@ import Aide from './Aide';
 const lienActif = ({ isActive }) => (isActive ? 'nav-lien actif' : 'nav-lien');
 
 export default function Layout() {
-  const { profil, estAdmin, estSuperadmin, deconnexion } = useAuth();
+  const { profil, estAdmin, estSuperadmin, magasins, magasinId, changerMagasin, deconnexion } =
+    useAuth();
 
   return (
     <div className="app">
@@ -13,6 +14,20 @@ export default function Layout() {
         <div className="entete-haut">
           <span className="logo">Gestion</span>
           <div className="entete-droite">
+            {estSuperadmin && magasins.length > 0 && (
+              <select
+                className="select-magasin"
+                value={magasinId ?? ''}
+                onChange={(e) => changerMagasin(e.target.value)}
+                title="Magasin actif"
+              >
+                {magasins.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.nom}
+                  </option>
+                ))}
+              </select>
+            )}
             <span className="profil">{profil?.nom}</span>
             <Aide />
             <button className="btn btn-discret" onClick={deconnexion}>
