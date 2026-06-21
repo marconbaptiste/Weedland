@@ -59,7 +59,14 @@ export default function Inscription() {
         </p>
         <label className="field">
           <span>Code d’inscription</span>
-          <input value={form.code} onChange={maj('code')} required />
+          <input
+            value={form.code}
+            onChange={maj('code')}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            required
+          />
         </label>
         <label className="field">
           <span>Nom du magasin</span>
