@@ -149,6 +149,26 @@ export default function Historique() {
   }
 
   // --- Admin : fiches par clôture ---
+  // On affiche une fiche par « jour travaillé » = union des clôtures ET des
+  // dates de chromes. Ainsi un chrome anté/postdaté un jour SANS clôture (ex.
+  // remboursement saisi des mois après) reste visible dans l'historique.
+  const cles = new Set([
+    ...closures.map((c) => `${c.employe_id}|${c.date}`),
+    ...Object.keys(chromes),
+  ]);
+  const jours = [...cles]
+    .map((cle) => {
+      const [employe_id, date] = cle.split('|');
+      return {
+        cle,
+        employe_id,
+        date,
+        closure: closures.find((c) => `${c.employe_id}|${c.date}` === cle) ?? null,
+        det: chromes[cle] || { avances: [], remboursements: [] },
+      };
+    })
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
   return (
     <div className="page">
       <h1>Historique général</h1>
@@ -161,14 +181,15 @@ export default function Historique() {
         <p className="periode-info">{closures.length} clôture(s)</p>
       </div>
 
-      {closures.map((c) => {
-        const det = chromes[`${c.employe_id}|${c.date}`] || { avances: [], remboursements: [] };
-        const enEdition = editId === c.caisse_id;
+      {jours.map((j) => {
+        const c = j.closure;
+        const det = j.det;
+        const enEdition = c && editId === c.caisse_id;
         return (
-          <div key={c.caisse_id} className="card histo">
+          <div key={j.cle} className="card histo">
             <div className="histo-tete">
-              <strong>{noms[c.employe_id] ?? '—'}</strong>
-              <span className="histo-date">{formatDateFr(c.date)}</span>
+              <strong>{noms[j.employe_id] ?? '—'}</strong>
+              <span className="histo-date">{formatDateFr(j.date)}</span>
             </div>
 
             {enEdition ? (
@@ -198,12 +219,16 @@ export default function Historique() {
               </div>
             ) : (
               <>
-                <div className="histo-grille">
-                  <span>CA</span><strong>{formatEuros(c.ca_jour)}</strong>
-                  <span>CB</span><span>{formatEuros(c.cb)}</span>
-                  <span>Espèces (Moro)</span><span>{formatEuros(c.especes)}</span>
-                  <span>Fond de caisse</span><span>{formatEuros(c.fond_caisse)}</span>
-                </div>
+                {c ? (
+                  <div className="histo-grille">
+                    <span>CA</span><strong>{formatEuros(c.ca_jour)}</strong>
+                    <span>CB</span><span>{formatEuros(c.cb)}</span>
+                    <span>Espèces (Moro)</span><span>{formatEuros(c.especes)}</span>
+                    <span>Fond de caisse</span><span>{formatEuros(c.fond_caisse)}</span>
+                  </div>
+                ) : (
+                  <p className="statut">Aucune clôture de caisse ce jour — chromes uniquement.</p>
+                )}
 
                 {det.avances.length > 0 && (
                   <div className="histo-bloc">
@@ -229,14 +254,16 @@ export default function Historique() {
                   </div>
                 )}
 
-                <button className="btn btn-discret" onClick={() => ouvrirEdition(c)}>Modifier</button>
+                {c && (
+                  <button className="btn btn-discret" onClick={() => ouvrirEdition(c)}>Modifier</button>
+                )}
               </>
             )}
           </div>
         );
       })}
 
-      {closures.length === 0 && <p className="vide">Aucune clôture ce mois-ci.</p>}
+      {jours.length === 0 && <p className="vide">Aucune activité ce mois-ci.</p>}
     </div>
   );
 }
