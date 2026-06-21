@@ -15,7 +15,7 @@
 create table if not exists public.users (
   id         uuid primary key references auth.users (id) on delete cascade,
   nom        text not null,
-  role       text not null default 'employe' check (role in ('employe', 'admin')),
+  role       text not null default 'employe' check (role in ('employe', 'admin', 'superadmin')),
   -- Taux d'intéressement par défaut de l'employé (% du CA), fixé par l'admin.
   pourcentage_interessement numeric(5, 2) not null default 0 check (pourcentage_interessement >= 0),
   created_at timestamptz not null default now()

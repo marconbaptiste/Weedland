@@ -75,6 +75,12 @@ begin
 end $$;
 
 -- 5. Le superadmin (l'exploitant) — adapte l'email si besoin ------------------
+-- Autoriser le rôle 'superadmin' (la contrainte d'origine ne listait que
+-- employe/admin).
+alter table public.users drop constraint if exists users_role_check;
+alter table public.users add constraint users_role_check
+  check (role in ('employe', 'admin', 'superadmin'));
+
 update public.users
 set role = 'superadmin'
 where id = (select id from auth.users where lower(email) = 'marcon.baptist@gmail.com');
