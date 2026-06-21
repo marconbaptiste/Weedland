@@ -123,15 +123,13 @@ export default function Aide() {
                 </>
               )}
 
-              {estAdmin && (
-                <div>
-                  <h3>Guide de démarrage</h3>
-                  <p>Réaffiche la checklist « Premiers pas » sur la page Caisse.</p>
-                  <button type="button" className="btn" onClick={relancerGuide}>
-                    🚀 Relancer le guide de démarrage
-                  </button>
-                </div>
-              )}
+              <div>
+                <h3>Guide de démarrage</h3>
+                <p>Réaffiche la checklist « Premiers pas » sur la page Caisse.</p>
+                <button type="button" className="btn" onClick={relancerGuide}>
+                  🚀 Relancer le guide de démarrage
+                </button>
+              </div>
             </div>
           </div>
         </div>
