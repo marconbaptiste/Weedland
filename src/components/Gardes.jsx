@@ -36,3 +36,11 @@ export function RequireAdmin() {
   if (!estAdmin) return <Navigate to="/" replace />;
   return <Outlet />;
 }
+
+/** Bloque l'accès si non super-admin (exploitant de la plateforme). */
+export function RequireSuperadmin() {
+  const { estSuperadmin, chargement } = useAuth();
+  if (chargement) return <p className="centre">Chargement…</p>;
+  if (!estSuperadmin) return <Navigate to="/" replace />;
+  return <Outlet />;
+}

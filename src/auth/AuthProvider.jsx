@@ -43,7 +43,7 @@ export function AuthProvider({ children }) {
     setProfilPret(false);
     supabase
       .from('users')
-      .select('id, nom, role, pourcentage_interessement')
+      .select('id, nom, role, pourcentage_interessement, magasin_id')
       .eq('id', session.user.id)
       .single()
       .then(({ data }) => {
@@ -65,7 +65,8 @@ export function AuthProvider({ children }) {
     session,
     utilisateur: session?.user ?? null,
     profil,
-    estAdmin: profil?.role === 'admin',
+    estAdmin: profil?.role === 'admin' || profil?.role === 'superadmin',
+    estSuperadmin: profil?.role === 'superadmin',
     chargement,
     connexion: (email, motDePasse) =>
       supabase.auth.signInWithPassword({ email, password: motDePasse }),

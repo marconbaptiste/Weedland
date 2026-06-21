@@ -7,7 +7,7 @@ import { parseMontant } from '../lib/format';
 // La création de compte passe par l'Edge Function `creer-employe` (clé
 // service_role côté serveur). Le changement de rôle se fait directement (RLS).
 export default function Comptes() {
-  const { utilisateur } = useAuth();
+  const { utilisateur, profil } = useAuth();
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState({
     nom: '',
@@ -39,7 +39,9 @@ export default function Comptes() {
     e.preventDefault();
     const email = nouvelEmail.trim().toLowerCase();
     if (!email) return;
-    await supabase.from('comptes_autorises').upsert({ email }, { onConflict: 'email' });
+    await supabase
+      .from('comptes_autorises')
+      .upsert({ email, magasin_id: profil?.magasin_id }, { onConflict: 'email' });
     setNouvelEmail('');
     charger();
   }
@@ -120,6 +122,7 @@ export default function Comptes() {
         email: form.email.trim().toLowerCase(),
         role: form.role,
         pourcentage_interessement: parseMontant(form.pourcentage),
+        magasin_id: profil?.magasin_id,
       },
       { onConflict: 'email' },
     );

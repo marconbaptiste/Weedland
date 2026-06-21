@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
       .select('role')
       .eq('id', user.id)
       .single();
-    if (profil?.role !== 'admin') {
+    if (profil?.role !== 'admin' && profil?.role !== 'superadmin') {
       return json({ error: 'Accès réservé aux administrateurs' }, 403);
     }
 

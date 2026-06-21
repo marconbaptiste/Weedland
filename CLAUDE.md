@@ -52,9 +52,17 @@ Tables (modèle imposé, ne pas renommer) : `users` (profil lié à `auth.users`
 - `v_solde_client` : solde dû par client.
 - `v_chromes_jour` : agrégat des chromes par (date, employé).
 
+### Multi-magasin (tenancy)
+
+L'app est **multi-magasin** : table `magasins`, et **`magasin_id`** sur toutes les données (`users`, `clients`, `caisse_jour`, `chromes`, `promos`, `stocks`, `charges`, `fournisseurs`, `paiements_employes`, `comptes_autorises`). Migration : `supabase/migrations/2026-06-22-multi-magasin.sql` (le socle vit dans cette migration, appliquée par-dessus `schema.sql`/`policies.sql`). Principe :
+- **1 magasin par compte** : `users.magasin_id`. `mon_magasin()` (SECURITY DEFINER) renvoie le magasin de l'appelant.
+- Les colonnes `magasin_id` ont pour **défaut `public.mon_magasin()`** → les insertions le remplissent automatiquement, et la RLS ajoute partout `magasin_id = mon_magasin()`. Les composants existants n'ont donc **pas** eu besoin de changer (cloisonnement transparent).
+- **Rôles** : `employe` < `admin` (gère son magasin) < `superadmin` (l'exploitant : crée magasins + admins via la page **Magasins**, garde l'admin de son propre magasin, mais ne voit pas les données clients des autres). `est_admin()` = rôle ∈ (`admin`,`superadmin`) ; `est_superadmin()` = rôle `superadmin`. Front : `estAdmin`, `estSuperadmin` (AuthProvider) ; garde `RequireSuperadmin`.
+- Le trigger `handle_new_user` assigne `magasin_id` depuis `comptes_autorises` (donc l'admin/superadmin choisit le magasin en autorisant l'email).
+
 ### Modèle RLS (sécurité — à comprendre avant toute modif de données)
 
-La fonction `est_admin()` est `SECURITY DEFINER` (contourne la RLS de `users` pour éviter la récursion). Logique de visibilité :
+La fonction `est_admin()` est `SECURITY DEFINER` (contourne la RLS de `users` pour éviter la récursion). Toutes les policies sont en plus **filtrées par `magasin_id = mon_magasin()`** (cf. multi-magasin). Logique de visibilité :
 - **caisse_jour** et **paiements_employes** : un employé ne voit/gère QUE ses propres lignes ; l'admin voit tout. Les paiements ne sont créés/modifiés que par l'admin.
 - **clients** et **chromes** : registre **partagé** en lecture/saisie entre tous les employés connectés — au comptoir, n'importe quel employé doit pouvoir encaisser le remboursement d'un client ou consulter sa dette. Toute ligne de chrome est attribuée à l'employé connecté (`employe_id = auth.uid()`).
 - **users** : chacun voit son profil ; seul l'admin gère les comptes.

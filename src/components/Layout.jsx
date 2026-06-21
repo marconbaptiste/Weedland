@@ -5,7 +5,7 @@ import Aide from './Aide';
 const lienActif = ({ isActive }) => (isActive ? 'nav-lien actif' : 'nav-lien');
 
 export default function Layout() {
-  const { profil, estAdmin, deconnexion } = useAuth();
+  const { profil, estAdmin, estSuperadmin, deconnexion } = useAuth();
 
   return (
     <div className="app">
@@ -54,6 +54,11 @@ export default function Layout() {
                 Import
               </NavLink>
             </>
+          )}
+          {estSuperadmin && (
+            <NavLink to="/magasins" className={lienActif}>
+              Magasins
+            </NavLink>
           )}
         </nav>
       </header>

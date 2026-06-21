@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { RequireAuth, RequireAdmin } from './components/Gardes';
+import { RequireAuth, RequireAdmin, RequireSuperadmin } from './components/Gardes';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Caisse from './pages/Caisse';
@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard';
 import Comptes from './pages/Comptes';
 import Journal from './pages/Journal';
 import Comptabilite from './pages/Comptabilite';
+import Magasins from './pages/Magasins';
 import Import from './pages/Import';
 
 export default function App() {
@@ -33,6 +34,11 @@ export default function App() {
             <Route path="journal" element={<Journal />} />
             <Route path="comptes" element={<Comptes />} />
             <Route path="import" element={<Import />} />
+          </Route>
+
+          {/* Réservé au super-admin (exploitant) */}
+          <Route element={<RequireSuperadmin />}>
+            <Route path="magasins" element={<Magasins />} />
           </Route>
         </Route>
       </Route>
