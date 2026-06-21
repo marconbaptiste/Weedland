@@ -120,6 +120,10 @@ export default function Inscription() {
           />
         </label>
         {erreur && <p className="message-erreur">{erreur}</p>}
+        <p className="statut">
+          En créant un magasin, tu acceptes les <Link to="/cgu">CGU</Link> et la{' '}
+          <Link to="/confidentialite">politique de confidentialité</Link>.
+        </p>
         <button className="btn btn-primary" type="submit" disabled={envoi}>
           {envoi ? 'Création…' : 'Créer mon magasin'}
         </button>

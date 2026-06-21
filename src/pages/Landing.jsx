@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom';
+import { NOM } from '../lib/marque';
 
 // Page publique de présentation (commercialisation). Accessible aux visiteurs
-// non connectés. Le nom du produit est volontairement centralisé ici (NOM).
-const NOM = 'Weedland';
+// non connectés.
 
 const ATOUTS = [
   { emoji: '⚡', titre: 'Caisse en 1 minute', texte: 'Clôture journalière rapide sur mobile au comptoir. Le chiffre d’affaires se calcule tout seul.' },
@@ -69,6 +69,10 @@ export default function Landing() {
 
       <footer className="landing-pied">
         <span>© {new Date().getFullYear()} {NOM}</span>
+        <nav className="landing-liens">
+          <Link to="/cgu">CGU</Link>
+          <Link to="/confidentialite">Confidentialité</Link>
+        </nav>
       </footer>
     </div>
   );

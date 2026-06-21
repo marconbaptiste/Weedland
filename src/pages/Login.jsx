@@ -69,6 +69,10 @@ export default function Login() {
         <Link to="/inscription" className="statut" style={{ textAlign: 'center' }}>
           Créer un nouveau magasin
         </Link>
+        <nav className="landing-liens">
+          <Link to="/cgu">CGU</Link>
+          <Link to="/confidentialite">Confidentialité</Link>
+        </nav>
       </form>
     </div>
   );
