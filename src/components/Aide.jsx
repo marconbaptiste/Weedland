@@ -16,8 +16,15 @@ function Section({ titre, children }) {
  * comment l'outil fonctionne. Le contenu s'adapte au rôle (employé / admin).
  */
 export default function Aide() {
-  const { estAdmin } = useAuth();
+  const { estAdmin, utilisateur } = useAuth();
   const [ouvert, setOuvert] = useState(false);
+
+  // Réaffiche le guide de démarrage (efface le « masqué » mémorisé) et revient
+  // à l'accueil où il s'affiche.
+  function relancerGuide() {
+    localStorage.removeItem(`guide-demarrage-masque:${utilisateur?.id}`);
+    window.location.assign('/');
+  }
 
   // Fermeture à la touche Échap quand la fenêtre est ouverte.
   useEffect(() => {
@@ -114,6 +121,16 @@ export default function Aide() {
                     un historique existant via des fichiers CSV.
                   </Section>
                 </>
+              )}
+
+              {estAdmin && (
+                <div>
+                  <h3>Guide de démarrage</h3>
+                  <p>Réaffiche la checklist « Premiers pas » sur la page Caisse.</p>
+                  <button type="button" className="btn" onClick={relancerGuide}>
+                    🚀 Relancer le guide de démarrage
+                  </button>
+                </div>
               )}
             </div>
           </div>
