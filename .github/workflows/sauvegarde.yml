@@ -1,0 +1,49 @@
+name: Sauvegarde base
+
+# Sauvegarde quotidienne de la base Supabase via pg_dump, chiffrée, stockée en
+# artefact GitHub (30 jours). Déclenchable aussi à la main (workflow_dispatch).
+#
+# Secrets requis (Settings → Secrets and variables → Actions) :
+#   - SUPABASE_DB_URL    : chaîne de connexion Postgres (Session pooler, port 5432)
+#   - BACKUP_PASSPHRASE  : mot de passe pour chiffrer/déchiffrer la sauvegarde
+#
+# Restauration : voir SAUVEGARDE.md
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # tous les jours à 03:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Installer pg_dump 16
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+
+      - name: Dump + chiffrement
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PASS: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$DB_URL" ] || [ -z "$PASS" ]; then
+            echo "Secrets SUPABASE_DB_URL / BACKUP_PASSPHRASE non définis — sauvegarde ignorée."
+            exit 0
+          fi
+          ts=$(date +%Y%m%d-%H%M%S)
+          /usr/lib/postgresql/16/bin/pg_dump "$DB_URL" --no-owner --no-privileges -Fc -f dump.pgcustom
+          openssl enc -aes-256-cbc -pbkdf2 -salt -in dump.pgcustom -out "weedland-$ts.sql.enc" -pass env:PASS
+          rm -f dump.pgcustom
+          echo "Sauvegarde créée : weedland-$ts.sql.enc ($(du -h weedland-$ts.sql.enc | cut -f1))"
+
+      - name: Upload de l'artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sauvegarde-weedland
+          path: weedland-*.sql.enc
+          retention-days: 30
+          if-no-files-found: ignore
