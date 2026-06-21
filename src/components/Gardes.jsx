@@ -24,7 +24,7 @@ function CompteNonAutorise() {
 export function RequireAuth() {
   const { session, profil, chargement } = useAuth();
   if (chargement) return <p className="centre">Chargement…</p>;
-  if (!session) return <Navigate to="/connexion" replace />;
+  if (!session) return <Navigate to="/presentation" replace />;
   if (!profil) return <CompteNonAutorise />;
   return <Outlet />;
 }
