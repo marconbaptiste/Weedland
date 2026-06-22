@@ -742,6 +742,20 @@ details > summary {
   border-radius: 8px;
   overflow: hidden;
 }
+.scan-resultat {
+  margin-top: 0.6rem;
+  text-align: center;
+  padding: 0.7rem;
+  border-radius: 8px;
+  background: rgba(63, 174, 107, 0.16);
+}
+.scan-resultat.recompense {
+  background: rgba(224, 167, 46, 0.2);
+}
+.scan-resultat .tampons {
+  justify-content: center;
+  margin-top: 0.4rem;
+}
 
 /* ----- Journée partagée ----- */
 .liste-partage {

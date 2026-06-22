@@ -59,6 +59,11 @@ export default function Fidelite() {
               Carte complète pour <strong>{etat.surnom}</strong> — offre la récompense. La carte
               repart à zéro.
             </p>
+            <div className="tampons" style={{ justifyContent: 'center' }}>
+              {Array.from({ length: etat.palier }).map((_, i) => (
+                <span key={i} className="tampon plein">★</span>
+              ))}
+            </div>
           </>
         ) : (
           <>
@@ -67,6 +72,13 @@ export default function Fidelite() {
             <p className="statut">
               <strong>{etat.surnom}</strong> : {etat.tampons}/{etat.palier} tampons.
             </p>
+            <div className="tampons" style={{ justifyContent: 'center' }}>
+              {Array.from({ length: etat.palier }).map((_, i) => (
+                <span key={i} className={`tampon ${i < etat.tampons ? 'plein' : ''}`}>
+                  {i < etat.tampons ? '★' : '☆'}
+                </span>
+              ))}
+            </div>
           </>
         )}
         <Link to="/" className="btn btn-primary">
