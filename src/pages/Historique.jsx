@@ -215,7 +215,7 @@ export default function Historique() {
                   <button className="btn btn-discret" onClick={() => supprimerCloture(c.caisse_id)}>Supprimer</button>
                 </div>
                 {editMsg && <p className="message-erreur">{editMsg}</p>}
-                <p className="statut">Les avances/remboursements se corrigent dans l’onglet Chromes.</p>
+                <p className="statut">Les avances/remboursements se corrigent dans l’onglet Clients.</p>
               </div>
             ) : (
               <>
@@ -232,7 +232,7 @@ export default function Historique() {
 
                 {det.avances.length > 0 && (
                   <div className="histo-bloc">
-                    <span className="histo-titre">Chromes — avances</span>
+                    <span className="histo-titre">Avances</span>
                     {det.avances.map((a, i) => (
                       <div key={i} className="histo-chrome">
                         <span>{a.surnom}</span>
@@ -244,7 +244,7 @@ export default function Historique() {
 
                 {det.remboursements.length > 0 && (
                   <div className="histo-bloc">
-                    <span className="histo-titre">Chromes — remboursements</span>
+                    <span className="histo-titre">Remboursements</span>
                     {det.remboursements.map((r, i) => (
                       <div key={i} className="histo-chrome">
                         <span>{r.surnom}</span>

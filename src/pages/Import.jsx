@@ -113,7 +113,7 @@ export default function Import() {
 
       <div className="bascule">
         <button className={mode === 'tableur' ? 'actif' : ''} onClick={() => setMode('tableur')}>Tableur (caisse/charges/fournisseurs)</button>
-        <button className={mode === 'chromes' ? 'actif' : ''} onClick={() => setMode('chromes')}>Chromes (dettes clients)</button>
+        <button className={mode === 'chromes' ? 'actif' : ''} onClick={() => setMode('chromes')}>Dettes clients</button>
       </div>
 
       {mode === 'tableur' ? (
