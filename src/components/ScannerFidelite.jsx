@@ -33,7 +33,7 @@ export default function ScannerFidelite({ onClose }) {
 
     const { data: nb, error } = await supabase.rpc('fidelite_ajouter', { p_client: id });
     if (error) {
-      setResultat({ erreur: true });
+      setResultat({ erreur: true, message: error.message });
     } else {
       const { data: cli } = await supabase.from('clients').select('surnom').eq('id', id).single();
       let tampons = nb;
@@ -112,7 +112,7 @@ export default function ScannerFidelite({ onClose }) {
 
         {resultat ? (
           resultat.erreur ? (
-            <p className="message-erreur">QR invalide ou client introuvable.</p>
+            <p className="message-erreur">{resultat.message || 'QR invalide.'}</p>
           ) : (
             <div className={`scan-resultat ${resultat.recompense ? 'recompense' : ''}`}>
               <strong>

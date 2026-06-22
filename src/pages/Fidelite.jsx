@@ -22,7 +22,7 @@ export default function Fidelite() {
 
       const { data: nb, error } = await supabase.rpc('fidelite_ajouter', { p_client: clientId });
       if (error) {
-        if (actif) setEtat({ chargement: false, erreur: 'Client introuvable ou QR invalide.' });
+        if (actif) setEtat({ chargement: false, erreur: error.message || 'QR invalide.' });
         return;
       }
       const { data: cli } = await supabase.from('clients').select('surnom').eq('id', clientId).single();
