@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import Aide from './Aide';
+import BoutonMonnaie from './BoutonMonnaie';
 
 const lienActif = ({ isActive }) => (isActive ? 'nav-lien actif' : 'nav-lien');
 
@@ -80,6 +81,7 @@ export default function Layout() {
       <main className="contenu">
         <Outlet />
       </main>
+      <BoutonMonnaie />
     </div>
   );
 }

@@ -3,9 +3,8 @@ import { parseMontant, formatEuros } from '../lib/format';
 import { decomposer } from '../lib/monnaie';
 import ChampMontant from './ChampMontant';
 
-// Aide au comptoir : calcule la monnaie à rendre et la décompose en
-// billets / pièces. Repliable (n'encombre pas la caisse).
-export default function RenduMonnaie() {
+// Cœur de la calculatrice de rendu de monnaie (réutilisable : modale, carte…).
+export default function CalculatriceMonnaie() {
   const [aPayer, setAPayer] = useState('');
   const [donne, setDonne] = useState('');
 
@@ -17,18 +16,13 @@ export default function RenduMonnaie() {
   const actif = p > 0 || d > 0;
 
   return (
-    <details className="card">
-      <summary>💶 Rendu de monnaie</summary>
-      <div className="bloc-form">
-        <ChampMontant label="Montant à payer" valeur={aPayer} onChange={setAPayer} />
-        <ChampMontant label="Montant donné" valeur={donne} onChange={setDonne} />
-      </div>
+    <div className="bloc-form">
+      <ChampMontant label="Montant à payer" valeur={aPayer} onChange={setAPayer} autoFocus />
+      <ChampMontant label="Montant donné" valeur={donne} onChange={setDonne} />
 
       {actif && (
         <div className={`voyant ${diff < 0 ? 'voyant-rouge' : 'voyant-vert'}`}>
-          {diff < 0
-            ? `Il manque ${formatEuros(-diff)}`
-            : `À rendre : ${formatEuros(aRendre)}`}
+          {diff < 0 ? `Il manque ${formatEuros(-diff)}` : `À rendre : ${formatEuros(aRendre)}`}
         </div>
       )}
 
@@ -43,18 +37,11 @@ export default function RenduMonnaie() {
         </ul>
       )}
 
-      {(p > 0 || d > 0) && (
-        <button
-          type="button"
-          className="btn btn-discret"
-          onClick={() => {
-            setAPayer('');
-            setDonne('');
-          }}
-        >
+      {actif && (
+        <button type="button" className="btn btn-discret" onClick={() => { setAPayer(''); setDonne(''); }}>
           Effacer
         </button>
       )}
-    </details>
+    </div>
   );
 }

@@ -691,6 +691,25 @@ details > summary {
 .coupure-nb {
   color: var(--texte-doux);
 }
+.fab-monnaie {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 50;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent);
+  color: #06210f;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.fab-monnaie:hover {
+  background: var(--accent-fonce);
+}
 
 /* ----- Journée partagée ----- */
 .liste-partage {
