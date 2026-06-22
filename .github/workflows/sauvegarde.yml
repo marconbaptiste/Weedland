@@ -24,7 +24,7 @@ jobs:
       PGPORT: '5432'
       PGUSER: postgres.nshglljmfskvqxcogdjk
       PGDATABASE: postgres
-      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      DBPASS: ${{ secrets.SUPABASE_DB_PASSWORD }}
       PASS: ${{ secrets.BACKUP_PASSPHRASE }}
     steps:
       - name: Installer pg_dump 16
@@ -36,10 +36,13 @@ jobs:
 
       - name: Dump + chiffrement
         run: |
-          if [ -z "$PGPASSWORD" ] || [ -z "$PASS" ]; then
+          if [ -z "$DBPASS" ] || [ -z "$PASS" ]; then
             echo "Secrets SUPABASE_DB_PASSWORD / BACKUP_PASSPHRASE non définis — sauvegarde ignorée."
             exit 0
           fi
+          # Nettoie tout retour à la ligne/CR collé par mégarde dans le secret.
+          export PGPASSWORD="$(printf '%s' "$DBPASS" | tr -d '\r\n')"
+          echo "DIAG longueur du mot de passe (après nettoyage) : ${#PGPASSWORD}"
           ts=$(date +%Y%m%d-%H%M%S)
           /usr/lib/postgresql/16/bin/pg_dump --no-owner --no-privileges -Fc -f dump.pgcustom
           openssl enc -aes-256-cbc -pbkdf2 -salt -in dump.pgcustom -out "weedland-$ts.sql.enc" -pass env:PASS
