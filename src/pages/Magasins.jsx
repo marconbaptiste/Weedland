@@ -1,10 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../auth/AuthProvider';
 import { parseMontant } from '../lib/format';
 
 // Module — Gestion des magasins (réservé au super-admin / exploitant).
-// Permet de créer un magasin et d'autoriser son premier administrateur.
+// Permet de créer un magasin, d'autoriser son premier administrateur, et de
+// supprimer un magasin (avec toutes ses données).
 export default function Magasins() {
+  const { magasinId } = useAuth();
   const [magasins, setMagasins] = useState([]);
   const [nomMagasin, setNomMagasin] = useState('');
   const [statut, setStatut] = useState('');
@@ -39,6 +42,26 @@ export default function Magasins() {
     }
     setNomMagasin('');
     setStatut('Magasin créé ✅');
+    charger();
+  }
+
+  async function supprimerMagasin(m) {
+    if (m.id === magasinId) {
+      setStatut('Bascule sur un autre magasin (en haut) avant de supprimer celui-ci.');
+      return;
+    }
+    if (!window.confirm(`Supprimer définitivement « ${m.nom} » et TOUTES ses données (clients, caisse, stocks, comptes…) ? Cette action est irréversible.`)) {
+      return;
+    }
+    setStatut('Suppression en cours…');
+    const { data, error } = await supabase.functions.invoke('hyper-api', {
+      body: { action: 'supprimer-magasin', magasinId: m.id },
+    });
+    if (error || data?.error) {
+      setStatut(`Erreur : ${data?.error ?? error?.message}`);
+      return;
+    }
+    setStatut(`Magasin « ${m.nom} » supprimé.`);
     charger();
   }
 
@@ -171,18 +194,29 @@ export default function Magasins() {
             <tr>
               <th>Nom</th>
               <th>Créé le</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {magasins.map((m) => (
               <tr key={m.id}>
-                <td>{m.nom}</td>
+                <td>
+                  {m.nom}
+                  {m.id === magasinId && <span className="badge badge-solde tag-partage">actuel</span>}
+                </td>
                 <td>{new Date(m.created_at).toLocaleDateString('fr-FR')}</td>
+                <td className="droite">
+                  {m.id !== magasinId && (
+                    <button type="button" className="btn btn-discret" onClick={() => supprimerMagasin(m)}>
+                      Supprimer
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             {magasins.length === 0 && (
               <tr>
-                <td colSpan={2} className="vide">
+                <td colSpan={3} className="vide">
                   Aucun magasin.
                 </td>
               </tr>

@@ -112,6 +112,30 @@ Deno.serve(async (req) => {
       return json({ error: 'Accès réservé aux administrateurs' }, 403);
     }
 
+    // 2a. Suppression d'un magasin et de toutes ses données (super-admin).
+    if (corps.action === 'supprimer-magasin') {
+      if (profil.role !== 'superadmin') return json({ error: 'Réservé au super-admin' }, 403);
+      const magasinId = String(corps.magasinId ?? '');
+      if (!magasinId) return json({ error: 'magasinId requis' }, 400);
+      const { data: moi } = await admin.from('users').select('magasin_id').eq('id', user.id).single();
+      if (moi?.magasin_id === magasinId) {
+        return json({ error: 'Bascule sur un autre magasin avant de supprimer celui-ci.' }, 400);
+      }
+      const tables = ['caisse_jour', 'chromes', 'promos', 'stocks', 'charges', 'fournisseurs', 'paiements_employes', 'clients'];
+      for (const t of tables) {
+        const { error: errDel } = await admin.from(t).delete().eq('magasin_id', magasinId);
+        if (errDel) return json({ error: `${t}: ${errDel.message}` }, 400);
+      }
+      const { data: membres } = await admin.from('users').select('id').eq('magasin_id', magasinId);
+      for (const membre of membres ?? []) {
+        await admin.auth.admin.deleteUser(membre.id);
+      }
+      await admin.from('comptes_autorises').delete().eq('magasin_id', magasinId);
+      const { error: errMag } = await admin.from('magasins').delete().eq('id', magasinId);
+      if (errMag) return json({ error: errMag.message }, 400);
+      return json({ ok: true }, 200);
+    }
+
     // 2a. Réinitialisation du mot de passe d'un employé.
     if (corps.action === 'reset') {
       const { userId, motDePasse: nouveau } = corps;
