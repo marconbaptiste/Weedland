@@ -7,6 +7,7 @@ import { resumeJour, somme, interessement } from '../lib/comptabilite';
 import { lireBrouillon, ecrireBrouillon, effacerBrouillon } from '../lib/brouillon';
 import ChampMontant from '../components/ChampMontant';
 import GuideDemarrage from '../components/GuideDemarrage';
+import RenduMonnaie from '../components/RenduMonnaie';
 
 // Module 1 — Clôture de caisse journalière (par employé / par jour).
 export default function Caisse() {
@@ -277,6 +278,8 @@ export default function Caisse() {
       <h1>Clôture de caisse</h1>
 
       <GuideDemarrage />
+
+      <RenduMonnaie />
 
       <div className="card">
         <div className="histo-tete">

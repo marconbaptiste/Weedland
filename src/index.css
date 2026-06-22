@@ -674,6 +674,23 @@ hr {
 details > summary {
   cursor: pointer;
 }
+.coupures {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.coupures li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--bordure);
+  padding: 0.35rem 0.2rem;
+}
+.coupure-nb {
+  color: var(--texte-doux);
+}
 
 /* ----- Journée partagée ----- */
 .liste-partage {
