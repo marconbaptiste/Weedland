@@ -22,8 +22,25 @@ export default function Carte() {
     setEtat({ surnom: r.surnom, tampons: r.tampons, palier: r.palier });
   }, [clientId]);
 
+  // Rafraîchit à l'ouverture, au retour sur l'onglet/l'écran, et régulièrement
+  // tant que la carte est affichée (utile quand elle est ajoutée à l'écran
+  // d'accueil : elle reflète chaque nouveau tampon).
   useEffect(() => {
+    document.title = 'Ma carte de fidélité';
     charger();
+    const surVisible = () => {
+      if (!document.hidden) charger();
+    };
+    document.addEventListener('visibilitychange', surVisible);
+    window.addEventListener('focus', charger);
+    const intervalle = setInterval(() => {
+      if (!document.hidden) charger();
+    }, 15000);
+    return () => {
+      document.removeEventListener('visibilitychange', surVisible);
+      window.removeEventListener('focus', charger);
+      clearInterval(intervalle);
+    };
   }, [charger]);
 
   async function ajouterTampon() {
@@ -88,6 +105,14 @@ export default function Carte() {
           </button>
         )}
         {msg && <p className="statut">{msg}</p>}
+
+        {!profil && (
+          <p className="statut">
+            💡 Ajoute cette carte à ton écran d’accueil pour la retrouver à chaque visite — elle se
+            met à jour automatiquement. (iPhone : Partager → « Sur l’écran d’accueil ». Android :
+            menu ⋮ → « Ajouter à l’écran d’accueil ».)
+          </p>
+        )}
       </div>
     </div>
   );
