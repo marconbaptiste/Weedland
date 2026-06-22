@@ -788,6 +788,28 @@ details > summary {
   font-size: 1.2rem;
 }
 
+/* ----- Astuce « ajouter à l'écran d'accueil » (carte fidélité publique) ----- */
+.astuce-accueil {
+  text-align: left;
+  background: var(--fond-input);
+  border: 1px solid var(--bordure);
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
+.astuce-accueil p {
+  color: var(--texte-doux);
+  margin: 0.3rem 0;
+}
+.astuce-accueil ol {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
 /* ----- Journée partagée ----- */
 .liste-partage {
   list-style: none;

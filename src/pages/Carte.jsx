@@ -78,6 +78,14 @@ export default function Carte() {
   const complet = etat.tampons >= etat.palier;
   const reste = etat.palier - etat.tampons;
 
+  // Aide « ajouter à l'écran d'accueil », adaptée au téléphone, masquée si déjà fait.
+  const ua = navigator.userAgent || '';
+  const iOS = /iphone|ipad|ipod/i.test(ua);
+  const android = /android/i.test(ua);
+  const dejaInstalle =
+    window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+
   return (
     <div className="page-connexion">
       <div className="card carte-connexion" style={{ textAlign: 'center' }}>
@@ -106,12 +114,29 @@ export default function Carte() {
         )}
         {msg && <p className="statut">{msg}</p>}
 
-        {!profil && (
-          <p className="statut">
-            💡 Ajoute cette carte à ton écran d’accueil pour la retrouver à chaque visite — elle se
-            met à jour automatiquement. (iPhone : Partager → « Sur l’écran d’accueil ». Android :
-            menu ⋮ → « Ajouter à l’écran d’accueil ».)
-          </p>
+        {!profil && !dejaInstalle && (
+          <div className="astuce-accueil">
+            <strong>📲 Garde ta carte à portée de main</strong>
+            <p>Ajoute-la à l’écran d’accueil de ton téléphone — elle se met à jour à chaque tampon.</p>
+            {iOS ? (
+              <ol>
+                <li>Touche le bouton <strong>Partager</strong> (carré avec une flèche ↑, en bas).</li>
+                <li>Choisis <strong>« Sur l’écran d’accueil »</strong>.</li>
+                <li>Valide avec <strong>« Ajouter »</strong>.</li>
+              </ol>
+            ) : android ? (
+              <ol>
+                <li>Touche le menu <strong>⋮</strong> (en haut à droite).</li>
+                <li>Choisis <strong>« Ajouter à l’écran d’accueil »</strong>.</li>
+                <li>Valide.</li>
+              </ol>
+            ) : (
+              <p>
+                Depuis le menu de ton navigateur, choisis « Ajouter à l’écran d’accueil » (ou
+                ajoute la page à tes favoris).
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>
