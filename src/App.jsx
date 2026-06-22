@@ -6,8 +6,10 @@ import CGU from './pages/CGU';
 import Confidentialite from './pages/Confidentialite';
 import Login from './pages/Login';
 import Inscription from './pages/Inscription';
+import Profil from './pages/Profil';
 import Caisse from './pages/Caisse';
 import Chromes from './pages/Chromes';
+import Fidelite from './pages/Fidelite';
 import Stocks from './pages/Stocks';
 import Historique from './pages/Historique';
 import Paiements from './pages/Paiements';
@@ -29,10 +31,12 @@ export default function App() {
 
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
-          <Route index element={<Caisse />} />
+          <Route index element={<Profil />} />
+          <Route path="caisse" element={<Caisse />} />
           <Route path="chromes" element={<Chromes />} />
           <Route path="stocks" element={<Stocks />} />
           <Route path="historique" element={<Historique />} />
+          <Route path="f/:clientId" element={<Fidelite />} />
 
           {/* Réservé à l'admin */}
           <Route element={<RequireAdmin />}>

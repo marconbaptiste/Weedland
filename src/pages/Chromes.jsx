@@ -5,6 +5,7 @@ import { parseMontant, formatEuros, formatDateFr } from '../lib/format';
 import { aujourdhuiISO } from '../lib/dates';
 import { soldeClient, statutSolde } from '../lib/comptabilite';
 import ChampMontant from '../components/ChampMontant';
+import ModaleQR from '../components/ModaleQR';
 
 // Module 2 — Chromes (avances / crédits clients).
 // RGPD : les clients sont identifiés par un SURNOM uniquement, jamais par leur
@@ -24,6 +25,7 @@ export default function Chromes() {
   // Fidélité : palier du magasin + état de la carte du client sélectionné.
   const [palier, setPalier] = useState(10);
   const [fidelite, setFidelite] = useState({ tampons: 0, recompenses: 0 });
+  const [qrModal, setQrModal] = useState(null); // { clientId, surnom } | null
 
   const [nouveau, setNouveau] = useState({ surnom: '', description: '' });
   const [creationOuverte, setCreationOuverte] = useState(false);
@@ -135,6 +137,8 @@ export default function Chromes() {
         description: data.description,
         solde: 0,
       });
+      // Affiche tout de suite le QR en grand : le client le prend en photo.
+      setQrModal({ clientId: data.id, surnom: data.surnom });
     }
   }
 
@@ -262,7 +266,14 @@ export default function Chromes() {
 
   return (
     <div className="page page-chromes">
-      <h1>Chromes</h1>
+      <h1>Clients</h1>
+      {qrModal && (
+        <ModaleQR
+          clientId={qrModal.clientId}
+          surnom={qrModal.surnom}
+          onClose={() => setQrModal(null)}
+        />
+      )}
 
       <div className="colonnes">
         <div className="card">
@@ -359,6 +370,13 @@ export default function Chromes() {
                   <h3>🎟️ Carte de fidélité</h3>
                   <span className="promo-qui">
                     {fidelite.tampons}/{palier}
+                    <button
+                      type="button"
+                      className="btn btn-discret"
+                      onClick={() => setQrModal({ clientId: clientSel.client_id, surnom: clientSel.surnom })}
+                    >
+                      QR
+                    </button>
                     {estAdmin && (
                       <button type="button" className="btn btn-discret" onClick={changerPalier}>
                         Palier

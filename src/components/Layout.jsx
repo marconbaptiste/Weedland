@@ -38,10 +38,13 @@ export default function Layout() {
         </div>
         <nav className="nav">
           <NavLink to="/" end className={lienActif}>
+            Accueil
+          </NavLink>
+          <NavLink to="/caisse" className={lienActif}>
             Caisse
           </NavLink>
           <NavLink to="/chromes" className={lienActif}>
-            Chromes
+            Clients
           </NavLink>
           <NavLink to="/stocks" className={lienActif}>
             Stocks

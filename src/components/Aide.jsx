@@ -83,7 +83,7 @@ export default function Aide() {
                 affichés à part : ils diffèrent du CA dès qu’il y a des chromes, c’est normal.
               </Section>
 
-              <Section titre="Chromes — les avances clients">
+              <Section titre="Clients — avances, dettes & fidélité">
                 Un « chrome » est une <strong>avance</strong> faite à un client (il repart avec de
                 la marchandise sans payer tout de suite). Quand il rembourse, enregistrez un{' '}
                 <strong>remboursement</strong>. Le solde de chaque client se met à jour seul
@@ -125,7 +125,7 @@ export default function Aide() {
 
               <div>
                 <h3>Guide de démarrage</h3>
-                <p>Réaffiche la checklist « Premiers pas » sur la page Caisse.</p>
+                <p>Réaffiche la checklist « Premiers pas » sur la page d’accueil.</p>
                 <button type="button" className="btn" onClick={relancerGuide}>
                   🚀 Relancer le guide de démarrage
                 </button>
