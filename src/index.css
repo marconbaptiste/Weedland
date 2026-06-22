@@ -757,6 +757,37 @@ details > summary {
   margin-top: 0.4rem;
 }
 
+/* ----- Fiche client en modale (popup) ----- */
+.modale-client {
+  background: var(--fond-carte);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  width: 100%;
+  max-width: 620px;
+  max-height: 92vh;
+  overflow-y: auto;
+  margin: 2vh auto;
+  padding: 0 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.modale-client-tete {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--fond-carte);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--bordure);
+}
+.modale-client-tete strong {
+  font-size: 1.2rem;
+}
+
 /* ----- Journée partagée ----- */
 .liste-partage {
   list-style: none;

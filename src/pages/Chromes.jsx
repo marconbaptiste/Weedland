@@ -259,6 +259,13 @@ export default function Chromes() {
     }
   }
 
+  function fermerClient() {
+    setClientSel(null);
+    setLignes([]);
+    setPromos([]);
+    setMsgClient('');
+  }
+
   const clientsFiltres = clients.filter((c) =>
     (c.surnom ?? '').toLowerCase().includes(recherche.toLowerCase()),
   );
@@ -275,8 +282,7 @@ export default function Chromes() {
         />
       )}
 
-      <div className="colonnes">
-        <div className="card">
+      <div className="card">
           <input
             type="search"
             placeholder="Rechercher un surnom…"
@@ -339,13 +345,16 @@ export default function Chromes() {
           )}
         </div>
 
-        <div className="card">
-          {!clientSel ? (
-            <p className="vide">Sélectionnez un client pour voir son historique.</p>
-          ) : (
-            <>
+      {clientSel && (
+        <div className="aide-fond" role="dialog" aria-modal="true" aria-label="Fiche client" onClick={fermerClient}>
+          <div className="modale-client" onClick={(e) => e.stopPropagation()}>
+            <div className="modale-client-tete">
+              <strong>{clientSel.surnom}</strong>
+              <button type="button" className="btn btn-discret" onClick={fermerClient}>
+                Fermer
+              </button>
+            </div>
               <div className="entete-client">
-                <h2>{clientSel.surnom}</h2>
                 <span className={`badge ${solde > 0 ? 'badge-dette' : 'badge-solde'}`}>
                   {statutSolde(solde)} · {formatEuros(solde)}
                 </span>
@@ -620,10 +629,9 @@ export default function Chromes() {
                   )}
                 </tbody>
               </table>
-            </>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
