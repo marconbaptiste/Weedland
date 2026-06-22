@@ -39,7 +39,7 @@ export default function ScannerFidelite({ onClose }) {
     } catch {
       /* ignore */
     }
-    const m = String(texte).match(/\/f\/([^/?#\s]+)/);
+    const m = String(texte).match(/\/(?:carte|f)\/([^/?#\s]+)/);
     const id = m ? m[1] : String(texte).trim();
     const palier = palierRef.current;
 

@@ -1,10 +1,10 @@
 import QRCode from 'qrcode';
 
-// URL de fidélité encodée dans le QR d'un client : ouvre /f/<id> dans l'app.
-// En la scannant (appareil photo natif ou scanner intégré), un employé connecté
-// ajoute un tampon au client.
+// URL encodée dans le QR d'un client : ouvre /carte/<id>, la carte de fidélité
+// PUBLIQUE (le client voit ses tampons sans se connecter ; le personnel connecté
+// peut ajouter un tampon). Le scanner intégré, lui, tamponne directement.
 export function urlFidelite(clientId) {
-  return `${window.location.origin}/f/${clientId}`;
+  return `${window.location.origin}/carte/${clientId}`;
 }
 
 // Génère un data URL (PNG) du QR pour une chaîne donnée.

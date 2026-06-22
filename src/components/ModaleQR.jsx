@@ -12,8 +12,8 @@ export default function ModaleQR({ surnom, clientId, onClose }) {
           </button>
         </div>
         <p className="statut">
-          Demande au client de prendre cette carte en photo. À chaque passage, scanne-la pour
-          ajouter un tampon.
+          Le client prend cette carte en photo : en la scannant lui-même, il verra ses tampons.
+          De ton côté, scanne-la (bouton « Scanner ») pour ajouter un tampon.
         </p>
         <QRClient clientId={clientId} taille={260} />
       </div>

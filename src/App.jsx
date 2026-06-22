@@ -6,6 +6,7 @@ import CGU from './pages/CGU';
 import Confidentialite from './pages/Confidentialite';
 import Login from './pages/Login';
 import Inscription from './pages/Inscription';
+import Carte from './pages/Carte';
 import Profil from './pages/Profil';
 import Caisse from './pages/Caisse';
 import Chromes from './pages/Chromes';
@@ -28,6 +29,7 @@ export default function App() {
       <Route path="/confidentialite" element={<Confidentialite />} />
       <Route path="/connexion" element={<Login />} />
       <Route path="/inscription" element={<Inscription />} />
+      <Route path="/carte/:clientId" element={<Carte />} />
 
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
