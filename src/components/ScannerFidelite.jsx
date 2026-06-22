@@ -13,9 +13,21 @@ export default function ScannerFidelite({ onClose }) {
   const palierRef = useRef(10);
   const occupeRef = useRef(false);
 
-  function fermer() {
+  async function fermer() {
     const s = scannerRef.current;
-    if (s) s.stop().then(() => s.clear()).catch(() => {});
+    scannerRef.current = null;
+    if (s) {
+      try {
+        await s.stop();
+      } catch {
+        /* déjà arrêté */
+      }
+      try {
+        await s.clear();
+      } catch {
+        /* ignore */
+      }
+    }
     onClose();
   }
 
