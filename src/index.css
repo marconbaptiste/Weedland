@@ -711,6 +711,22 @@ details > summary {
   background: var(--accent-fonce);
 }
 
+/* ----- Carte de fidélité (tampons) ----- */
+.tampons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  font-size: 1.4rem;
+  line-height: 1;
+  margin: 0.2rem 0 0.5rem;
+}
+.tampon {
+  color: var(--bordure);
+}
+.tampon.plein {
+  color: var(--accent);
+}
+
 /* ----- Journée partagée ----- */
 .liste-partage {
   list-style: none;

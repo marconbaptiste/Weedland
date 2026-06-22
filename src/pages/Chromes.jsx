@@ -10,7 +10,7 @@ import ChampMontant from '../components/ChampMontant';
 // RGPD : les clients sont identifiés par un SURNOM uniquement, jamais par leur
 // nom/prénom réel. La description est interne (visible seulement du personnel).
 export default function Chromes() {
-  const { utilisateur, estAdmin } = useAuth();
+  const { utilisateur, estAdmin, magasinId } = useAuth();
   const [recherche, setRecherche] = useState('');
   const [clients, setClients] = useState([]);
   const [clientSel, setClientSel] = useState(null);
@@ -21,6 +21,9 @@ export default function Chromes() {
   const [editPromo, setEditPromo] = useState(null); // id
   const [editPromoForm, setEditPromoForm] = useState({ description: '', date: '' });
   const [msgClient, setMsgClient] = useState('');
+  // Fidélité : palier du magasin + état de la carte du client sélectionné.
+  const [palier, setPalier] = useState(10);
+  const [fidelite, setFidelite] = useState({ tampons: 0, recompenses: 0 });
 
   const [nouveau, setNouveau] = useState({ surnom: '', description: '' });
   const [creationOuverte, setCreationOuverte] = useState(false);
@@ -46,26 +49,72 @@ export default function Chromes() {
     chargerClients();
   }, [chargerClients]);
 
-  const ouvrirClient = useCallback(async (client) => {
-    setClientSel(client);
-    setMsgClient('');
-    const [{ data: chr }, { data: pr }] = await Promise.all([
-      supabase
-        .from('chromes')
-        .select('id, type, montant, date, employe_id, users(nom)')
-        .eq('client_id', client.client_id)
-        .order('date', { ascending: false })
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('promos')
-        .select('id, description, date, employe_id, users(nom)')
-        .eq('client_id', client.client_id)
-        .order('date', { ascending: false })
-        .order('created_at', { ascending: false }),
-    ]);
-    setLignes(chr ?? []);
-    setPromos(pr ?? []);
+  // Palier de fidélité du magasin.
+  useEffect(() => {
+    if (!magasinId) return;
+    supabase
+      .from('magasins')
+      .select('fidelite_palier')
+      .eq('id', magasinId)
+      .single()
+      .then(({ data }) => setPalier(data?.fidelite_palier ?? 10));
+  }, [magasinId]);
+
+  const chargerFidelite = useCallback(async (clientId) => {
+    const { data } = await supabase
+      .from('clients')
+      .select('tampons, recompenses')
+      .eq('id', clientId)
+      .single();
+    setFidelite({ tampons: data?.tampons ?? 0, recompenses: data?.recompenses ?? 0 });
   }, []);
+
+  const ouvrirClient = useCallback(
+    async (client) => {
+      setClientSel(client);
+      setMsgClient('');
+      const [{ data: chr }, { data: pr }] = await Promise.all([
+        supabase
+          .from('chromes')
+          .select('id, type, montant, date, employe_id, users(nom)')
+          .eq('client_id', client.client_id)
+          .order('date', { ascending: false })
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('promos')
+          .select('id, description, date, employe_id, users(nom)')
+          .eq('client_id', client.client_id)
+          .order('date', { ascending: false })
+          .order('created_at', { ascending: false }),
+      ]);
+      setLignes(chr ?? []);
+      setPromos(pr ?? []);
+      chargerFidelite(client.client_id);
+    },
+    [chargerFidelite],
+  );
+
+  // Fidélité — actions (fonctions SECURITY DEFINER côté base).
+  async function ajouterTampon() {
+    await supabase.rpc('fidelite_ajouter', { p_client: clientSel.client_id });
+    chargerFidelite(clientSel.client_id);
+  }
+  async function retirerTampon() {
+    await supabase.rpc('fidelite_retirer', { p_client: clientSel.client_id });
+    chargerFidelite(clientSel.client_id);
+  }
+  async function utiliserRecompense() {
+    const { error } = await supabase.rpc('fidelite_utiliser', { p_client: clientSel.client_id });
+    if (!error) setMsgClient('Récompense utilisée 🎁');
+    chargerFidelite(clientSel.client_id);
+  }
+  async function changerPalier() {
+    const v = window.prompt('Nombre de tampons pour une récompense :', String(palier));
+    const n = parseInt(v, 10);
+    if (!n || n < 1) return;
+    const { error } = await supabase.rpc('fidelite_palier', { p_palier: n });
+    if (!error) setPalier(n);
+  }
 
   async function creerClient(e) {
     e.preventDefault();
@@ -304,6 +353,49 @@ export default function Chromes() {
                 </div>
               )}
               {msgClient && <p className="statut">{msgClient}</p>}
+
+              <div className="section-promos">
+                <div className="entete-client">
+                  <h3>🎟️ Carte de fidélité</h3>
+                  <span className="promo-qui">
+                    {fidelite.tampons}/{palier}
+                    {estAdmin && (
+                      <button type="button" className="btn btn-discret" onClick={changerPalier}>
+                        Palier
+                      </button>
+                    )}
+                  </span>
+                </div>
+                <div className="tampons">
+                  {Array.from({ length: palier }).map((_, i) => (
+                    <span key={i} className={`tampon ${i < fidelite.tampons ? 'plein' : ''}`}>
+                      {i < fidelite.tampons ? '★' : '☆'}
+                    </span>
+                  ))}
+                </div>
+                {fidelite.tampons >= palier ? (
+                  <div className="form-inline">
+                    <div className="voyant voyant-vert" style={{ flex: 1 }}>
+                      🎁 Carte complète — récompense disponible
+                    </div>
+                    <button type="button" className="btn btn-primary" onClick={utiliserRecompense}>
+                      Utiliser
+                    </button>
+                  </div>
+                ) : (
+                  <div className="form-inline">
+                    <button type="button" className="btn btn-primary" onClick={ajouterTampon}>
+                      + 1 tampon
+                    </button>
+                    <button type="button" className="btn btn-discret" onClick={retirerTampon}>
+                      −
+                    </button>
+                  </div>
+                )}
+                {fidelite.recompenses > 0 && (
+                  <p className="statut">{fidelite.recompenses} récompense(s) déjà utilisée(s).</p>
+                )}
+              </div>
 
               <div className="section-promos">
                 <h3>★ Promos / traitements de faveur</h3>
