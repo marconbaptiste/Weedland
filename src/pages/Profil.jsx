@@ -49,16 +49,16 @@ export default function Profil() {
           <span className="kpi-valeur">{formatEuros(stats.caJour)}</span>
         </div>
         <div className="kpi">
+          <span className="kpi-label">CA de la semaine</span>
+          <span className="kpi-valeur">{formatEuros(stats.caSemaine)}</span>
+        </div>
+        <div className="kpi">
           <span className="kpi-label">Avances du jour</span>
           <span className="kpi-valeur">{formatEuros(stats.avancesJour)}</span>
         </div>
         <div className="kpi">
           <span className="kpi-label">Remboursements du jour</span>
           <span className="kpi-valeur">{formatEuros(stats.remboursementsJour)}</span>
-        </div>
-        <div className="kpi">
-          <span className="kpi-label">CA de la semaine</span>
-          <span className="kpi-valeur">{formatEuros(stats.caSemaine)}</span>
         </div>
       </div>
 
