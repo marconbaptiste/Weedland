@@ -30,6 +30,7 @@ create table if not exists public.clients (
   id          uuid primary key default gen_random_uuid(),
   surnom      text not null,
   description text,
+  telephone   text, -- facultatif, avec l'accord du client (rappel dette / promo)
   created_at  timestamptz not null default now()
 );
 
@@ -307,10 +308,11 @@ select
   cl.surnom,
   cl.description,
   coalesce(sum(ch.montant) filter (where ch.type = 'avance'), 0)
-    - coalesce(sum(ch.montant) filter (where ch.type = 'remboursement'), 0) as solde
+    - coalesce(sum(ch.montant) filter (where ch.type = 'remboursement'), 0) as solde,
+  cl.telephone
 from public.clients cl
 left join public.chromes ch on ch.client_id = cl.id
-group by cl.id, cl.surnom, cl.description;
+group by cl.id, cl.surnom, cl.description, cl.telephone;
 grant select on public.v_solde_client to anon, authenticated;
 
 -- ============================================================================

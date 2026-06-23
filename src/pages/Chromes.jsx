@@ -6,6 +6,7 @@ import { aujourdhuiISO } from '../lib/dates';
 import { soldeClient, statutSolde } from '../lib/comptabilite';
 import ChampMontant from '../components/ChampMontant';
 import ModaleQR from '../components/ModaleQR';
+import ModaleQRInscription from '../components/ModaleQRInscription';
 
 // Module 2 — Chromes (avances / crédits clients).
 // RGPD : les clients sont identifiés par un SURNOM uniquement, jamais par leur
@@ -26,9 +27,11 @@ export default function Chromes() {
   const [palier, setPalier] = useState(10);
   const [fidelite, setFidelite] = useState({ tampons: 0, recompenses: 0 });
   const [qrModal, setQrModal] = useState(null); // { clientId, surnom } | null
+  const [qrInscription, setQrInscription] = useState(false); // QR d'inscription magasin
+  const [inscriptionsOuvertes, setInscriptionsOuvertes] = useState(true);
   const [faveurs, setFaveurs] = useState([]); // raccourcis de faveurs du magasin
 
-  const [nouveau, setNouveau] = useState({ surnom: '', description: '' });
+  const [nouveau, setNouveau] = useState({ surnom: '', description: '', telephone: '' });
   const [creationOuverte, setCreationOuverte] = useState(false);
 
   const [type, setType] = useState('avance');
@@ -41,7 +44,10 @@ export default function Chromes() {
 
   const chargerClients = useCallback(async () => {
     const [{ data }, { data: pr }] = await Promise.all([
-      supabase.from('v_solde_client').select('client_id, surnom, description, solde').order('surnom'),
+      supabase
+        .from('v_solde_client')
+        .select('client_id, surnom, description, telephone, solde')
+        .order('surnom'),
       supabase.from('promos').select('client_id'),
     ]);
     setClients(data ?? []);
@@ -57,12 +63,13 @@ export default function Chromes() {
     if (!magasinId) return;
     supabase
       .from('magasins')
-      .select('fidelite_palier, faveurs_raccourcis')
+      .select('fidelite_palier, faveurs_raccourcis, inscriptions_ouvertes')
       .eq('id', magasinId)
       .single()
       .then(({ data }) => {
         setPalier(data?.fidelite_palier ?? 10);
         setFaveurs(data?.faveurs_raccourcis ?? []);
+        setInscriptionsOuvertes(data?.inscriptions_ouvertes ?? true);
       });
   }, [magasinId]);
 
@@ -128,17 +135,22 @@ export default function Chromes() {
     if (!surnom) return;
     const { data, error } = await supabase
       .from('clients')
-      .insert({ surnom, description: nouveau.description.trim() || null })
+      .insert({
+        surnom,
+        description: nouveau.description.trim() || null,
+        telephone: nouveau.telephone.trim() || null,
+      })
       .select()
       .single();
     if (!error && data) {
-      setNouveau({ surnom: '', description: '' });
+      setNouveau({ surnom: '', description: '', telephone: '' });
       setCreationOuverte(false);
       await chargerClients();
       ouvrirClient({
         client_id: data.id,
         surnom: data.surnom,
         description: data.description,
+        telephone: data.telephone,
         solde: 0,
       });
       // Affiche tout de suite le QR en grand : le client le prend en photo.
@@ -158,6 +170,26 @@ export default function Chromes() {
     }
     setClientSel((c) => ({ ...c, surnom: s }));
     setMsgClient('Client renommé ✅');
+    chargerClients();
+  }
+
+  async function modifierTelephone() {
+    const saisie = window.prompt(
+      'Numéro de téléphone du client (laisser vide pour effacer) :',
+      clientSel.telephone ?? '',
+    );
+    if (saisie == null) return;
+    const telephone = saisie.trim() || null;
+    const { error } = await supabase
+      .from('clients')
+      .update({ telephone })
+      .eq('id', clientSel.client_id);
+    if (error) {
+      setMsgClient(`Modification impossible : ${error.message}`);
+      return;
+    }
+    setClientSel((c) => ({ ...c, telephone }));
+    setMsgClient('Téléphone mis à jour ✅');
     chargerClients();
   }
 
@@ -246,6 +278,12 @@ export default function Chromes() {
     if (!error) setFaveurs(liste);
   }
 
+  // Ouvre/ferme l'auto-inscription publique du magasin (admin).
+  async function basculerInscriptions(ouvert) {
+    const { error } = await supabase.rpc('inscriptions_set', { p_ouvert: ouvert });
+    if (!error) setInscriptionsOuvertes(ouvert);
+  }
+
   async function supprimerPromo(id) {
     if (!window.confirm('Supprimer cette promo ?')) return;
     await supabase.from('promos').delete().eq('id', id);
@@ -311,6 +349,15 @@ export default function Chromes() {
           onClose={() => setQrModal(null)}
         />
       )}
+      {qrInscription && magasinId && (
+        <ModaleQRInscription
+          magasinId={magasinId}
+          estAdmin={estAdmin}
+          ouvert={inscriptionsOuvertes}
+          onToggle={basculerInscriptions}
+          onClose={() => setQrInscription(false)}
+        />
+      )}
 
       <div className="card">
           <input
@@ -351,6 +398,16 @@ export default function Chromes() {
                 />
               </label>
               <label className="field">
+                <span>Téléphone (facultatif)</span>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  value={nouveau.telephone}
+                  onChange={(e) => setNouveau((n) => ({ ...n, telephone: e.target.value }))}
+                  placeholder="ex. 06 12 34 56 78 (avec l'accord du client)"
+                />
+              </label>
+              <label className="field">
                 <span>Description (interne)</span>
                 <textarea
                   rows={2}
@@ -369,9 +426,14 @@ export default function Chromes() {
               </div>
             </form>
           ) : (
-            <button className="btn" onClick={() => setCreationOuverte(true)}>
-              + Nouvelle fiche client
-            </button>
+            <div className="form-inline">
+              <button className="btn" onClick={() => setCreationOuverte(true)}>
+                + Nouvelle fiche client
+              </button>
+              <button type="button" className="btn" onClick={() => setQrInscription(true)}>
+                📲 QR d’inscription
+              </button>
+            </div>
           )}
         </div>
 
@@ -389,6 +451,11 @@ export default function Chromes() {
                   {statutSolde(solde)} · {formatEuros(solde)}
                 </span>
               </div>
+              {clientSel.telephone && (
+                <p className="telephone-client">
+                  📞 <a href={`tel:${clientSel.telephone.replace(/\s/g, '')}`}>{clientSel.telephone}</a>
+                </p>
+              )}
               {clientSel.description && (
                 <p className="description-client">{clientSel.description}</p>
               )}
@@ -396,6 +463,9 @@ export default function Chromes() {
                 <div className="form-inline">
                   <button type="button" className="btn" onClick={renommerClient}>
                     Renommer
+                  </button>
+                  <button type="button" className="btn" onClick={modifierTelephone}>
+                    {clientSel.telephone ? 'Modifier le téléphone' : 'Ajouter un téléphone'}
                   </button>
                   <button type="button" className="btn btn-discret" onClick={supprimerClient}>
                     Supprimer la fiche
