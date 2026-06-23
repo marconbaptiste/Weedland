@@ -113,7 +113,7 @@ Un « chrome » = une avance (crédit) faite à un client.
 
 ### RGPD
 
-Les clients ne sont **jamais** identifiés par leur nom/prénom réel. La table `clients` ne contient qu'un **`surnom`** et une **`description`** interne (repère pour le personnel, visible uniquement via la RLS), plus le solde calculé et des compteurs de **fidélité** (`tampons`, `recompenses`) — jamais de coordonnées ni d'identifiants personnels réels.
+Les clients ne sont **jamais** identifiés par leur nom/prénom réel. La table `clients` ne contient qu'un **`surnom`** et une **`description`** interne (repère pour le personnel, visible uniquement via la RLS), plus le solde calculé et des compteurs de **fidélité** (`tampons`, `recompenses`). Seule exception, à la demande du commerçant : un **`telephone`** *facultatif* (rappel d'une dette / info promo), renseigné avec l'accord du client — saisi à la création (tout employé) et modifiable par l'admin dans la fiche client, exposé par `v_solde_client`, cloisonné par magasin via la RLS. Aucune autre coordonnée ni identifiant personnel réel n'est stocké. Migration : `supabase/migrations/2026-06-23-clients-telephone.sql`.
 
 **Fidélité (carte à tampons)** : palier configurable par magasin (`magasins.fidelite_palier`, défaut 10). Le stamping se fait via des fonctions SECURITY DEFINER (`fidelite_ajouter`/`fidelite_retirer`/`fidelite_utiliser` — membres ; `fidelite_palier` — admin) pour autoriser les employés sans ouvrir l'édition de `clients` (réservée à l'admin), tout en restant cloisonné par magasin. UI dans la fiche client (Chromes). Migration : `supabase/migrations/2026-06-22-fidelite.sql`.
 

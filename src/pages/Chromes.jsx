@@ -28,7 +28,7 @@ export default function Chromes() {
   const [qrModal, setQrModal] = useState(null); // { clientId, surnom } | null
   const [faveurs, setFaveurs] = useState([]); // raccourcis de faveurs du magasin
 
-  const [nouveau, setNouveau] = useState({ surnom: '', description: '' });
+  const [nouveau, setNouveau] = useState({ surnom: '', description: '', telephone: '' });
   const [creationOuverte, setCreationOuverte] = useState(false);
 
   const [type, setType] = useState('avance');
@@ -41,7 +41,10 @@ export default function Chromes() {
 
   const chargerClients = useCallback(async () => {
     const [{ data }, { data: pr }] = await Promise.all([
-      supabase.from('v_solde_client').select('client_id, surnom, description, solde').order('surnom'),
+      supabase
+        .from('v_solde_client')
+        .select('client_id, surnom, description, telephone, solde')
+        .order('surnom'),
       supabase.from('promos').select('client_id'),
     ]);
     setClients(data ?? []);
@@ -128,17 +131,22 @@ export default function Chromes() {
     if (!surnom) return;
     const { data, error } = await supabase
       .from('clients')
-      .insert({ surnom, description: nouveau.description.trim() || null })
+      .insert({
+        surnom,
+        description: nouveau.description.trim() || null,
+        telephone: nouveau.telephone.trim() || null,
+      })
       .select()
       .single();
     if (!error && data) {
-      setNouveau({ surnom: '', description: '' });
+      setNouveau({ surnom: '', description: '', telephone: '' });
       setCreationOuverte(false);
       await chargerClients();
       ouvrirClient({
         client_id: data.id,
         surnom: data.surnom,
         description: data.description,
+        telephone: data.telephone,
         solde: 0,
       });
       // Affiche tout de suite le QR en grand : le client le prend en photo.
@@ -158,6 +166,26 @@ export default function Chromes() {
     }
     setClientSel((c) => ({ ...c, surnom: s }));
     setMsgClient('Client renommé ✅');
+    chargerClients();
+  }
+
+  async function modifierTelephone() {
+    const saisie = window.prompt(
+      'Numéro de téléphone du client (laisser vide pour effacer) :',
+      clientSel.telephone ?? '',
+    );
+    if (saisie == null) return;
+    const telephone = saisie.trim() || null;
+    const { error } = await supabase
+      .from('clients')
+      .update({ telephone })
+      .eq('id', clientSel.client_id);
+    if (error) {
+      setMsgClient(`Modification impossible : ${error.message}`);
+      return;
+    }
+    setClientSel((c) => ({ ...c, telephone }));
+    setMsgClient('Téléphone mis à jour ✅');
     chargerClients();
   }
 
@@ -351,6 +379,16 @@ export default function Chromes() {
                 />
               </label>
               <label className="field">
+                <span>Téléphone (facultatif)</span>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  value={nouveau.telephone}
+                  onChange={(e) => setNouveau((n) => ({ ...n, telephone: e.target.value }))}
+                  placeholder="ex. 06 12 34 56 78 (avec l'accord du client)"
+                />
+              </label>
+              <label className="field">
                 <span>Description (interne)</span>
                 <textarea
                   rows={2}
@@ -389,6 +427,11 @@ export default function Chromes() {
                   {statutSolde(solde)} · {formatEuros(solde)}
                 </span>
               </div>
+              {clientSel.telephone && (
+                <p className="telephone-client">
+                  📞 <a href={`tel:${clientSel.telephone.replace(/\s/g, '')}`}>{clientSel.telephone}</a>
+                </p>
+              )}
               {clientSel.description && (
                 <p className="description-client">{clientSel.description}</p>
               )}
@@ -396,6 +439,9 @@ export default function Chromes() {
                 <div className="form-inline">
                   <button type="button" className="btn" onClick={renommerClient}>
                     Renommer
+                  </button>
+                  <button type="button" className="btn" onClick={modifierTelephone}>
+                    {clientSel.telephone ? 'Modifier le téléphone' : 'Ajouter un téléphone'}
                   </button>
                   <button type="button" className="btn btn-discret" onClick={supprimerClient}>
                     Supprimer la fiche
