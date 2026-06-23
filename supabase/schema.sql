@@ -298,7 +298,7 @@ grant select on
   public.v_chromes_jour,
   public.v_ca_jour,
   public.v_interessement_employe
-to anon, authenticated;
+to authenticated;
 
 -- Solde dû par client (Σ avances - Σ remboursements).
 create or replace view public.v_solde_client
@@ -313,7 +313,7 @@ select
 from public.clients cl
 left join public.chromes ch on ch.client_id = cl.id
 group by cl.id, cl.surnom, cl.description, cl.telephone;
-grant select on public.v_solde_client to anon, authenticated;
+grant select on public.v_solde_client to authenticated;
 
 -- ============================================================================
 -- DÉCLENCHEUR : crée automatiquement le profil public.users à l'inscription.
