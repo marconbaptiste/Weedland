@@ -28,6 +28,7 @@ export default function Chromes() {
   const [fidelite, setFidelite] = useState({ tampons: 0, recompenses: 0 });
   const [qrModal, setQrModal] = useState(null); // { clientId, surnom } | null
   const [qrInscription, setQrInscription] = useState(false); // QR d'inscription magasin
+  const [inscriptionsOuvertes, setInscriptionsOuvertes] = useState(true);
   const [faveurs, setFaveurs] = useState([]); // raccourcis de faveurs du magasin
 
   const [nouveau, setNouveau] = useState({ surnom: '', description: '', telephone: '' });
@@ -62,12 +63,13 @@ export default function Chromes() {
     if (!magasinId) return;
     supabase
       .from('magasins')
-      .select('fidelite_palier, faveurs_raccourcis')
+      .select('fidelite_palier, faveurs_raccourcis, inscriptions_ouvertes')
       .eq('id', magasinId)
       .single()
       .then(({ data }) => {
         setPalier(data?.fidelite_palier ?? 10);
         setFaveurs(data?.faveurs_raccourcis ?? []);
+        setInscriptionsOuvertes(data?.inscriptions_ouvertes ?? true);
       });
   }, [magasinId]);
 
@@ -276,6 +278,12 @@ export default function Chromes() {
     if (!error) setFaveurs(liste);
   }
 
+  // Ouvre/ferme l'auto-inscription publique du magasin (admin).
+  async function basculerInscriptions(ouvert) {
+    const { error } = await supabase.rpc('inscriptions_set', { p_ouvert: ouvert });
+    if (!error) setInscriptionsOuvertes(ouvert);
+  }
+
   async function supprimerPromo(id) {
     if (!window.confirm('Supprimer cette promo ?')) return;
     await supabase.from('promos').delete().eq('id', id);
@@ -342,7 +350,13 @@ export default function Chromes() {
         />
       )}
       {qrInscription && magasinId && (
-        <ModaleQRInscription magasinId={magasinId} onClose={() => setQrInscription(false)} />
+        <ModaleQRInscription
+          magasinId={magasinId}
+          estAdmin={estAdmin}
+          ouvert={inscriptionsOuvertes}
+          onToggle={basculerInscriptions}
+          onClose={() => setQrInscription(false)}
+        />
       )}
 
       <div className="card">

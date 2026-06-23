@@ -3,7 +3,7 @@ import { genererQR, urlInscription } from '../lib/qr';
 
 // Affiche en grand le QR d'INSCRIPTION du magasin (à afficher/imprimer au
 // comptoir). Le client le scanne pour créer lui-même sa carte de fidélité.
-export default function ModaleQRInscription({ magasinId, onClose }) {
+export default function ModaleQRInscription({ magasinId, onClose, estAdmin, ouvert, onToggle }) {
   const [src, setSrc] = useState('');
   const url = urlInscription(magasinId);
 
@@ -37,12 +37,23 @@ export default function ModaleQRInscription({ magasinId, onClose }) {
           Affiche ou imprime ce QR au comptoir : le client le scanne, crée sa carte en quelques
           secondes et repart avec <strong>1 étoile offerte</strong>.
         </p>
+        {!ouvert && (
+          <p className="message-erreur">
+            ⚠️ Les inscriptions sont <strong>fermées</strong> : le QR ne crée plus de carte tant que
+            tu ne les rouvres pas.
+          </p>
+        )}
         {src && <img src={src} alt="QR d'inscription" width={320} height={320} className="qr-client" />}
         <p className="statut" style={{ wordBreak: 'break-all' }}>{url}</p>
         <div className="form-inline" style={{ justifyContent: 'center' }}>
           <button type="button" className="btn" onClick={() => window.print()}>
             Imprimer
           </button>
+          {estAdmin && (
+            <button type="button" className="btn" onClick={() => onToggle(!ouvert)}>
+              {ouvert ? 'Fermer les inscriptions' : 'Rouvrir les inscriptions'}
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -15,9 +15,29 @@
 --     renvoie que surnom/tampons/palier).
 -- RGPD : téléphone recueilli avec le consentement explicite du client (case à
 -- cocher côté formulaire), cloisonné par magasin.
+--
+-- Robinet anti-spam : magasins.inscriptions_ouvertes (défaut true). L'admin du
+-- magasin l'ouvre/ferme via inscriptions_set() (SECURITY DEFINER) ; quand c'est
+-- fermé, l'inscription publique est refusée.
 -- À exécuter dans l'éditeur SQL Supabase (après multi-magasin + fidélité +
 -- clients-telephone).
 -- ============================================================================
+
+alter table public.magasins
+  add column if not exists inscriptions_ouvertes boolean not null default true;
+
+-- L'admin du magasin ouvre/ferme l'auto-inscription (RLS magasins = superadmin
+-- uniquement, on passe donc par une fonction SECURITY DEFINER, comme faveurs_set).
+create or replace function public.inscriptions_set(p_ouvert boolean)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.est_admin() then raise exception 'réservé à l''admin'; end if;
+  update public.magasins
+  set inscriptions_ouvertes = coalesce(p_ouvert, true)
+  where id = public.mon_magasin();
+end; $$;
+
+grant execute on function public.inscriptions_set(boolean) to authenticated;
 
 create or replace function public.inscription_client_publique(
   p_magasin   uuid,
@@ -28,11 +48,17 @@ returns uuid
 language plpgsql security definer set search_path = public as $$
 declare
   v_id      uuid;
+  v_ouvert  boolean;
   v_surnom  text := btrim(coalesce(p_surnom, ''));
   v_tel     text := btrim(coalesce(p_telephone, ''));
 begin
-  if p_magasin is null or not exists (select 1 from public.magasins where id = p_magasin) then
+  select inscriptions_ouvertes into v_ouvert
+  from public.magasins where id = p_magasin;
+  if v_ouvert is null then
     raise exception 'Magasin inconnu.';
+  end if;
+  if not v_ouvert then
+    raise exception 'Les inscriptions sont fermées pour ce magasin.';
   end if;
   if v_surnom = '' then raise exception 'Surnom requis.'; end if;
   if v_tel = '' then raise exception 'Téléphone requis.'; end if;
