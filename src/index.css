@@ -813,6 +813,42 @@ details > summary {
   padding: 0.45rem 0.7rem;
   font-size: 0.9rem;
 }
+
+/* ----- Messagerie (support / doléances) ----- */
+.messagerie {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.bulle {
+  max-width: 80%;
+  padding: 0.5rem 0.7rem;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.92rem;
+}
+.bulle.moi {
+  align-self: flex-end;
+  background: var(--accent);
+  color: #06210f;
+}
+.bulle.autre {
+  align-self: flex-start;
+  background: var(--fond-input);
+}
+.bulle-quand {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
 .astuce-accueil ol {
   margin: 0.4rem 0 0;
   padding-left: 1.2rem;

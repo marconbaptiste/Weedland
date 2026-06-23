@@ -19,6 +19,7 @@ export function AuthProvider({ children }) {
   const [profil, setProfil] = useState(null);
   const [profilPret, setProfilPret] = useState(false);
   const [magasins, setMagasins] = useState([]); // liste (super-admin uniquement)
+  const [magasinInfo, setMagasinInfo] = useState(null); // abonnement du magasin courant
 
   // Suivi de la session Supabase (persistée ~30 j et rafraîchie automatiquement).
   useEffect(() => {
@@ -75,6 +76,28 @@ export function AuthProvider({ children }) {
       .then(({ data }) => setMagasins(data ?? []));
   }, [profil?.role]);
 
+  // Abonnement / période d'essai du magasin de l'utilisateur (pour le blocage).
+  useEffect(() => {
+    if (!profil?.magasin_id) {
+      setMagasinInfo(null);
+      return;
+    }
+    supabase
+      .from('magasins')
+      .select('abonnement, essai_fin')
+      .eq('id', profil.magasin_id)
+      .single()
+      .then(({ data }) => setMagasinInfo(data ?? null));
+  }, [profil?.magasin_id]);
+
+  const estSuperadmin = profil?.role === 'superadmin';
+  const aujourdHui = new Date().toISOString().slice(0, 10);
+  const magasinBloque =
+    !estSuperadmin &&
+    !!magasinInfo &&
+    (magasinInfo.abonnement === 'suspendu' ||
+      (magasinInfo.abonnement === 'essai' && magasinInfo.essai_fin && magasinInfo.essai_fin < aujourdHui));
+
   // Super-admin : bascule le magasin actif (met à jour son propre magasin_id).
   // Un rechargement garantit que toutes les pages relisent le bon magasin.
   const changerMagasin = async (magasinId) => {
@@ -88,9 +111,11 @@ export function AuthProvider({ children }) {
     utilisateur: session?.user ?? null,
     profil,
     estAdmin: profil?.role === 'admin' || profil?.role === 'superadmin',
-    estSuperadmin: profil?.role === 'superadmin',
+    estSuperadmin,
     magasins,
     magasinId: profil?.magasin_id ?? null,
+    magasinInfo,
+    magasinBloque,
     changerMagasin,
     chargement,
     connexion: (email, motDePasse) =>

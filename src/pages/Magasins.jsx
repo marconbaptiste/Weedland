@@ -2,38 +2,100 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant } from '../lib/format';
+import Messagerie from '../components/Messagerie';
 
-// Module — Gestion des magasins (réservé au super-admin / exploitant).
-// Permet de créer un magasin, d'autoriser son premier administrateur, et de
-// supprimer un magasin (avec toutes ses données).
+const ABONNEMENTS = ['essai', 'actif', 'suspendu'];
+
+// Tableau de pilotage (super-admin) : vue d'ensemble, magasins + abonnement,
+// codes d'inscription, messagerie/doléances.
 export default function Magasins() {
   const { magasinId } = useAuth();
+  const [onglet, setOnglet] = useState('apercu');
   const [magasins, setMagasins] = useState([]);
   const [codes, setCodes] = useState([]);
-  const [nomMagasin, setNomMagasin] = useState('');
+  const [users, setUsers] = useState([]);
+  const [nonLus, setNonLus] = useState([]);
   const [statut, setStatut] = useState('');
-  const [admin, setAdmin] = useState({
-    magasin_id: '',
-    email: '',
-    nom: '',
-    motDePasse: '',
-    pourcentage: '',
-  });
+  const [nomMagasin, setNomMagasin] = useState('');
+  const [admin, setAdmin] = useState({ magasin_id: '', email: '', nom: '', motDePasse: '', pourcentage: '' });
+  const [filActif, setFilActif] = useState(null); // magasin sélectionné pour la messagerie
 
   const charger = useCallback(async () => {
-    const [{ data: mag }, { data: cod }] = await Promise.all([
-      supabase.from('magasins').select('id, nom, actif, created_at').order('created_at'),
+    const [{ data: mag }, { data: cod }, { data: us }, { data: msg }] = await Promise.all([
+      supabase.from('magasins').select('id, nom, abonnement, essai_fin, created_at').order('created_at'),
       supabase.from('codes_inscription').select('code, actif, utilisations').order('created_at', { ascending: false }),
+      supabase.from('users').select('id, magasin_id, role'),
+      supabase.from('messages').select('magasin_id, de_superadmin, lu'),
     ]);
     setMagasins(mag ?? []);
     setCodes(cod ?? []);
+    setUsers(us ?? []);
+    setNonLus((msg ?? []).filter((m) => !m.lu && !m.de_superadmin));
   }, []);
 
   useEffect(() => {
     charger();
   }, [charger]);
 
-  // Génère un code lisible (sans caractères ambigus) et l'enregistre.
+  const nbEmployes = (id) => users.filter((u) => u.magasin_id === id).length;
+  const nonLusMagasin = (id) => nonLus.filter((m) => m.magasin_id === id).length;
+
+  // --- Magasins / abonnement ---
+  async function creerMagasin(e) {
+    e.preventDefault();
+    const nom = nomMagasin.trim();
+    if (!nom) return;
+    const { error } = await supabase.from('magasins').insert({ nom });
+    if (error) return setStatut(`Erreur : ${error.message}`);
+    setNomMagasin('');
+    setStatut('Magasin créé ✅');
+    charger();
+  }
+  async function majMagasin(id, patch) {
+    await supabase.from('magasins').update(patch).eq('id', id);
+    charger();
+  }
+  function prolongerEssai(m) {
+    const base = m.essai_fin && m.essai_fin > new Date().toISOString().slice(0, 10) ? new Date(m.essai_fin) : new Date();
+    base.setDate(base.getDate() + 14);
+    majMagasin(m.id, { essai_fin: base.toISOString().slice(0, 10), abonnement: 'essai' });
+  }
+  async function supprimerMagasin(m) {
+    if (m.id === magasinId) return setStatut('Bascule sur un autre magasin (en haut) avant de supprimer celui-ci.');
+    if (!window.confirm(`Supprimer « ${m.nom} » et TOUTES ses données ? Irréversible.`)) return;
+    setStatut('Suppression…');
+    const { data, error } = await supabase.functions.invoke('hyper-api', {
+      body: { action: 'supprimer-magasin', magasinId: m.id },
+    });
+    if (error || data?.error) return setStatut(`Erreur : ${data?.error ?? error?.message}`);
+    setStatut(`Magasin « ${m.nom} » supprimé.`);
+    charger();
+  }
+
+  // --- Autoriser un admin ---
+  async function autoriserAdmin(e) {
+    e.preventDefault();
+    setStatut('');
+    const email = admin.email.trim().toLowerCase();
+    if (!email || !admin.magasin_id) return setStatut('Choisis un magasin et saisis un email.');
+    const { error: errAuth } = await supabase.from('comptes_autorises').upsert(
+      { email, role: 'admin', pourcentage_interessement: parseMontant(admin.pourcentage), magasin_id: admin.magasin_id },
+      { onConflict: 'email' },
+    );
+    if (errAuth) return setStatut(`Erreur autorisation : ${errAuth.message}`);
+    if (admin.motDePasse && admin.nom.trim()) {
+      const { data, error } = await supabase.functions.invoke('hyper-api', {
+        body: { email, motDePasse: admin.motDePasse, nom: admin.nom.trim(), role: 'admin', pourcentage: admin.pourcentage },
+      });
+      if (error || data?.error) return setStatut(`Email autorisé, mais création en erreur : ${data?.error ?? error?.message}`);
+      setStatut('Magasin + administrateur créés ✅');
+    } else {
+      setStatut('Email autorisé ✅ — l’admin peut se connecter avec Google.');
+    }
+    setAdmin({ magasin_id: '', email: '', nom: '', motDePasse: '', pourcentage: '' });
+  }
+
+  // --- Codes ---
   async function genererCode() {
     const alpha = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const code = Array.from({ length: 8 }, () => alpha[Math.floor(Math.random() * alpha.length)]).join('');
@@ -54,250 +116,143 @@ export default function Magasins() {
     setStatut(`Code ${code} copié.`);
   }
 
-  async function creerMagasin(e) {
-    e.preventDefault();
-    const nom = nomMagasin.trim();
-    if (!nom) return;
-    const { error } = await supabase.from('magasins').insert({ nom });
-    if (error) {
-      setStatut(`Erreur : ${error.message}`);
-      return;
-    }
-    setNomMagasin('');
-    setStatut('Magasin créé ✅');
-    charger();
-  }
-
-  async function supprimerMagasin(m) {
-    if (m.id === magasinId) {
-      setStatut('Bascule sur un autre magasin (en haut) avant de supprimer celui-ci.');
-      return;
-    }
-    if (!window.confirm(`Supprimer définitivement « ${m.nom} » et TOUTES ses données (clients, caisse, stocks, comptes…) ? Cette action est irréversible.`)) {
-      return;
-    }
-    setStatut('Suppression en cours…');
-    const { data, error } = await supabase.functions.invoke('hyper-api', {
-      body: { action: 'supprimer-magasin', magasinId: m.id },
-    });
-    if (error || data?.error) {
-      setStatut(`Erreur : ${data?.error ?? error?.message}`);
-      return;
-    }
-    setStatut(`Magasin « ${m.nom} » supprimé.`);
-    charger();
-  }
-
-  async function autoriserAdmin(e) {
-    e.preventDefault();
-    setStatut('');
-    const email = admin.email.trim().toLowerCase();
-    if (!email || !admin.magasin_id) {
-      setStatut('Choisis un magasin et saisis un email.');
-      return;
-    }
-    // 1) Autoriser l'email pour ce magasin, en rôle admin.
-    const { error: errAuth } = await supabase.from('comptes_autorises').upsert(
-      {
-        email,
-        role: 'admin',
-        pourcentage_interessement: parseMontant(admin.pourcentage),
-        magasin_id: admin.magasin_id,
-      },
-      { onConflict: 'email' },
-    );
-    if (errAuth) {
-      setStatut(`Erreur autorisation : ${errAuth.message}`);
-      return;
-    }
-    // 2) Si mot de passe + nom fournis, créer le compte tout de suite (Edge
-    //    Function). Sinon, l'admin se connectera via Google avec cet email.
-    if (admin.motDePasse && admin.nom.trim()) {
-      const { data, error } = await supabase.functions.invoke('hyper-api', {
-        body: {
-          email,
-          motDePasse: admin.motDePasse,
-          nom: admin.nom.trim(),
-          role: 'admin',
-          pourcentage: admin.pourcentage,
-        },
-      });
-      if (error || data?.error) {
-        setStatut(
-          `Email autorisé, mais création du compte en erreur : ${data?.error ?? error?.message}`,
-        );
-        return;
-      }
-      setStatut('Magasin + administrateur créés ✅');
-    } else {
-      setStatut('Email autorisé ✅ — l’admin peut se connecter avec Google (ou crée-lui un mot de passe).');
-    }
-    setAdmin({ magasin_id: '', email: '', nom: '', motDePasse: '', pourcentage: '' });
-  }
+  const kpis = {
+    total: magasins.length,
+    essai: magasins.filter((m) => m.abonnement === 'essai').length,
+    actif: magasins.filter((m) => m.abonnement === 'actif').length,
+    suspendu: magasins.filter((m) => m.abonnement === 'suspendu').length,
+    comptes: users.length,
+    messages: nonLus.length,
+  };
 
   return (
     <div className="page">
-      <h1>Magasins</h1>
+      <h1>Pilotage</h1>
 
-      <form className="card" onSubmit={creerMagasin}>
-        <h2>Nouveau magasin</h2>
-        <label className="field">
-          <span>Nom du magasin</span>
-          <input
-            value={nomMagasin}
-            onChange={(e) => setNomMagasin(e.target.value)}
-            placeholder="ex. Weedland Lyon"
-          />
-        </label>
-        <button className="btn btn-primary" type="submit">
-          Créer le magasin
-        </button>
-      </form>
-
-      <div className="card">
-        <div className="entete-client">
-          <h2>Codes d’inscription</h2>
-          <button type="button" className="btn btn-primary" onClick={genererCode}>
-            + Générer un code
+      <div className="bascule">
+        {[
+          ['apercu', 'Vue d’ensemble'],
+          ['magasins', 'Magasins'],
+          ['codes', 'Codes'],
+          ['messages', `Messages${kpis.messages ? ` (${kpis.messages})` : ''}`],
+        ].map(([k, libelle]) => (
+          <button key={k} className={onglet === k ? 'actif' : ''} onClick={() => setOnglet(k)}>
+            {libelle}
           </button>
+        ))}
+      </div>
+
+      {statut && <p className="statut">{statut}</p>}
+
+      {onglet === 'apercu' && (
+        <div className="cartes-kpi">
+          <div className="kpi"><span className="kpi-label">Magasins</span><span className="kpi-valeur">{kpis.total}</span></div>
+          <div className="kpi"><span className="kpi-label">En essai</span><span className="kpi-valeur">{kpis.essai}</span></div>
+          <div className="kpi"><span className="kpi-label">Actifs</span><span className="kpi-valeur solde-ok">{kpis.actif}</span></div>
+          <div className="kpi"><span className="kpi-label">Suspendus</span><span className={`kpi-valeur ${kpis.suspendu ? 'dette' : ''}`}>{kpis.suspendu}</span></div>
+          <div className="kpi"><span className="kpi-label">Comptes</span><span className="kpi-valeur">{kpis.comptes}</span></div>
+          <div className="kpi"><span className="kpi-label">Messages non lus</span><span className={`kpi-valeur ${kpis.messages ? 'dette' : ''}`}>{kpis.messages}</span></div>
         </div>
-        <p className="statut">
-          Donne un code à un nouveau patron : il pourra créer son magasin via « Créer mon magasin ».
-        </p>
-        <table className="tableau">
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th className="droite">Utilisé</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {codes.map((c) => (
-              <tr key={c.code} style={{ opacity: c.actif ? 1 : 0.5 }}>
-                <td>
-                  <strong>{c.code}</strong>
-                  {!c.actif && ' (inactif)'}
-                </td>
-                <td className="droite">{c.utilisations}×</td>
-                <td className="actions-cellule">
-                  <button type="button" className="btn btn-discret" onClick={() => copierCode(c.code)}>
-                    Copier
-                  </button>
-                  <button type="button" className="btn btn-discret" onClick={() => basculerCode(c.code, c.actif)}>
-                    {c.actif ? 'Désactiver' : 'Activer'}
-                  </button>
-                  <button type="button" className="btn btn-discret" onClick={() => supprimerCode(c.code)} aria-label="Supprimer">
-                    ✕
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {codes.length === 0 && (
-              <tr>
-                <td colSpan={3} className="vide">
-                  Aucun code — génères-en un.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        {statut && <p className="statut">{statut}</p>}
-      </div>
+      )}
 
-      <form className="card" onSubmit={autoriserAdmin}>
-        <h2>Autoriser un administrateur</h2>
-        <p className="statut">
-          Crée d’abord le magasin, puis autorise son admin. Avec un mot de passe + nom, le compte
-          est créé immédiatement ; sinon l’admin se connecte avec Google via cet email.
-        </p>
-        <label className="field">
-          <span>Magasin</span>
-          <select
-            value={admin.magasin_id}
-            onChange={(e) => setAdmin((a) => ({ ...a, magasin_id: e.target.value }))}
-          >
-            <option value="">— Choisir —</option>
-            {magasins.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.nom}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Email de l’admin</span>
-          <input
-            type="email"
-            value={admin.email}
-            onChange={(e) => setAdmin((a) => ({ ...a, email: e.target.value }))}
-          />
-        </label>
-        <label className="field">
-          <span>Nom (si création avec mot de passe)</span>
-          <input value={admin.nom} onChange={(e) => setAdmin((a) => ({ ...a, nom: e.target.value }))} />
-        </label>
-        <label className="field">
-          <span>Mot de passe (optionnel)</span>
-          <input
-            type="text"
-            value={admin.motDePasse}
-            onChange={(e) => setAdmin((a) => ({ ...a, motDePasse: e.target.value }))}
-            placeholder="laisser vide pour connexion Google"
-          />
-        </label>
-        <label className="field">
-          <span>% d’intéressement (par défaut)</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={admin.pourcentage}
-            onChange={(e) => setAdmin((a) => ({ ...a, pourcentage: e.target.value }))}
-          />
-        </label>
-        <button className="btn btn-primary" type="submit">
-          Autoriser l’administrateur
-        </button>
-        {statut && <p className="statut">{statut}</p>}
-      </form>
+      {onglet === 'magasins' && (
+        <>
+          <form className="card" onSubmit={creerMagasin}>
+            <h2>Nouveau magasin</h2>
+            <div className="form-inline">
+              <input value={nomMagasin} onChange={(e) => setNomMagasin(e.target.value)} placeholder="Nom du magasin" />
+              <button className="btn btn-primary" type="submit">Créer</button>
+            </div>
+          </form>
 
-      <div className="card">
-        <h2>Magasins existants</h2>
-        <table className="tableau">
-          <thead>
-            <tr>
-              <th>Nom</th>
-              <th>Créé le</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {magasins.map((m) => (
-              <tr key={m.id}>
-                <td>
-                  {m.nom}
-                  {m.id === magasinId && <span className="badge badge-solde tag-partage">actuel</span>}
-                </td>
-                <td>{new Date(m.created_at).toLocaleDateString('fr-FR')}</td>
-                <td className="droite">
-                  {m.id !== magasinId && (
-                    <button type="button" className="btn btn-discret" onClick={() => supprimerMagasin(m)}>
-                      Supprimer
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {magasins.length === 0 && (
-              <tr>
-                <td colSpan={3} className="vide">
-                  Aucun magasin.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+          {magasins.map((m) => (
+            <div key={m.id} className="card">
+              <div className="entete-client">
+                <strong>{m.nom}{m.id === magasinId && <span className="badge badge-solde tag-partage">actuel</span>}</strong>
+                <span className="promo-qui">{nbEmployes(m.id)} compte(s)</span>
+              </div>
+              <div className="form-inline">
+                <label className="field">
+                  <span>Abonnement</span>
+                  <select value={m.abonnement} onChange={(e) => majMagasin(m.id, { abonnement: e.target.value })}>
+                    {ABONNEMENTS.map((a) => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Fin d’essai</span>
+                  <input type="date" value={m.essai_fin ?? ''} onChange={(e) => majMagasin(m.id, { essai_fin: e.target.value })} />
+                </label>
+              </div>
+              <div className="form-inline">
+                <button type="button" className="btn" onClick={() => prolongerEssai(m)}>+14 j d’essai</button>
+                {m.abonnement !== 'actif' && <button type="button" className="btn" onClick={() => majMagasin(m.id, { abonnement: 'actif' })}>Activer</button>}
+                {m.abonnement !== 'suspendu' && <button type="button" className="btn btn-discret" onClick={() => majMagasin(m.id, { abonnement: 'suspendu' })}>Suspendre</button>}
+                {m.id !== magasinId && <button type="button" className="btn btn-discret" onClick={() => supprimerMagasin(m)}>Supprimer</button>}
+              </div>
+            </div>
+          ))}
+
+          <form className="card" onSubmit={autoriserAdmin}>
+            <h2>Autoriser un administrateur</h2>
+            <label className="field">
+              <span>Magasin</span>
+              <select value={admin.magasin_id} onChange={(e) => setAdmin((a) => ({ ...a, magasin_id: e.target.value }))}>
+                <option value="">— Choisir —</option>
+                {magasins.map((m) => <option key={m.id} value={m.id}>{m.nom}</option>)}
+              </select>
+            </label>
+            <label className="field"><span>Email</span><input type="email" value={admin.email} onChange={(e) => setAdmin((a) => ({ ...a, email: e.target.value }))} /></label>
+            <label className="field"><span>Nom (si mot de passe)</span><input value={admin.nom} onChange={(e) => setAdmin((a) => ({ ...a, nom: e.target.value }))} /></label>
+            <label className="field"><span>Mot de passe (optionnel)</span><input type="text" value={admin.motDePasse} onChange={(e) => setAdmin((a) => ({ ...a, motDePasse: e.target.value }))} placeholder="vide = connexion Google" /></label>
+            <button className="btn btn-primary" type="submit">Autoriser l’administrateur</button>
+          </form>
+        </>
+      )}
+
+      {onglet === 'codes' && (
+        <div className="card">
+          <div className="entete-client">
+            <h2>Codes d’inscription</h2>
+            <button type="button" className="btn btn-primary" onClick={genererCode}>+ Générer</button>
+          </div>
+          <p className="statut">Donne un code à un nouveau patron pour qu’il crée son magasin.</p>
+          <table className="tableau">
+            <thead><tr><th>Code</th><th className="droite">Utilisé</th><th></th></tr></thead>
+            <tbody>
+              {codes.map((c) => (
+                <tr key={c.code} style={{ opacity: c.actif ? 1 : 0.5 }}>
+                  <td><strong>{c.code}</strong>{!c.actif && ' (inactif)'}</td>
+                  <td className="droite">{c.utilisations}×</td>
+                  <td className="actions-cellule">
+                    <button type="button" className="btn btn-discret" onClick={() => copierCode(c.code)}>Copier</button>
+                    <button type="button" className="btn btn-discret" onClick={() => basculerCode(c.code, c.actif)}>{c.actif ? 'Désactiver' : 'Activer'}</button>
+                    <button type="button" className="btn btn-discret" onClick={() => supprimerCode(c.code)}>✕</button>
+                  </td>
+                </tr>
+              ))}
+              {codes.length === 0 && <tr><td colSpan={3} className="vide">Aucun code.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {onglet === 'messages' && (
+        <div className="card">
+          <h2>Doléances par magasin</h2>
+          <label className="field">
+            <span>Magasin</span>
+            <select value={filActif ?? ''} onChange={(e) => setFilActif(e.target.value || null)}>
+              <option value="">— Choisir —</option>
+              {magasins.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.nom}{nonLusMagasin(m.id) ? ` (${nonLusMagasin(m.id)} non lu)` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          {filActif && <Messagerie magasinId={filActif} superadmin />}
+        </div>
+      )}
     </div>
   );
 }

@@ -74,9 +74,14 @@ export default function Layout() {
               </NavLink>
             </>
           )}
+          {estAdmin && !estSuperadmin && (
+            <NavLink to="/support" className={lienActif}>
+              Support
+            </NavLink>
+          )}
           {estSuperadmin && (
             <NavLink to="/magasins" className={lienActif}>
-              Magasins
+              Pilotage
             </NavLink>
           )}
         </nav>

@@ -19,6 +19,7 @@ import Comptes from './pages/Comptes';
 import Journal from './pages/Journal';
 import Comptabilite from './pages/Comptabilite';
 import Magasins from './pages/Magasins';
+import Support from './pages/Support';
 import Import from './pages/Import';
 
 export default function App() {
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="chromes" element={<Chromes />} />
           <Route path="stocks" element={<Stocks />} />
           <Route path="historique" element={<Historique />} />
+          <Route path="support" element={<Support />} />
           <Route path="f/:clientId" element={<Fidelite />} />
 
           {/* Réservé à l'admin */}
