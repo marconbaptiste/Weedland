@@ -6,6 +6,7 @@ import { aujourdhuiISO } from '../lib/dates';
 import { soldeClient, statutSolde } from '../lib/comptabilite';
 import ChampMontant from '../components/ChampMontant';
 import ModaleQR from '../components/ModaleQR';
+import ModaleQRInscription from '../components/ModaleQRInscription';
 
 // Module 2 — Chromes (avances / crédits clients).
 // RGPD : les clients sont identifiés par un SURNOM uniquement, jamais par leur
@@ -26,6 +27,7 @@ export default function Chromes() {
   const [palier, setPalier] = useState(10);
   const [fidelite, setFidelite] = useState({ tampons: 0, recompenses: 0 });
   const [qrModal, setQrModal] = useState(null); // { clientId, surnom } | null
+  const [qrInscription, setQrInscription] = useState(false); // QR d'inscription magasin
   const [faveurs, setFaveurs] = useState([]); // raccourcis de faveurs du magasin
 
   const [nouveau, setNouveau] = useState({ surnom: '', description: '', telephone: '' });
@@ -339,6 +341,9 @@ export default function Chromes() {
           onClose={() => setQrModal(null)}
         />
       )}
+      {qrInscription && magasinId && (
+        <ModaleQRInscription magasinId={magasinId} onClose={() => setQrInscription(false)} />
+      )}
 
       <div className="card">
           <input
@@ -407,9 +412,14 @@ export default function Chromes() {
               </div>
             </form>
           ) : (
-            <button className="btn" onClick={() => setCreationOuverte(true)}>
-              + Nouvelle fiche client
-            </button>
+            <div className="form-inline">
+              <button className="btn" onClick={() => setCreationOuverte(true)}>
+                + Nouvelle fiche client
+              </button>
+              <button type="button" className="btn" onClick={() => setQrInscription(true)}>
+                📲 QR d’inscription
+              </button>
+            </div>
           )}
         </div>
 

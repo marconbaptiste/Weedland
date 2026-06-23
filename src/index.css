@@ -535,6 +535,18 @@ hr {
   color: var(--accent);
   text-decoration: none;
 }
+.case-consent {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  text-align: left;
+  font-size: 0.85rem;
+  color: var(--texte-doux);
+}
+.case-consent input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
 .section-promos {
   border-top: 1px solid var(--bordure);
   border-bottom: 1px solid var(--bordure);

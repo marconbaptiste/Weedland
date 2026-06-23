@@ -7,6 +7,7 @@ import Confidentialite from './pages/Confidentialite';
 import Login from './pages/Login';
 import Inscription from './pages/Inscription';
 import Carte from './pages/Carte';
+import RejoindreCarte from './pages/RejoindreCarte';
 import Profil from './pages/Profil';
 import Caisse from './pages/Caisse';
 import Chromes from './pages/Chromes';
@@ -31,6 +32,7 @@ export default function App() {
       <Route path="/connexion" element={<Login />} />
       <Route path="/inscription" element={<Inscription />} />
       <Route path="/carte/:clientId" element={<Carte />} />
+      <Route path="/rejoindre/:magasinId" element={<RejoindreCarte />} />
 
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
