@@ -26,6 +26,7 @@ export default function Chromes() {
   const [palier, setPalier] = useState(10);
   const [fidelite, setFidelite] = useState({ tampons: 0, recompenses: 0 });
   const [qrModal, setQrModal] = useState(null); // { clientId, surnom } | null
+  const [faveurs, setFaveurs] = useState([]); // raccourcis de faveurs du magasin
 
   const [nouveau, setNouveau] = useState({ surnom: '', description: '' });
   const [creationOuverte, setCreationOuverte] = useState(false);
@@ -56,10 +57,13 @@ export default function Chromes() {
     if (!magasinId) return;
     supabase
       .from('magasins')
-      .select('fidelite_palier')
+      .select('fidelite_palier, faveurs_raccourcis')
       .eq('id', magasinId)
       .single()
-      .then(({ data }) => setPalier(data?.fidelite_palier ?? 10));
+      .then(({ data }) => {
+        setPalier(data?.fidelite_palier ?? 10);
+        setFaveurs(data?.faveurs_raccourcis ?? []);
+      });
   }, [magasinId]);
 
   const chargerFidelite = useCallback(async (clientId) => {
@@ -214,6 +218,32 @@ export default function Chromes() {
       await ouvrirClient(clientSel);
       await chargerClients();
     }
+  }
+
+  // Ajout rapide d'une faveur via un raccourci configuré.
+  async function ajouterFaveur(libelle) {
+    if (!clientSel) return;
+    const { error } = await supabase.from('promos').insert({
+      client_id: clientSel.client_id,
+      description: libelle,
+      date: aujourdhuiISO(),
+      employe_id: utilisateur.id,
+    });
+    if (!error) {
+      await ouvrirClient(clientSel);
+      await chargerClients();
+    }
+  }
+
+  async function configurerFaveurs() {
+    const v = window.prompt(
+      'Raccourcis de faveurs (séparés par des virgules) :',
+      faveurs.join(', '),
+    );
+    if (v == null) return;
+    const liste = v.split(',').map((s) => s.trim()).filter(Boolean);
+    const { error } = await supabase.rpc('faveurs_set', { p_libelles: liste });
+    if (!error) setFaveurs(liste);
   }
 
   async function supprimerPromo(id) {
@@ -425,7 +455,23 @@ export default function Chromes() {
               </div>
 
               <div className="section-promos">
-                <h3>★ Promos / traitements de faveur</h3>
+                <div className="entete-client">
+                  <h3>★ Promos / traitements de faveur</h3>
+                  {estAdmin && (
+                    <button type="button" className="btn btn-discret" onClick={configurerFaveurs}>
+                      ⚙️ Raccourcis
+                    </button>
+                  )}
+                </div>
+                {faveurs.length > 0 && (
+                  <div className="faveurs-rapides">
+                    {faveurs.map((f) => (
+                      <button key={f} type="button" className="btn" onClick={() => ajouterFaveur(f)}>
+                        + {f}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <form className="form-inline" onSubmit={creerPromo}>
                   <input
                     placeholder="ex. -10% sur tout, 1 g offert…"

@@ -804,6 +804,15 @@ details > summary {
   color: var(--texte-doux);
   margin: 0.3rem 0;
 }
+.faveurs-rapides {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.faveurs-rapides .btn {
+  padding: 0.45rem 0.7rem;
+  font-size: 0.9rem;
+}
 .astuce-accueil ol {
   margin: 0.4rem 0 0;
   padding-left: 1.2rem;
