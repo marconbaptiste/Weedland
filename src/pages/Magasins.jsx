@@ -9,6 +9,7 @@ import { parseMontant } from '../lib/format';
 export default function Magasins() {
   const { magasinId } = useAuth();
   const [magasins, setMagasins] = useState([]);
+  const [codes, setCodes] = useState([]);
   const [nomMagasin, setNomMagasin] = useState('');
   const [statut, setStatut] = useState('');
   const [admin, setAdmin] = useState({
@@ -20,16 +21,38 @@ export default function Magasins() {
   });
 
   const charger = useCallback(async () => {
-    const { data } = await supabase
-      .from('magasins')
-      .select('id, nom, actif, created_at')
-      .order('created_at');
-    setMagasins(data ?? []);
+    const [{ data: mag }, { data: cod }] = await Promise.all([
+      supabase.from('magasins').select('id, nom, actif, created_at').order('created_at'),
+      supabase.from('codes_inscription').select('code, actif, utilisations').order('created_at', { ascending: false }),
+    ]);
+    setMagasins(mag ?? []);
+    setCodes(cod ?? []);
   }, []);
 
   useEffect(() => {
     charger();
   }, [charger]);
+
+  // Génère un code lisible (sans caractères ambigus) et l'enregistre.
+  async function genererCode() {
+    const alpha = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const code = Array.from({ length: 8 }, () => alpha[Math.floor(Math.random() * alpha.length)]).join('');
+    await supabase.from('codes_inscription').insert({ code });
+    charger();
+  }
+  async function basculerCode(code, actif) {
+    await supabase.from('codes_inscription').update({ actif: !actif }).eq('code', code);
+    charger();
+  }
+  async function supprimerCode(code) {
+    if (!window.confirm(`Supprimer le code ${code} ?`)) return;
+    await supabase.from('codes_inscription').delete().eq('code', code);
+    charger();
+  }
+  function copierCode(code) {
+    navigator.clipboard?.writeText(code);
+    setStatut(`Code ${code} copié.`);
+  }
 
   async function creerMagasin(e) {
     e.preventDefault();
@@ -130,6 +153,57 @@ export default function Magasins() {
           Créer le magasin
         </button>
       </form>
+
+      <div className="card">
+        <div className="entete-client">
+          <h2>Codes d’inscription</h2>
+          <button type="button" className="btn btn-primary" onClick={genererCode}>
+            + Générer un code
+          </button>
+        </div>
+        <p className="statut">
+          Donne un code à un nouveau patron : il pourra créer son magasin via « Créer mon magasin ».
+        </p>
+        <table className="tableau">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th className="droite">Utilisé</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {codes.map((c) => (
+              <tr key={c.code} style={{ opacity: c.actif ? 1 : 0.5 }}>
+                <td>
+                  <strong>{c.code}</strong>
+                  {!c.actif && ' (inactif)'}
+                </td>
+                <td className="droite">{c.utilisations}×</td>
+                <td className="actions-cellule">
+                  <button type="button" className="btn btn-discret" onClick={() => copierCode(c.code)}>
+                    Copier
+                  </button>
+                  <button type="button" className="btn btn-discret" onClick={() => basculerCode(c.code, c.actif)}>
+                    {c.actif ? 'Désactiver' : 'Activer'}
+                  </button>
+                  <button type="button" className="btn btn-discret" onClick={() => supprimerCode(c.code)} aria-label="Supprimer">
+                    ✕
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {codes.length === 0 && (
+              <tr>
+                <td colSpan={3} className="vide">
+                  Aucun code — génères-en un.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        {statut && <p className="statut">{statut}</p>}
+      </div>
 
       <form className="card" onSubmit={autoriserAdmin}>
         <h2>Autoriser un administrateur</h2>

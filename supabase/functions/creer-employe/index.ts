@@ -38,8 +38,17 @@ Deno.serve(async (req) => {
     // 1) Inscription self-service d'un magasin (PUBLIC, protégée par un code).
     // ----------------------------------------------------------------------
     if (corps.action === 'inscription') {
-      const code = (Deno.env.get('CODE_INSCRIPTION') ?? '').trim();
-      if (!code || String(corps.code ?? '').trim() !== code) {
+      const admin = createClient(url, serviceRole);
+      const codeSaisi = String(corps.code ?? '').trim();
+      const codeEnv = (Deno.env.get('CODE_INSCRIPTION') ?? '').trim();
+      // Code valide s'il existe (actif) dans codes_inscription OU = secret env.
+      const { data: codeRow } = await admin
+        .from('codes_inscription')
+        .select('code, utilisations')
+        .eq('code', codeSaisi)
+        .eq('actif', true)
+        .maybeSingle();
+      if (!codeSaisi || (!codeRow && codeSaisi !== codeEnv)) {
         return json({ error: 'Code d’inscription invalide.' }, 403);
       }
       const nomMagasin = String(corps.nomMagasin ?? '').trim();
@@ -52,8 +61,6 @@ Deno.serve(async (req) => {
       if (motDePasse.length < 8) {
         return json({ error: 'Mot de passe trop court (8 caractères minimum).' }, 400);
       }
-
-      const admin = createClient(url, serviceRole);
 
       // Email déjà autorisé / utilisé ?
       const { data: deja } = await admin
@@ -86,6 +93,12 @@ Deno.serve(async (req) => {
       });
       if (errUser) return json({ error: errUser.message }, 400);
 
+      if (codeRow) {
+        await admin
+          .from('codes_inscription')
+          .update({ utilisations: (codeRow.utilisations ?? 0) + 1 })
+          .eq('code', codeSaisi);
+      }
       return json({ ok: true }, 200);
     }
 
