@@ -713,25 +713,22 @@ export default function Chromes() {
                         </td>
                         <td>{l.users?.nom ?? '—'}</td>
                         <td className="actions-cellule">
-                          {(estAdmin || l.employe_id === utilisateur.id) && (
-                            <>
-                              <button
-                                type="button"
-                                className="btn btn-discret"
-                                onClick={() => commencerEditChrome(l)}
-                              >
-                                Modifier
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-discret"
-                                onClick={() => supprimerLigne(l.id)}
-                                aria-label="Supprimer la ligne"
-                              >
-                                ✕
-                              </button>
-                            </>
-                          )}
+                          {/* Registre partagé : tout employé du magasin peut ajuster un chrome. */}
+                          <button
+                            type="button"
+                            className="btn btn-discret"
+                            onClick={() => commencerEditChrome(l)}
+                          >
+                            Modifier
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-discret"
+                            onClick={() => supprimerLigne(l.id)}
+                            aria-label="Supprimer la ligne"
+                          >
+                            ✕
+                          </button>
                         </td>
                       </tr>
                     ),
