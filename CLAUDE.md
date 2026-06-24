@@ -65,7 +65,7 @@ L'app est **multi-magasin** : table `magasins`, et **`magasin_id`** sur toutes l
 
 La fonction `est_admin()` est `SECURITY DEFINER` (contourne la RLS de `users` pour éviter la récursion). Toutes les policies sont en plus **filtrées par `magasin_id = mon_magasin()`** (cf. multi-magasin). Logique de visibilité :
 - **caisse_jour** et **paiements_employes** : un employé ne voit/gère QUE ses propres lignes ; l'admin voit tout. Les paiements ne sont créés/modifiés que par l'admin.
-- **clients** et **chromes** : registre **partagé** en lecture/saisie entre tous les employés connectés — au comptoir, n'importe quel employé doit pouvoir encaisser le remboursement d'un client ou consulter sa dette. Toute ligne de chrome est attribuée à l'employé connecté (`employe_id = auth.uid()`).
+- **clients** et **chromes** : registre **partagé** en lecture/saisie entre tous les employés connectés — au comptoir, n'importe quel employé doit pouvoir encaisser le remboursement d'un client ou consulter sa dette. Toute ligne de chrome est attribuée à l'employé connecté à la saisie (`employe_id = auth.uid()`), mais sa **correction est partagée** : n'importe quel membre du magasin peut **modifier et supprimer** un chrome (y compris celui d'un collègue), pas seulement son auteur ou l'admin (`chromes_update`/`chromes_delete` = `est_membre()` + `magasin_id`). Migration : `supabase/migrations/2026-06-24-chromes-ajustement-partage.sql`.
 - **users** : chacun voit son profil ; seul l'admin gère les comptes.
 
 ## Logique comptable CA/chromes — POINT CRITIQUE
