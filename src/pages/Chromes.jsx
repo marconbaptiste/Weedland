@@ -509,9 +509,7 @@ export default function Chromes() {
                   <thead>
                     <tr>
                       <th>Date</th>
-                      <th>Type</th>
                       <th className="droite">Montant</th>
-                      <th>Employé</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -526,7 +524,7 @@ export default function Chromes() {
                               onChange={(e) => setEditChromeForm((f) => ({ ...f, date: e.target.value }))}
                             />
                           </td>
-                          <td>
+                          <td className="droite">
                             <select
                               value={editChromeForm.type}
                               onChange={(e) => setEditChromeForm((f) => ({ ...f, type: e.target.value }))}
@@ -534,8 +532,6 @@ export default function Chromes() {
                               <option value="avance">Avance</option>
                               <option value="remboursement">Remboursement</option>
                             </select>
-                          </td>
-                          <td className="droite">
                             <input
                               className="champ-pourcentage"
                               type="text"
@@ -544,7 +540,6 @@ export default function Chromes() {
                               onChange={(e) => setEditChromeForm((f) => ({ ...f, montant: e.target.value }))}
                             />
                           </td>
-                          <td>{l.users?.nom ?? '—'}</td>
                           <td className="actions-cellule">
                             <button
                               type="button"
@@ -565,11 +560,9 @@ export default function Chromes() {
                       ) : (
                         <tr key={l.id}>
                           <td>{formatDateFr(l.date)}</td>
-                          <td>{l.type === 'avance' ? 'Avance' : 'Remboursement'}</td>
                           <td className={`droite ${l.type === 'avance' ? 'dette' : 'solde-ok'}`}>
                             {l.type === 'avance' ? '+' : '−'} {formatEuros(l.montant)}
                           </td>
-                          <td>{l.users?.nom ?? '—'}</td>
                           <td className="actions-cellule">
                             {/* Registre partagé : tout employé du magasin peut ajuster un chrome. */}
                             <button
@@ -593,7 +586,7 @@ export default function Chromes() {
                     )}
                     {lignes.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="vide">
+                        <td colSpan={3} className="vide">
                           Aucune ligne.
                         </td>
                       </tr>
