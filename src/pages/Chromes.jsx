@@ -476,6 +476,134 @@ export default function Chromes() {
 
               <div className="section-promos">
                 <div className="entete-client">
+                  <h3>💸 Chromes — avances / remboursements</h3>
+                </div>
+                <form className="form-chrome" onSubmit={ajouterLigne}>
+                  <div className="bascule">
+                    <button
+                      type="button"
+                      className={type === 'avance' ? 'actif' : ''}
+                      onClick={() => setType('avance')}
+                    >
+                      Avance (+)
+                    </button>
+                    <button
+                      type="button"
+                      className={type === 'remboursement' ? 'actif' : ''}
+                      onClick={() => setType('remboursement')}
+                    >
+                      Remboursement (−)
+                    </button>
+                  </div>
+                  <ChampMontant label="Montant" valeur={montant} onChange={setMontant} />
+                  <label className="field">
+                    <span>Date</span>
+                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                  </label>
+                  <button className="btn btn-primary" type="submit">
+                    Enregistrer la ligne
+                  </button>
+                </form>
+
+                <table className="tableau">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th className="droite">Montant</th>
+                      <th>Employé</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lignes.map((l) =>
+                      editChrome === l.id ? (
+                        <tr key={l.id}>
+                          <td>
+                            <input
+                              type="date"
+                              value={editChromeForm.date}
+                              onChange={(e) => setEditChromeForm((f) => ({ ...f, date: e.target.value }))}
+                            />
+                          </td>
+                          <td>
+                            <select
+                              value={editChromeForm.type}
+                              onChange={(e) => setEditChromeForm((f) => ({ ...f, type: e.target.value }))}
+                            >
+                              <option value="avance">Avance</option>
+                              <option value="remboursement">Remboursement</option>
+                            </select>
+                          </td>
+                          <td className="droite">
+                            <input
+                              className="champ-pourcentage"
+                              type="text"
+                              inputMode="decimal"
+                              value={editChromeForm.montant}
+                              onChange={(e) => setEditChromeForm((f) => ({ ...f, montant: e.target.value }))}
+                            />
+                          </td>
+                          <td>{l.users?.nom ?? '—'}</td>
+                          <td className="actions-cellule">
+                            <button
+                              type="button"
+                              className="btn btn-discret"
+                              onClick={() => enregistrerEditChrome(l.id)}
+                            >
+                              Enregistrer
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-discret"
+                              onClick={() => setEditChrome(null)}
+                            >
+                              Annuler
+                            </button>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={l.id}>
+                          <td>{formatDateFr(l.date)}</td>
+                          <td>{l.type === 'avance' ? 'Avance' : 'Remboursement'}</td>
+                          <td className={`droite ${l.type === 'avance' ? 'dette' : 'solde-ok'}`}>
+                            {l.type === 'avance' ? '+' : '−'} {formatEuros(l.montant)}
+                          </td>
+                          <td>{l.users?.nom ?? '—'}</td>
+                          <td className="actions-cellule">
+                            {/* Registre partagé : tout employé du magasin peut ajuster un chrome. */}
+                            <button
+                              type="button"
+                              className="btn btn-discret"
+                              onClick={() => commencerEditChrome(l)}
+                            >
+                              Modifier
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-discret"
+                              onClick={() => supprimerLigne(l.id)}
+                              aria-label="Supprimer la ligne"
+                            >
+                              ✕
+                            </button>
+                          </td>
+                        </tr>
+                      ),
+                    )}
+                    {lignes.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="vide">
+                          Aucune ligne.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="section-promos">
+                <div className="entete-client">
                   <h3>🎟️ Carte de fidélité</h3>
                   <span className="promo-qui">
                     {fidelite.tampons}/{palier}
@@ -619,129 +747,6 @@ export default function Chromes() {
                   {promos.length === 0 && <li className="vide">Aucune promo enregistrée.</li>}
                 </ul>
               </div>
-
-              <form className="form-chrome" onSubmit={ajouterLigne}>
-                <div className="bascule">
-                  <button
-                    type="button"
-                    className={type === 'avance' ? 'actif' : ''}
-                    onClick={() => setType('avance')}
-                  >
-                    Avance (+)
-                  </button>
-                  <button
-                    type="button"
-                    className={type === 'remboursement' ? 'actif' : ''}
-                    onClick={() => setType('remboursement')}
-                  >
-                    Remboursement (−)
-                  </button>
-                </div>
-                <ChampMontant label="Montant" valeur={montant} onChange={setMontant} />
-                <label className="field">
-                  <span>Date</span>
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                </label>
-                <button className="btn btn-primary" type="submit">
-                  Enregistrer la ligne
-                </button>
-              </form>
-
-              <table className="tableau">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Type</th>
-                    <th className="droite">Montant</th>
-                    <th>Employé</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lignes.map((l) =>
-                    editChrome === l.id ? (
-                      <tr key={l.id}>
-                        <td>
-                          <input
-                            type="date"
-                            value={editChromeForm.date}
-                            onChange={(e) => setEditChromeForm((f) => ({ ...f, date: e.target.value }))}
-                          />
-                        </td>
-                        <td>
-                          <select
-                            value={editChromeForm.type}
-                            onChange={(e) => setEditChromeForm((f) => ({ ...f, type: e.target.value }))}
-                          >
-                            <option value="avance">Avance</option>
-                            <option value="remboursement">Remboursement</option>
-                          </select>
-                        </td>
-                        <td className="droite">
-                          <input
-                            className="champ-pourcentage"
-                            type="text"
-                            inputMode="decimal"
-                            value={editChromeForm.montant}
-                            onChange={(e) => setEditChromeForm((f) => ({ ...f, montant: e.target.value }))}
-                          />
-                        </td>
-                        <td>{l.users?.nom ?? '—'}</td>
-                        <td className="actions-cellule">
-                          <button
-                            type="button"
-                            className="btn btn-discret"
-                            onClick={() => enregistrerEditChrome(l.id)}
-                          >
-                            Enregistrer
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-discret"
-                            onClick={() => setEditChrome(null)}
-                          >
-                            Annuler
-                          </button>
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr key={l.id}>
-                        <td>{formatDateFr(l.date)}</td>
-                        <td>{l.type === 'avance' ? 'Avance' : 'Remboursement'}</td>
-                        <td className={`droite ${l.type === 'avance' ? 'dette' : 'solde-ok'}`}>
-                          {l.type === 'avance' ? '+' : '−'} {formatEuros(l.montant)}
-                        </td>
-                        <td>{l.users?.nom ?? '—'}</td>
-                        <td className="actions-cellule">
-                          {/* Registre partagé : tout employé du magasin peut ajuster un chrome. */}
-                          <button
-                            type="button"
-                            className="btn btn-discret"
-                            onClick={() => commencerEditChrome(l)}
-                          >
-                            Modifier
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-discret"
-                            onClick={() => supprimerLigne(l.id)}
-                            aria-label="Supprimer la ligne"
-                          >
-                            ✕
-                          </button>
-                        </td>
-                      </tr>
-                    ),
-                  )}
-                  {lignes.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="vide">
-                        Aucune ligne.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
           </div>
         </div>
       )}
