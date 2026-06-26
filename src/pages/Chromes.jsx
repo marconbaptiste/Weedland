@@ -38,9 +38,10 @@ export default function Chromes() {
   const [montant, setMontant] = useState('');
   const [date, setDate] = useState(aujourdhuiISO());
 
-  // Édition en ligne d'une ligne de chrome (admin ou auteur).
+  // Édition en ligne d'une ligne de chrome (partagée : tout membre du magasin).
   const [editChrome, setEditChrome] = useState(null); // id
-  const [editChromeForm, setEditChromeForm] = useState({ type: 'avance', montant: '', date: '' });
+  const [editChromeForm, setEditChromeForm] = useState({ type: 'avance', montant: '', date: '', employe_id: '' });
+  const [employes, setEmployes] = useState([]); // employés du magasin (réaffectation)
 
   const chargerClients = useCallback(async () => {
     const [{ data }, { data: pr }] = await Promise.all([
@@ -71,6 +72,12 @@ export default function Chromes() {
         setFaveurs(data?.faveurs_raccourcis ?? []);
         setInscriptionsOuvertes(data?.inscriptions_ouvertes ?? true);
       });
+  }, [magasinId]);
+
+  // Employés du magasin : pour réaffecter un chrome lors d'une correction
+  // (ex. chrome saisi par le mauvais employé / mauvaise date).
+  useEffect(() => {
+    supabase.rpc('collegues').then(({ data }) => setEmployes(data ?? []));
   }, [magasinId]);
 
   const chargerFidelite = useCallback(async (clientId) => {
@@ -218,7 +225,12 @@ export default function Chromes() {
 
   function commencerEditChrome(l) {
     setEditChrome(l.id);
-    setEditChromeForm({ type: l.type, montant: String(l.montant), date: l.date });
+    setEditChromeForm({
+      type: l.type,
+      montant: String(l.montant),
+      date: l.date,
+      employe_id: l.employe_id,
+    });
   }
 
   async function enregistrerEditChrome(id) {
@@ -226,7 +238,12 @@ export default function Chromes() {
     if (valeur <= 0) return;
     const { error } = await supabase
       .from('chromes')
-      .update({ type: editChromeForm.type, montant: valeur, date: editChromeForm.date })
+      .update({
+        type: editChromeForm.type,
+        montant: valeur,
+        date: editChromeForm.date,
+        employe_id: editChromeForm.employe_id,
+      })
       .eq('id', id);
     if (!error) {
       setEditChrome(null);
@@ -523,6 +540,19 @@ export default function Chromes() {
                               value={editChromeForm.date}
                               onChange={(e) => setEditChromeForm((f) => ({ ...f, date: e.target.value }))}
                             />
+                            <select
+                              value={editChromeForm.employe_id ?? ''}
+                              onChange={(e) =>
+                                setEditChromeForm((f) => ({ ...f, employe_id: e.target.value }))
+                              }
+                              aria-label="Employé attribué"
+                            >
+                              {employes.map((emp) => (
+                                <option key={emp.id} value={emp.id}>
+                                  {emp.nom}
+                                </option>
+                              ))}
+                            </select>
                           </td>
                           <td className="droite">
                             <select

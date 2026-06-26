@@ -45,7 +45,7 @@ export default function Historique() {
       supabase.from('users').select('id, nom'),
       supabase
         .from('chromes')
-        .select('date, employe_id, type, montant, clients(surnom)')
+        .select('date, employe_id, type, montant, modifie_le, modifie_par, clients(surnom)')
         .gte('date', debut)
         .lte('date', fin),
     ]);
@@ -56,7 +56,12 @@ export default function Historique() {
       const k = `${c.employe_id}|${c.date}`;
       if (!map[k]) map[k] = { avances: [], remboursements: [] };
       const cible = c.type === 'avance' ? map[k].avances : map[k].remboursements;
-      cible.push({ surnom: c.clients?.surnom ?? 'client', montant: c.montant });
+      cible.push({
+        surnom: c.clients?.surnom ?? 'client',
+        montant: c.montant,
+        modifie_le: c.modifie_le,
+        modifie_par: c.modifie_par,
+      });
     });
     setChromes(map);
   }, [mois]);
@@ -237,6 +242,11 @@ export default function Historique() {
                       <div key={i} className="histo-chrome">
                         <span>{a.surnom}</span>
                         <span className="dette">+ {formatEuros(a.montant)}</span>
+                        {a.modifie_le && (
+                          <span className="histo-modif">
+                            ✏️ corrigé par {noms[a.modifie_par] ?? '—'} le {formatDateFr(a.modifie_le)}
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -249,6 +259,11 @@ export default function Historique() {
                       <div key={i} className="histo-chrome">
                         <span>{r.surnom}</span>
                         <span className="solde-ok">− {formatEuros(r.montant)}</span>
+                        {r.modifie_le && (
+                          <span className="histo-modif">
+                            ✏️ corrigé par {noms[r.modifie_par] ?? '—'} le {formatDateFr(r.modifie_le)}
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
