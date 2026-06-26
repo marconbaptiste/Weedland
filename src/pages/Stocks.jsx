@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatNombre } from '../lib/format';
 import { somme } from '../lib/comptabilite';
 import ChampMontant from '../components/ChampMontant';
+import ImportFacture from '../components/ImportFacture';
 
 const UNITES = ['g', 'kg', 'mg', 'ml', 'pièce'];
 const FORM_VIDE = {
@@ -30,6 +31,7 @@ export default function Stocks() {
   const [edition, setEdition] = useState(null); // id en cours d'édition
   const [editForm, setEditForm] = useState(FORM_VIDE);
   const [delta, setDelta] = useState({}); // id -> mouvement saisi (string)
+  const [importOuvert, setImportOuvert] = useState(false);
 
   const charger = useCallback(async () => {
     const { data } = await supabase
@@ -210,11 +212,24 @@ export default function Stocks() {
             </div>
           </form>
         ) : (
-          <button className="btn" onClick={() => setCreationOuverte(true)}>
-            + Ajouter un produit
-          </button>
+          <div className="form-inline">
+            <button className="btn" onClick={() => setCreationOuverte(true)}>
+              + Ajouter un produit
+            </button>
+            <button type="button" className="btn" onClick={() => setImportOuvert(true)}>
+              📄 Importer depuis une facture
+            </button>
+          </div>
         )}
       </div>
+
+      {importOuvert && (
+        <ImportFacture
+          categories={categories}
+          onClose={() => setImportOuvert(false)}
+          onImported={() => charger()}
+        />
+      )}
 
       {categories.length === 0 && <p className="vide">Aucun produit en stock.</p>}
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extraireMontant } from './ocr.js';
+import { extraireMontant, extraireLignesFacture } from './ocr.js';
 
 describe('extraireMontant', () => {
   it('privilégie la ligne TOTAL TTC', () => {
@@ -29,5 +29,35 @@ describe('extraireMontant', () => {
 
   it('ignore les entiers sans décimales', () => {
     expect(extraireMontant('Quantité 12\nTOTAL 7,30')).toBe(7.3);
+  });
+});
+
+describe('extraireLignesFacture', () => {
+  it('extrait produit + quantité + unité', () => {
+    const t = `Amnesia 100 g\nResine Maroc 50g`;
+    const r = extraireLignesFacture(t);
+    expect(r).toHaveLength(2);
+    expect(r[0]).toMatchObject({ produit: 'Amnesia', quantite: '100', unite: 'g' });
+    expect(r[1]).toMatchObject({ quantite: '50', unite: 'g' });
+  });
+
+  it('reconnaît kg et pièces', () => {
+    expect(extraireLignesFacture('Pollen 2 kg')[0]).toMatchObject({ quantite: '2', unite: 'kg' });
+    expect(extraireLignesFacture('Briquets 24 pièces')[0]).toMatchObject({ unite: 'pièce' });
+  });
+
+  it('ignore les lignes d’en-tête et de total', () => {
+    const t = `FACTURE N°123\nDate : 26/06/2026\nAmnesia 100 g\nTOTAL TTC 250,00\nTVA 20%`;
+    const r = extraireLignesFacture(t);
+    expect(r).toHaveLength(1);
+    expect(r[0].produit).toBe('Amnesia');
+  });
+
+  it('ignore les lignes sans texte produit', () => {
+    expect(extraireLignesFacture('12,50\n---\n')).toHaveLength(0);
+  });
+
+  it('renvoie un tableau vide si pas de texte', () => {
+    expect(extraireLignesFacture('')).toEqual([]);
   });
 });
