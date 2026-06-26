@@ -535,6 +535,12 @@ hr {
   color: var(--accent);
   text-decoration: none;
 }
+.qr-carte {
+  margin: 0.8rem 0;
+}
+.qr-carte .qr-client {
+  border-radius: 12px;
+}
 .case-consent {
   display: flex;
   gap: 0.6rem;

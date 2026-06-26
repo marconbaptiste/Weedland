@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { NOM } from '../lib/marque';
+import QRClient from '../components/QRClient';
 
 // Page PUBLIQUE — carte de fidélité d'un client (ouverte en scannant son QR).
 // Lecture seule pour le client ; le personnel connecté peut ajouter un tampon.
@@ -106,6 +107,11 @@ export default function Carte() {
             ? '🎁 Carte complète — récompense disponible !'
             : `${etat.tampons}/${etat.palier} — plus que ${reste} avant ta récompense !`}
         </p>
+
+        <div className="qr-carte">
+          <QRClient clientId={clientId} taille={200} />
+          <p className="statut">📲 Montre ce QR au comptoir pour cumuler tes étoiles.</p>
+        </div>
 
         {profil && (
           <button type="button" className="btn btn-primary" onClick={ajouterTampon}>
