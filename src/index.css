@@ -541,6 +541,63 @@ hr {
 .qr-carte .qr-client {
   border-radius: 12px;
 }
+/* Promotions affichées sur la carte de fidélité */
+.promos-carte {
+  margin: 1rem 0;
+  text-align: left;
+}
+.promos-carte h2 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+.promo-carte {
+  background: var(--surface, #1a1d24);
+  border: 1px solid var(--bordure);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.5rem;
+}
+.promo-carte-tete {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.badge-remise {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.promo-produit {
+  display: inline-block;
+  font-size: 0.85rem;
+  color: var(--texte-doux);
+}
+/* Liste admin des promotions */
+.promo-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.8rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--bordure);
+}
+.promo-item.promo-inactive {
+  opacity: 0.5;
+}
+.promo-corps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.promo-actions {
+  display: flex;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
 .case-consent {
   display: flex;
   gap: 0.6rem;

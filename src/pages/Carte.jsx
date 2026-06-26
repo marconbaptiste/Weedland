@@ -14,15 +14,20 @@ export default function Carte() {
   const [msg, setMsg] = useState('');
   const [promptInstall, setPromptInstall] = useState(null);
   const [afficheAide, setAfficheAide] = useState(false);
+  const [promos, setPromos] = useState([]);
 
   const charger = useCallback(async () => {
-    const { data, error } = await supabase.rpc('fidelite_etat', { p_client: clientId });
+    const [{ data, error }, { data: prs }] = await Promise.all([
+      supabase.rpc('fidelite_etat', { p_client: clientId }),
+      supabase.rpc('promotions_carte', { p_client: clientId }),
+    ]);
     if (error || !data || data.length === 0) {
       setEtat({ introuvable: true });
       return;
     }
     const r = data[0];
     setEtat({ surnom: r.surnom, tampons: r.tampons, palier: r.palier });
+    setPromos(prs ?? []);
   }, [clientId]);
 
   // Rafraîchit à l'ouverture, au retour sur l'onglet/l'écran, et régulièrement
@@ -136,6 +141,22 @@ export default function Carte() {
           <QRClient clientId={clientId} taille={200} />
           <p className="statut">📲 Montre ce QR au comptoir pour cumuler tes étoiles.</p>
         </div>
+
+        {promos.length > 0 && (
+          <div className="promos-carte">
+            <h2>🎉 Promotions du moment</h2>
+            {promos.map((p, i) => (
+              <div key={i} className="promo-carte">
+                <div className="promo-carte-tete">
+                  <strong>{p.titre}</strong>
+                  {p.remise && <span className="badge badge-remise">{p.remise}</span>}
+                </div>
+                {p.produit && <span className="promo-produit">🏷️ {p.produit}</span>}
+                {p.description && <p className="promo-desc">{p.description}</p>}
+              </div>
+            ))}
+          </div>
+        )}
 
         {profil && (
           <button type="button" className="btn btn-primary" onClick={ajouterTampon}>
