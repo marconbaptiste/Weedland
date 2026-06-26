@@ -17,6 +17,7 @@ import Historique from './pages/Historique';
 import Paiements from './pages/Paiements';
 import Dashboard from './pages/Dashboard';
 import Comptes from './pages/Comptes';
+import Promotions from './pages/Promotions';
 import Journal from './pages/Journal';
 import Comptabilite from './pages/Comptabilite';
 import Magasins from './pages/Magasins';
@@ -48,6 +49,7 @@ export default function App() {
           <Route element={<RequireAdmin />}>
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="comptabilite" element={<Comptabilite />} />
+            <Route path="promotions" element={<Promotions />} />
             <Route path="paiements" element={<Paiements />} />
             <Route path="journal" element={<Journal />} />
             <Route path="comptes" element={<Comptes />} />
