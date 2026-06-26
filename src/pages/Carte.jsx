@@ -26,7 +26,7 @@ export default function Carte() {
       return;
     }
     const r = data[0];
-    setEtat({ surnom: r.surnom, tampons: r.tampons, palier: r.palier });
+    setEtat({ surnom: r.surnom, tampons: r.tampons, palier: r.palier, magasin: r.magasin });
     setPromos(prs ?? []);
   }, [clientId]);
 
@@ -62,6 +62,56 @@ export default function Carte() {
     window.addEventListener('beforeinstallprompt', surPrompt);
     return () => window.removeEventListener('beforeinstallprompt', surPrompt);
   }, []);
+
+  const magasin = etat && !etat.introuvable ? etat.magasin : null;
+
+  // Nomme l'onglet ET le raccourci écran d'accueil « Carte de fidélité – <magasin> »
+  // (au lieu de « Gestion ») : titre + apple-mobile-web-app-title + un manifeste
+  // PWA propre à la carte (nom + icône dédiés), restaurés en quittant la page.
+  useEffect(() => {
+    if (!magasin) return undefined;
+    const titre = `Carte de fidélité – ${magasin}`;
+    const prevTitre = document.title;
+    document.title = titre;
+
+    let meta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    const metaCree = !meta;
+    const prevMeta = meta?.getAttribute('content');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'apple-mobile-web-app-title');
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute('content', titre);
+
+    const lien = document.querySelector('link[rel="manifest"]');
+    const prevManifest = lien?.getAttribute('href');
+    let blobUrl;
+    if (lien) {
+      const manifeste = {
+        name: titre,
+        short_name: 'Fidélité',
+        start_url: window.location.pathname,
+        scope: window.location.pathname,
+        display: 'standalone',
+        background_color: '#0f1115',
+        theme_color: '#0f1115',
+        icons: [{ src: '/carte-icone.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
+      };
+      blobUrl = URL.createObjectURL(
+        new Blob([JSON.stringify(manifeste)], { type: 'application/manifest+json' }),
+      );
+      lien.setAttribute('href', blobUrl);
+    }
+
+    return () => {
+      document.title = prevTitre;
+      if (lien && prevManifest) lien.setAttribute('href', prevManifest);
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      if (metaCree) meta.remove();
+      else if (meta && prevMeta != null) meta.setAttribute('content', prevMeta);
+    };
+  }, [magasin]);
 
   async function installer() {
     if (promptInstall) {
