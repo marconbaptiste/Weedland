@@ -1010,6 +1010,13 @@ details > summary {
 .histo-chrome {
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
+}
+.histo-modif {
+  flex-basis: 100%;
+  font-size: 0.72rem;
+  font-style: italic;
+  color: var(--texte-doux);
 }
 
 /* ----- Graphiques ----- */
