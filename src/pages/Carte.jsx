@@ -12,6 +12,8 @@ export default function Carte() {
   const { profil } = useAuth();
   const [etat, setEtat] = useState(null);
   const [msg, setMsg] = useState('');
+  const [promptInstall, setPromptInstall] = useState(null);
+  const [afficheAide, setAfficheAide] = useState(false);
 
   const charger = useCallback(async () => {
     const { data, error } = await supabase.rpc('fidelite_etat', { p_client: clientId });
@@ -43,6 +45,28 @@ export default function Carte() {
       clearInterval(intervalle);
     };
   }, [charger]);
+
+  // Capture l'événement d'installation PWA (Android/Chrome) → bouton « Ajouter à
+  // l'écran d'accueil » en 1 tap. iOS ne le supporte pas : on affiche alors les
+  // instructions manuelles au clic.
+  useEffect(() => {
+    const surPrompt = (e) => {
+      e.preventDefault();
+      setPromptInstall(e);
+    };
+    window.addEventListener('beforeinstallprompt', surPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', surPrompt);
+  }, []);
+
+  async function installer() {
+    if (promptInstall) {
+      promptInstall.prompt();
+      const choix = await promptInstall.userChoice;
+      if (choix?.outcome === 'accepted') setPromptInstall(null);
+    } else {
+      setAfficheAide(true);
+    }
+  }
 
   async function ajouterTampon() {
     setMsg('');
@@ -123,24 +147,31 @@ export default function Carte() {
         {!profil && !dejaInstalle && (
           <div className="astuce-accueil">
             <strong>📲 Garde ta carte à portée de main</strong>
-            <p>Ajoute-la à l’écran d’accueil de ton téléphone — elle se met à jour à chaque tampon.</p>
-            {iOS ? (
-              <ol>
-                <li>Touche le bouton <strong>Partager</strong> (carré avec une flèche ↑, en bas).</li>
-                <li>Choisis <strong>« Sur l’écran d’accueil »</strong>.</li>
-                <li>Valide avec <strong>« Ajouter »</strong>.</li>
-              </ol>
-            ) : android ? (
-              <ol>
-                <li>Touche le menu <strong>⋮</strong> (en haut à droite).</li>
-                <li>Choisis <strong>« Ajouter à l’écran d’accueil »</strong>.</li>
-                <li>Valide.</li>
-              </ol>
-            ) : (
-              <p>
-                Depuis le menu de ton navigateur, choisis « Ajouter à l’écran d’accueil » (ou
-                ajoute la page à tes favoris).
-              </p>
+            <p>Ajoute-la à l’écran d’accueil : un raccourci, un seul tap pour présenter ton QR.</p>
+            <button type="button" className="btn btn-primary" onClick={installer}>
+              📲 Ajouter à l’écran d’accueil
+            </button>
+            {afficheAide && (
+              <div className="astuce-etapes">
+                {iOS ? (
+                  <ol>
+                    <li>Touche le bouton <strong>Partager</strong> (carré avec une flèche ↑, en bas).</li>
+                    <li>Choisis <strong>« Sur l’écran d’accueil »</strong>.</li>
+                    <li>Valide avec <strong>« Ajouter »</strong>.</li>
+                  </ol>
+                ) : android ? (
+                  <ol>
+                    <li>Touche le menu <strong>⋮</strong> (en haut à droite).</li>
+                    <li>Choisis <strong>« Ajouter à l’écran d’accueil »</strong>.</li>
+                    <li>Valide.</li>
+                  </ol>
+                ) : (
+                  <p>
+                    Depuis le menu de ton navigateur, choisis « Ajouter à l’écran d’accueil » (ou
+                    ajoute la page à tes favoris).
+                  </p>
+                )}
+              </div>
             )}
           </div>
         )}
