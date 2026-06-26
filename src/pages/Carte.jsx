@@ -5,6 +5,36 @@ import { useAuth } from '../auth/AuthProvider';
 import { NOM } from '../lib/marque';
 import QRClient from '../components/QRClient';
 
+// Génère l'icône de la carte de fidélité (🎟️ sur fond sombre arrondi) en PNG
+// (data URI). Utilisé pour le raccourci écran d'accueil : iOS exige un PNG
+// (apple-touch-icon), le SVG/manifeste ne suffit pas. Rendu côté client.
+function genererIconeCarte(taille) {
+  try {
+    const c = document.createElement('canvas');
+    c.width = taille;
+    c.height = taille;
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    const r = Math.round(taille * 0.22);
+    ctx.fillStyle = '#0f1115';
+    ctx.beginPath();
+    ctx.moveTo(r, 0);
+    ctx.arcTo(taille, 0, taille, taille, r);
+    ctx.arcTo(taille, taille, 0, taille, r);
+    ctx.arcTo(0, taille, 0, 0, r);
+    ctx.arcTo(0, 0, taille, 0, r);
+    ctx.closePath();
+    ctx.fill();
+    ctx.font = `${Math.round(taille * 0.62)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🎟️', taille / 2, taille * 0.55);
+    return c.toDataURL('image/png');
+  } catch {
+    return null;
+  }
+}
+
 // Page PUBLIQUE — carte de fidélité d'un client (ouverte en scannant son QR).
 // Lecture seule pour le client ; le personnel connecté peut ajouter un tampon.
 export default function Carte() {
@@ -65,15 +95,23 @@ export default function Carte() {
 
   const magasin = etat && !etat.introuvable ? etat.magasin : null;
 
-  // Nomme l'onglet ET le raccourci écran d'accueil « Carte de fidélité – <magasin> »
-  // (au lieu de « Gestion ») : titre + apple-mobile-web-app-title + un manifeste
-  // PWA propre à la carte (nom + icône dédiés), restaurés en quittant la page.
+  // Personnalise le raccourci écran d'accueil (au lieu de « Gestion ») :
+  //  - onglet : « Carte de fidélité – <magasin> »
+  //  - libellé du raccourci : « <magasin> Fidélité »
+  //  - icône : l'icône de la carte (🎟️) en PNG pour iOS (apple-touch-icon) et
+  //    dans un manifeste PWA propre à la carte (Android).
+  // Tout est restauré en quittant la page.
   useEffect(() => {
     if (!magasin) return undefined;
     const titre = `Carte de fidélité – ${magasin}`;
+    const libelle = `${magasin} Fidélité`;
+    const icone = genererIconeCarte(180);
+    const icone512 = genererIconeCarte(512);
+
     const prevTitre = document.title;
     document.title = titre;
 
+    // Libellé court (iOS) = « <magasin> Fidélité ».
     let meta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
     const metaCree = !meta;
     const prevMeta = meta?.getAttribute('content');
@@ -82,21 +120,30 @@ export default function Carte() {
       meta.setAttribute('name', 'apple-mobile-web-app-title');
       document.head.appendChild(meta);
     }
-    meta.setAttribute('content', titre);
+    meta.setAttribute('content', libelle);
 
+    // Icône iOS (apple-touch-icon) = 🎟️ en PNG.
+    const apple = document.querySelector('link[rel="apple-touch-icon"]');
+    const prevApple = apple?.getAttribute('href');
+    if (apple && icone) apple.setAttribute('href', icone);
+
+    // Manifeste propre à la carte (Android) : nom + libellé + icône dédiés.
     const lien = document.querySelector('link[rel="manifest"]');
     const prevManifest = lien?.getAttribute('href');
     let blobUrl;
     if (lien) {
       const manifeste = {
         name: titre,
-        short_name: 'Fidélité',
+        short_name: libelle,
         start_url: window.location.pathname,
         scope: window.location.pathname,
         display: 'standalone',
         background_color: '#0f1115',
         theme_color: '#0f1115',
-        icons: [{ src: '/carte-icone.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
+        icons: [
+          icone512 && { src: icone512, sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/carte-icone.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+        ].filter(Boolean),
       };
       blobUrl = URL.createObjectURL(
         new Blob([JSON.stringify(manifeste)], { type: 'application/manifest+json' }),
@@ -106,6 +153,7 @@ export default function Carte() {
 
     return () => {
       document.title = prevTitre;
+      if (apple && prevApple != null) apple.setAttribute('href', prevApple);
       if (lien && prevManifest) lien.setAttribute('href', prevManifest);
       if (blobUrl) URL.revokeObjectURL(blobUrl);
       if (metaCree) meta.remove();
