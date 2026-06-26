@@ -214,6 +214,11 @@ export default function Carte() {
     window.navigator.standalone === true ||
     (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
 
+  // Bouton Apple Wallet : masqué tant que VITE_WALLET_ACTIF n'est pas activé
+  // (le temps de configurer le certificat Apple + déployer l'Edge Function).
+  const walletActif = import.meta.env.VITE_WALLET_ACTIF === 'true';
+  const walletUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/carte-wallet?c=${clientId}`;
+
   return (
     <div className="page-connexion">
       <div className="card carte-connexion" style={{ textAlign: 'center' }}>
@@ -239,6 +244,12 @@ export default function Carte() {
           <QRClient clientId={clientId} taille={200} />
           <p className="statut">📲 Montre ce QR au comptoir pour cumuler tes étoiles.</p>
         </div>
+
+        {walletActif && iOS && (
+          <a className="btn btn-wallet" href={walletUrl}>
+             Ajouter à Apple Wallet
+          </a>
+        )}
 
         {promos.length > 0 && (
           <div className="promos-carte">
