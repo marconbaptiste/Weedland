@@ -53,8 +53,8 @@ export default function RejoindreCarte() {
         <span className="logo">{NOM}</span>
         <h1 className="logo-connexion">🎟️ Ma carte de fidélité</h1>
         <p className="statut">
-          Crée ta carte de fidélité en quelques secondes et reçois <strong>1 étoile de
-          bienvenue</strong> ★. Ensuite, le magasin ajoute tes étoiles à chaque passage.
+          Crée ta carte de fidélité en quelques secondes. ★ Le magasin ajoute tes étoiles à
+          chaque passage.
         </p>
 
         <label className="field">
