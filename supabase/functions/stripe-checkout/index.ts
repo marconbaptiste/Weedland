@@ -57,6 +57,7 @@ Deno.serve(async (req) => {
       customer: customerId,
       line_items: [{ price: env("STRIPE_PRICE_ID"), quantity: 1 }],
       subscription_data: { trial_period_days: 14, metadata: { magasin_id: mag.id } },
+      allow_promotion_codes: true, // le client peut entrer un code promo (ex. premier magasin)
       success_url: `${base}/?abonnement=ok`,
       cancel_url: `${base}/?abonnement=annule`,
     });
