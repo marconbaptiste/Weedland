@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
+import { formatDateFr } from '../lib/format';
 import Messagerie from '../components/Messagerie';
 
 // Mode pilote (super-admin) — panneau d'accueil : on choisit un magasin à
@@ -14,10 +15,14 @@ export default function Pilote() {
   const [magasins, setMagasins] = useState([]);
   const [nonLus, setNonLus] = useState({}); // magasin_id -> nb messages non lus
   const [fil, setFil] = useState(null); // { id, nom } magasin de la messagerie ouverte
+  const [msgErr, setMsgErr] = useState('');
 
   const charger = useCallback(async () => {
     const [{ data: mg }, { data: msg }] = await Promise.all([
-      supabase.from('magasins').select('id, nom, abonnement, essai_fin').order('nom'),
+      supabase
+        .from('magasins')
+        .select('id, nom, abonnement, essai_fin, echeance, stripe_subscription_id')
+        .order('nom'),
       supabase.from('messages').select('magasin_id, de_superadmin, lu'),
     ]);
     setMagasins(mg ?? []);
@@ -47,6 +52,25 @@ export default function Pilote() {
     charger(); // rafraîchit les compteurs (messages marqués lus à l'ouverture)
   }
 
+  // Facturation Stripe : ouvre le checkout (s'abonner) ou le portail (gérer).
+  async function facturer(m, fn) {
+    setMsgErr('');
+    const { data, error } = await supabase.functions.invoke(fn, { body: { magasinId: m.id } });
+    if (error || data?.error) {
+      setMsgErr(data?.error || error?.message || 'Action Stripe indisponible (config ?).');
+      return;
+    }
+    if (data?.url) window.location.href = data.url;
+  }
+
+  // Lier un magasin à un client Stripe existant (cus_…).
+  async function lierStripe(m) {
+    const id = window.prompt('ID client Stripe du magasin (cus_…) :', '');
+    if (id == null) return;
+    await supabase.from('magasins').update({ stripe_customer_id: id.trim() || null }).eq('id', m.id);
+    charger();
+  }
+
   return (
     <div className="page-connexion pilote">
       <div className="pilote-tete">
@@ -73,10 +97,35 @@ export default function Pilote() {
             >
               💬{nonLus[m.id] ? ` ${nonLus[m.id]}` : ''}
             </button>
+            <div className="pilote-carte-pied">
+              <span className="pilote-echeance">
+                {m.abonnement === 'essai' && m.essai_fin
+                  ? `Essai jusqu’au ${formatDateFr(m.essai_fin)}`
+                  : m.echeance
+                    ? `Renouvellement ${formatDateFr(m.echeance)}`
+                    : 'Pas d’abonnement'}
+              </span>
+              <div className="pilote-actions">
+                {m.stripe_subscription_id ? (
+                  <button type="button" className="btn btn-discret" onClick={() => facturer(m, 'stripe-portal')}>
+                    💳 Gérer
+                  </button>
+                ) : (
+                  <button type="button" className="btn btn-discret" onClick={() => facturer(m, 'stripe-checkout')}>
+                    S’abonner
+                  </button>
+                )}
+                <button type="button" className="btn btn-discret" onClick={() => lierStripe(m)} title="Lier un client Stripe">
+                  🔗
+                </button>
+              </div>
+            </div>
           </div>
         ))}
         {magasins.length === 0 && <p className="vide">Aucun magasin.</p>}
       </div>
+
+      {msgErr && <p className="message-erreur" style={{ textAlign: 'center' }}>{msgErr}</p>}
 
       <div className="form-inline" style={{ justifyContent: 'center' }}>
         <Link to="/magasins" className="btn">
