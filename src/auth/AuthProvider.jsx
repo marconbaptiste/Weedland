@@ -125,7 +125,10 @@ export function AuthProvider({ children }) {
         provider: 'google',
         options: { redirectTo: window.location.origin },
       }),
-    deconnexion: () => supabase.auth.signOut(),
+    deconnexion: () => {
+      sessionStorage.removeItem('pilote:entre');
+      return supabase.auth.signOut();
+    },
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
