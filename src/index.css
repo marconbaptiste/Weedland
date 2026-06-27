@@ -593,6 +593,20 @@ hr {
   color: #fff;
   font-weight: 700;
 }
+.pilote-carte-pied {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0 0.6rem 0.6rem;
+}
+.pilote-echeance {
+  font-size: 0.78rem;
+  color: var(--texte-doux);
+}
+.pilote-actions {
+  display: flex;
+  gap: 0.3rem;
+}
 .btn-wallet {
   display: inline-block;
   background: #000;
