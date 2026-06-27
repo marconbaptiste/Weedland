@@ -15,6 +15,11 @@ export default function Layout() {
         <div className="entete-haut">
           <span className="logo">Gestion</span>
           <div className="entete-droite">
+            {estSuperadmin && (
+              <NavLink to="/pilote" className="btn btn-discret" title="Panneau pilote">
+                🧭 Magasins
+              </NavLink>
+            )}
             {estSuperadmin && magasins.length > 0 && (
               <select
                 className="select-magasin"

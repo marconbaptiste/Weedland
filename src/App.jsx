@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { RequireAuth, RequireAdmin, RequireSuperadmin } from './components/Gardes';
+import { useAuth } from './auth/AuthProvider';
 import Layout from './components/Layout';
 import Landing from './pages/Landing';
 import CGU from './pages/CGU';
@@ -21,8 +22,19 @@ import Promotions from './pages/Promotions';
 import Journal from './pages/Journal';
 import Comptabilite from './pages/Comptabilite';
 import Magasins from './pages/Magasins';
+import Pilote from './pages/Pilote';
 import Support from './pages/Support';
 import Import from './pages/Import';
+
+// Accueil (route index) : le super-admin atterrit sur le panneau pilote tant
+// qu'il n'a pas choisi de magasin pour cette session ; sinon vue normale.
+function Accueil() {
+  const { estSuperadmin } = useAuth();
+  if (estSuperadmin && sessionStorage.getItem('pilote:entre') !== '1') {
+    return <Navigate to="/pilote" replace />;
+  }
+  return <Profil />;
+}
 
 export default function App() {
   return (
@@ -36,8 +48,13 @@ export default function App() {
       <Route path="/rejoindre/:magasinId" element={<RejoindreCarte />} />
 
       <Route element={<RequireAuth />}>
+        {/* Panneau pilote (super-admin) — hors Layout, plein écran */}
+        <Route element={<RequireSuperadmin />}>
+          <Route path="/pilote" element={<Pilote />} />
+        </Route>
+
         <Route element={<Layout />}>
-          <Route index element={<Profil />} />
+          <Route index element={<Accueil />} />
           <Route path="caisse" element={<Caisse />} />
           <Route path="chromes" element={<Chromes />} />
           <Route path="stocks" element={<Stocks />} />
