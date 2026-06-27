@@ -56,8 +56,20 @@ export default function Pilote() {
   async function facturer(m, fn) {
     setMsgErr('');
     const { data, error } = await supabase.functions.invoke(fn, { body: { magasinId: m.id } });
-    if (error || data?.error) {
-      setMsgErr(data?.error || error?.message || 'Action Stripe indisponible (config ?).');
+    if (error) {
+      // Récupère le message d'erreur renvoyé par la fonction (corps JSON).
+      let detail = error.message;
+      try {
+        const corps = await error.context?.json?.();
+        if (corps?.error) detail = corps.error;
+      } catch {
+        /* corps non lisible */
+      }
+      setMsgErr(detail || 'Action Stripe indisponible (config ?).');
+      return;
+    }
+    if (data?.error) {
+      setMsgErr(data.error);
       return;
     }
     if (data?.url) window.location.href = data.url;
