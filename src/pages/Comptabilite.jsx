@@ -8,6 +8,7 @@ import {
   intervalleAnnee,
   semaineDuMois,
 } from '../lib/dates';
+import { useAuth } from '../auth/AuthProvider';
 import { somme } from '../lib/comptabilite';
 import { telechargerPDF } from '../lib/export';
 import { compresserImage } from '../lib/image';
@@ -22,6 +23,7 @@ const moisCourt = (ym) =>
 // sur un mois, une année, ou une période personnalisée. L'édition des charges
 // et fournisseurs se fait en mode « Mois ».
 export default function Comptabilite() {
+  const { magasinId } = useAuth();
   const [periode, setPeriode] = useState('mois');
   const [mois, setMois] = useState(premierDuMois());
   const [perso, setPerso] = useState(() => {
@@ -109,7 +111,9 @@ export default function Comptabilite() {
 
   async function ajouterJustificatif(table, id, file) {
     const blob = await compresserImage(file);
-    const chemin = `${table}/${id}.jpg`;
+    // Chemin cloisonné par magasin (1er segment = magasin_id) : la policy
+    // Storage refuse l'accès aux justificatifs d'un autre magasin.
+    const chemin = `${magasinId}/${table}/${id}.jpg`;
     const { error: up } = await supabase.storage
       .from('justificatifs')
       .upload(chemin, blob, { upsert: true, contentType: blob.type || 'image/jpeg' });

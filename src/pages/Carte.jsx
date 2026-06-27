@@ -47,8 +47,10 @@ export default function Carte() {
   const [promos, setPromos] = useState([]);
 
   const charger = useCallback(async () => {
+    // fidelite_token renvoie l'état + un token frais (rotatif) encodé dans le QR :
+    // une capture du QR devient caduque dès le scan suivant ou la rotation (TTL).
     const [{ data, error }, { data: prs }] = await Promise.all([
-      supabase.rpc('fidelite_etat', { p_client: clientId }),
+      supabase.rpc('fidelite_token', { p_client: clientId, p_ttl_sec: 60 }),
       supabase.rpc('promotions_carte', { p_client: clientId }),
     ]);
     if (error || !data || data.length === 0) {
@@ -56,7 +58,7 @@ export default function Carte() {
       return;
     }
     const r = data[0];
-    setEtat({ surnom: r.surnom, tampons: r.tampons, palier: r.palier, magasin: r.magasin });
+    setEtat({ token: r.token, surnom: r.surnom, tampons: r.tampons, palier: r.palier, magasin: r.magasin });
     setPromos(prs ?? []);
   }, [clientId]);
 
@@ -241,7 +243,7 @@ export default function Carte() {
         </p>
 
         <div className="qr-carte">
-          <QRClient clientId={clientId} taille={200} />
+          <QRClient clientId={clientId} token={etat.token} taille={200} />
           <p className="statut">📲 Montre ce QR au comptoir pour cumuler tes étoiles.</p>
         </div>
 
