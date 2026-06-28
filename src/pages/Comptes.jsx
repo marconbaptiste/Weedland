@@ -90,7 +90,7 @@ export default function Comptes() {
     const motDePasse = window.prompt(`Nouveau mot de passe pour ${nom} (min. 6 caractères) :`);
     if (!motDePasse) return;
     setStatut('');
-    const { data, error } = await supabase.functions.invoke('hyper-api', {
+    const { data, error } = await supabase.functions.invoke('creer-employe', {
       body: { action: 'reset', userId: id, motDePasse },
     });
     if (error) {
@@ -126,9 +126,7 @@ export default function Comptes() {
       },
       { onConflict: 'email' },
     );
-    // NB : le slug de l'Edge Function déployée est « hyper-api » (le nom affiché
-    // « creer-employe » n'est qu'une étiquette ; le slug ne peut pas changer).
-    const { data, error } = await supabase.functions.invoke('hyper-api', { body: form });
+    const { data, error } = await supabase.functions.invoke('creer-employe', { body: form });
     setEnvoi(false);
     if (error) {
       let message = 'Erreur lors de la création (la fonction creer-employe est-elle déployée ?).';

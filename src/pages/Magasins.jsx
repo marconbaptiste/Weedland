@@ -64,7 +64,7 @@ export default function Magasins() {
     if (m.id === magasinId) return setStatut('Bascule sur un autre magasin (en haut) avant de supprimer celui-ci.');
     if (!window.confirm(`Supprimer « ${m.nom} » et TOUTES ses données ? Irréversible.`)) return;
     setStatut('Suppression…');
-    const { data, error } = await supabase.functions.invoke('hyper-api', {
+    const { data, error } = await supabase.functions.invoke('creer-employe', {
       body: { action: 'supprimer-magasin', magasinId: m.id },
     });
     if (error || data?.error) return setStatut(`Erreur : ${data?.error ?? error?.message}`);
@@ -84,7 +84,7 @@ export default function Magasins() {
     );
     if (errAuth) return setStatut(`Erreur autorisation : ${errAuth.message}`);
     if (admin.motDePasse && admin.nom.trim()) {
-      const { data, error } = await supabase.functions.invoke('hyper-api', {
+      const { data, error } = await supabase.functions.invoke('creer-employe', {
         body: { email, motDePasse: admin.motDePasse, nom: admin.nom.trim(), role: 'admin', pourcentage: admin.pourcentage },
       });
       if (error || data?.error) return setStatut(`Email autorisé, mais création en erreur : ${data?.error ?? error?.message}`);

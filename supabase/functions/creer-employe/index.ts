@@ -1,5 +1,5 @@
 // Edge Function : création de comptes + inscription self-service d'un magasin.
-// Déploiement : `supabase functions deploy creer-employe` (slug déployé : hyper-api).
+// Déploiement : `supabase functions deploy creer-employe` (slug : creer-employe).
 //
 // Trois usages :
 //  - action 'inscription' : PUBLIC (pas d'auth). Crée un magasin + son admin,
