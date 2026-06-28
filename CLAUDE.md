@@ -4,6 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > Le produit, l'interface et les commentaires de code sont **en français**. Conservez cette convention.
 
+> ## 🔒 RÈGLE ABSOLUE — Revue sécurité à chaque changement
+> **Toute** nouvelle fonctionnalité ou correction doit être étudiée sous l'angle sécurité **avant d'être livrée** — se mettre dans la peau d'un pirate / d'un client qui cherche à détourner l'app. **Aucune ouverture** ne doit être laissée. Pour chaque diff, vérifier systématiquement :
+> - **RLS d'abord, jamais le client** : tout contrôle d'accès passe par les policies serveur + `magasin_id = mon_magasin()`. Une garde côté front (`estAdmin`, masquage UI) n'est JAMAIS une sécurité — supposer que l'attaquant appelle Supabase directement avec la clé anon + son JWT.
+> - **Cloisonnement multi-magasin** : toute nouvelle table/colonne/vue/fonction/bucket porte `magasin_id` et filtre dessus. Pas de fuite inter-magasins.
+> - **Élévation de privilèges** : aucun chemin employe→admin→superadmin (policies bornées, trigger `users_garde_role`, allowlist contrainte, jamais de rôle/taux depuis `user_metadata`).
+> - **Fonctions SECURITY DEFINER** : `set search_path`, vérifier `est_membre()`/`est_admin()`/`mon_magasin()`, n'exposer en `anon` que le strict minimum (jamais de données perso ni financières).
+> - **Edge Functions** : revérifier le rôle ET le magasin de l'appelant ET de la cible côté serveur ; ne jamais faire confiance à un id fourni par le client ; ne pas fuiter d'erreurs internes.
+> - **Anti-triche / anti-abus** : registres publics (carte fidélité, inscription) protégés contre le replay, le partage, la création de masse, l'énumération. Privilégier les contraintes atomiques en base (UNIQUE, `on conflict`, consommation de token).
+> - **Injection / XSS / secrets** : pas de SQL dynamique sur entrée utilisateur, pas de `dangerouslySetInnerHTML`, jamais de clé `service_role` côté front.
+>
+> En cas de doute ou de surface d'attaque non triviale, lancer une **passe de pentest dédiée** (agents en parallèle) avant de merger, et ne retenir que les failles réellement exploitables au vu du code. Documenter la décision sécurité dans le commit/PR.
+
 ## Présentation
 
 Weedland est une application web de gestion pour un magasin de CBD (vente au comptoir, plusieurs employés). Objectif : remplacer un suivi manuel sur WhatsApp par une plateforme rapide au comptoir sur mobile et consultable sur ordinateur. Deux rôles : **employé** (saisit ses opérations, voit son historique) et **admin/employeur** (vue consolidée, exports, gestion des comptes).
