@@ -30,6 +30,7 @@ export default function Chromes() {
   const [qrInscription, setQrInscription] = useState(false); // QR d'inscription magasin
   const [inscriptionsOuvertes, setInscriptionsOuvertes] = useState(true);
   const [faveurs, setFaveurs] = useState([]); // raccourcis de faveurs du magasin
+  const [chromesJour, setChromesJour] = useState([]); // chromes du jour de l'employé connecté
 
   const [nouveau, setNouveau] = useState({ surnom: '', description: '', telephone: '' });
   const [creationOuverte, setCreationOuverte] = useState(false);
@@ -58,6 +59,23 @@ export default function Chromes() {
   useEffect(() => {
     chargerClients();
   }, [chargerClients]);
+
+  // Chromes du jour de l'employé connecté (résumé affiché en bas de page).
+  const chargerChromesJour = useCallback(async () => {
+    const today = aujourdhuiISO();
+    const { data } = await supabase
+      .from('chromes')
+      .select('type, montant, clients(surnom)')
+      .eq('employe_id', utilisateur.id)
+      .eq('date', today);
+    setChromesJour(
+      (data ?? []).map((c) => ({ type: c.type, montant: c.montant, surnom: c.clients?.surnom ?? 'client' })),
+    );
+  }, [utilisateur.id]);
+
+  useEffect(() => {
+    chargerChromesJour();
+  }, [chargerChromesJour]);
 
   // Palier de fidélité du magasin.
   useEffect(() => {
@@ -221,6 +239,7 @@ export default function Chromes() {
     await supabase.from('chromes').delete().eq('id', id);
     await ouvrirClient(clientSel);
     await chargerClients();
+    await chargerChromesJour();
   }
 
   function commencerEditChrome(l) {
@@ -249,6 +268,7 @@ export default function Chromes() {
       setEditChrome(null);
       await ouvrirClient(clientSel);
       await chargerClients();
+      await chargerChromesJour();
     }
   }
 
@@ -341,6 +361,7 @@ export default function Chromes() {
       setMontant('');
       await ouvrirClient(clientSel);
       await chargerClients();
+      await chargerChromesJour();
     }
   }
 
@@ -355,6 +376,8 @@ export default function Chromes() {
     (c.surnom ?? '').toLowerCase().includes(recherche.toLowerCase()),
   );
   const solde = clientSel ? soldeClient(lignes) : 0;
+  const avancesJour = chromesJour.filter((c) => c.type === 'avance');
+  const remboursementsJour = chromesJour.filter((c) => c.type === 'remboursement');
 
   return (
     <div className="page page-chromes">
@@ -453,6 +476,33 @@ export default function Chromes() {
             </div>
           )}
         </div>
+
+      <div className="card">
+        <h2>Chromes du jour</h2>
+        {chromesJour.length === 0 && <p className="vide">Aucun chrome aujourd’hui.</p>}
+        {avancesJour.length > 0 && (
+          <div className="histo-bloc">
+            <span className="histo-titre">Avances</span>
+            {avancesJour.map((a, i) => (
+              <div key={`a${i}`} className="histo-chrome">
+                <span>{a.surnom}</span>
+                <span className="dette">+ {formatEuros(a.montant)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {remboursementsJour.length > 0 && (
+          <div className="histo-bloc">
+            <span className="histo-titre">Remboursements</span>
+            {remboursementsJour.map((r, i) => (
+              <div key={`r${i}`} className="histo-chrome">
+                <span>{r.surnom}</span>
+                <span className="solde-ok">− {formatEuros(r.montant)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {clientSel && (
         <div className="aide-fond" role="dialog" aria-modal="true" aria-label="Fiche client" onClick={fermerClient}>
