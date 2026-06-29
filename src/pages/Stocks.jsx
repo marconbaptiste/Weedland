@@ -5,6 +5,7 @@ import { parseMontant, formatEuros, formatNombre } from '../lib/format';
 import { somme } from '../lib/comptabilite';
 import ChampMontant from '../components/ChampMontant';
 import ImportFacture from '../components/ImportFacture';
+import ListeCourses from '../components/ListeCourses';
 
 const UNITES = ['g', 'kg', 'mg', 'ml', 'pièce'];
 const FORM_VIDE = {
@@ -136,6 +137,8 @@ export default function Stocks() {
   return (
     <div className="page">
       <h1>Stocks</h1>
+
+      <ListeCourses />
 
       <div className="cartes-kpi">
         <div className="kpi">

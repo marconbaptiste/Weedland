@@ -827,6 +827,58 @@ hr {
   text-align: right;
   padding: 0.4rem 0.4rem;
 }
+/* Liste de courses (to-do d'achats, page Stocks) */
+.courses-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.courses-tete h2 {
+  margin: 0;
+}
+.courses-compteur {
+  font-size: 0.85rem;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+.courses-liste {
+  list-style: none;
+  margin: 0.6rem 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.courses-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.45rem 0.2rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.courses-label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 1;
+  cursor: pointer;
+}
+.courses-label input {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: none;
+}
+.courses-item.fait .courses-label span {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
 .bloc-form {
   display: flex;
   flex-direction: column;
