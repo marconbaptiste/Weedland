@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthProvider';
 import Aide from './Aide';
 import BoutonMonnaie from './BoutonMonnaie';
 import BoutonCourses from './BoutonCourses';
+import BoutonScanner from './BoutonScanner';
 
 const lienActif = ({ isActive }) => (isActive ? 'nav-lien actif' : 'nav-lien');
 
@@ -98,6 +99,7 @@ export default function Layout() {
       <main className="contenu">
         <Outlet />
       </main>
+      <BoutonScanner />
       <BoutonCourses />
       <BoutonMonnaie />
     </div>

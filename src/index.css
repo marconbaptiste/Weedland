@@ -912,7 +912,8 @@ details > summary {
   color: var(--texte-doux);
 }
 .fab-monnaie,
-.fab-courses {
+.fab-courses,
+.fab-scanner {
   position: fixed;
   right: calc(0.8rem + env(safe-area-inset-right));
   bottom: calc(0.8rem + env(safe-area-inset-bottom));
@@ -929,12 +930,16 @@ details > summary {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
 }
 .fab-monnaie:hover,
-.fab-courses:hover {
+.fab-courses:hover,
+.fab-scanner:hover {
   background: var(--accent-fonce);
 }
-/* Raccourci liste de courses : juste au-dessus du bouton « rendu monnaie ». */
+/* Bulles empilées au-dessus du « rendu monnaie » : courses, puis scanner. */
 .fab-courses {
   bottom: calc(0.8rem + env(safe-area-inset-bottom) + 64px);
+}
+.fab-scanner {
+  bottom: calc(0.8rem + env(safe-area-inset-bottom) + 128px);
 }
 .fab-badge {
   position: absolute;

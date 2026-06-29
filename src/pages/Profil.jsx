@@ -1,21 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { formatEuros } from '../lib/format';
 import { aujourdhuiISO, intervallePeriode } from '../lib/dates';
 import { somme } from '../lib/comptabilite';
 import GuideDemarrage from '../components/GuideDemarrage';
-import CalculatriceMonnaie from '../components/CalculatriceMonnaie';
-import ScannerFidelite from '../components/ScannerFidelite';
 
 // Accueil après connexion : profil + CA (jour/semaine) + chromes détaillés du
-// jour + raccourcis.
+// jour. Les outils (rendu monnaie, scanner fidélité, liste de courses) sont
+// accessibles partout via les bulles flottantes (cf. Layout).
 export default function Profil() {
   const { utilisateur, profil, estAdmin } = useAuth();
   const [stats, setStats] = useState({ caJour: 0, caSemaine: 0 });
   const [chromesJour, setChromesJour] = useState([]);
-  const [outil, setOutil] = useState(null); // 'monnaie' | 'scanner' | null
 
   useEffect(() => {
     const today = aujourdhuiISO();
@@ -88,37 +85,7 @@ export default function Profil() {
         )}
       </div>
 
-      <div className="card">
-        <h2>Raccourcis</h2>
-        <div className="form-inline">
-          <button type="button" className="btn btn-primary" onClick={() => setOutil('monnaie')}>
-            💶 Rendu de monnaie
-          </button>
-          <button type="button" className="btn btn-primary" onClick={() => setOutil('scanner')}>
-            🎟️ Scanner fidélité
-          </button>
-          <Link to="/caisse" className="btn">
-            🧾 Clôture de caisse
-          </Link>
-        </div>
-      </div>
-
       <GuideDemarrage />
-
-      {outil === 'monnaie' && (
-        <div className="aide-fond" role="dialog" aria-modal="true" onClick={() => setOutil(null)}>
-          <div className="aide-modale" onClick={(e) => e.stopPropagation()}>
-            <div className="aide-tete">
-              <h2>💶 Rendu de monnaie</h2>
-              <button type="button" className="btn btn-discret" onClick={() => setOutil(null)}>
-                Fermer
-              </button>
-            </div>
-            <CalculatriceMonnaie />
-          </div>
-        </div>
-      )}
-      {outil === 'scanner' && <ScannerFidelite onClose={() => setOutil(null)} />}
 
       {estAdmin && (
         <p className="periode-info">Tu es administrateur — retrouve la vue consolidée dans le Dashboard.</p>
