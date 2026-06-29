@@ -9,13 +9,13 @@ import CalculatriceMonnaie from '../components/CalculatriceMonnaie';
 import ScannerFidelite from '../components/ScannerFidelite';
 import ListeCourses from '../components/ListeCourses';
 
-// Accueil après connexion : profil + CA (jour/semaine) + chromes détaillés du
-// jour + une rangée de raccourcis en bulles (scanner fidélité, liste de courses,
-// rendu monnaie). La bulle « courses » porte une pastille de notification.
+// Accueil après connexion : profil + CA (jour/semaine) + une rangée de
+// raccourcis en bulles (scanner fidélité, liste de courses, rendu monnaie). La
+// bulle « courses » porte une pastille de notification. Le détail des chromes du
+// jour vit désormais sur la page Clients.
 export default function Profil() {
   const { utilisateur, profil, estAdmin } = useAuth();
   const [stats, setStats] = useState({ caJour: 0, caSemaine: 0 });
-  const [chromesJour, setChromesJour] = useState([]);
   const [outil, setOutil] = useState(null); // 'monnaie' | 'scanner' | 'courses' | null
   const [nbCourses, setNbCourses] = useState(0);
   const [coursesNouveau, setCoursesNouveau] = useState(false);
@@ -39,11 +39,6 @@ export default function Profil() {
         caJour: somme([enc(jour), av(jour), -rb(jour)]),
         caSemaine: somme([enc(tout), av(tout), -rb(tout)]),
       });
-      setChromesJour(
-        (chr ?? [])
-          .filter((c) => c.date === today)
-          .map((c) => ({ type: c.type, montant: c.montant, surnom: c.clients?.surnom ?? 'client' })),
-      );
     })();
   }, [utilisateur.id]);
 
@@ -97,8 +92,6 @@ export default function Profil() {
   }
 
   const prenom = (profil?.nom ?? '').split(' ')[0];
-  const avances = chromesJour.filter((c) => c.type === 'avance');
-  const remboursements = chromesJour.filter((c) => c.type === 'remboursement');
 
   return (
     <div className="page">
@@ -133,33 +126,6 @@ export default function Profil() {
           <span className="bulle-rond">💶</span>
           <span className="bulle-label">Rendu de monnaie</span>
         </button>
-      </div>
-
-      <div className="card">
-        <h2>Chromes du jour</h2>
-        {chromesJour.length === 0 && <p className="vide">Aucun chrome aujourd’hui.</p>}
-        {avances.length > 0 && (
-          <div className="histo-bloc">
-            <span className="histo-titre">Avances</span>
-            {avances.map((a, i) => (
-              <div key={`a${i}`} className="histo-chrome">
-                <span>{a.surnom}</span>
-                <span className="dette">+ {formatEuros(a.montant)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        {remboursements.length > 0 && (
-          <div className="histo-bloc">
-            <span className="histo-titre">Remboursements</span>
-            {remboursements.map((r, i) => (
-              <div key={`r${i}`} className="histo-chrome">
-                <span>{r.surnom}</span>
-                <span className="solde-ok">− {formatEuros(r.montant)}</span>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       <GuideDemarrage />
