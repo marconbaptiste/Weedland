@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { formatEuros } from '../lib/format';
-import { aujourdhuiISO, intervallePeriode } from '../lib/dates';
+import { aujourdhuiISO, intervallePeriode, intervalleAnnee } from '../lib/dates';
 import { somme } from '../lib/comptabilite';
 import GuideDemarrage from '../components/GuideDemarrage';
 import CalculatriceMonnaie from '../components/CalculatriceMonnaie';
@@ -16,6 +16,7 @@ import ListeCourses from '../components/ListeCourses';
 export default function Profil() {
   const { utilisateur, profil, estAdmin } = useAuth();
   const [stats, setStats] = useState({ caJour: 0, caSemaine: 0 });
+  const [statsPerso, setStatsPerso] = useState({ caMois: 0, intMois: 0, caAnnee: 0, intAnnee: 0 });
   const [outil, setOutil] = useState(null); // 'monnaie' | 'scanner' | 'courses' | null
   const [nbCourses, setNbCourses] = useState(0);
   const [coursesNouveau, setCoursesNouveau] = useState(false);
@@ -38,6 +39,29 @@ export default function Profil() {
       setStats({
         caJour: somme([enc(jour), av(jour), -rb(jour)]),
         caSemaine: somme([enc(tout), av(tout), -rb(tout)]),
+      });
+    })();
+  }, [utilisateur.id]);
+
+  // Récap personnel : CA + intéressement du mois et de l'année (déplacé depuis
+  // la page Caisse).
+  useEffect(() => {
+    (async () => {
+      const [aDeb, aFin] = intervalleAnnee();
+      const [mDeb, mFin] = intervallePeriode('mois');
+      const { data } = await supabase
+        .from('v_interessement_employe')
+        .select('date, est_proprietaire, ca_jour, interessement')
+        .eq('employe_id', utilisateur.id)
+        .gte('date', aDeb)
+        .lte('date', aFin);
+      const lignes = data ?? [];
+      const dansMois = (d) => d >= mDeb && d <= mFin;
+      setStatsPerso({
+        caMois: somme(lignes.filter((l) => l.est_proprietaire && dansMois(l.date)).map((l) => l.ca_jour)),
+        intMois: somme(lignes.filter((l) => dansMois(l.date)).map((l) => l.interessement)),
+        caAnnee: somme(lignes.filter((l) => l.est_proprietaire).map((l) => l.ca_jour)),
+        intAnnee: somme(lignes.map((l) => l.interessement)),
       });
     })();
   }, [utilisateur.id]);
@@ -105,6 +129,31 @@ export default function Profil() {
         <div className="kpi">
           <span className="kpi-label">CA de la semaine</span>
           <span className="kpi-valeur">{formatEuros(stats.caSemaine)}</span>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="histo-tete">
+          <strong>{profil?.nom}</strong>
+          <span className="badge badge-solde">{estAdmin ? 'Admin' : 'Employé'}</span>
+        </div>
+        <div className="cartes-kpi">
+          <div className="kpi">
+            <span className="kpi-label">CA du mois</span>
+            <span className="kpi-valeur">{formatEuros(statsPerso.caMois)}</span>
+          </div>
+          <div className="kpi">
+            <span className="kpi-label">Intéressement du mois</span>
+            <span className="kpi-valeur">{formatEuros(statsPerso.intMois)}</span>
+          </div>
+          <div className="kpi">
+            <span className="kpi-label">CA de l’année</span>
+            <span className="kpi-valeur">{formatEuros(statsPerso.caAnnee)}</span>
+          </div>
+          <div className="kpi">
+            <span className="kpi-label">Intéressement de l’année</span>
+            <span className="kpi-valeur">{formatEuros(statsPerso.intAnnee)}</span>
+          </div>
         </div>
       </div>
 
