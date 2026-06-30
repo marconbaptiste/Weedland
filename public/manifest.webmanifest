@@ -1,6 +1,6 @@
 {
-  "name": "Gestion",
-  "short_name": "Gestion",
+  "name": "Kanabiz",
+  "short_name": "Kanabiz",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
