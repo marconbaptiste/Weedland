@@ -1,18 +1,42 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="fond" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1b2330" />
-      <stop offset="1" stop-color="#0f1115" />
+    <linearGradient id="verre" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#fbfdff" />
+      <stop offset="0.5" stop-color="#e2e8f0" />
+      <stop offset="1" stop-color="#c8d0db" />
     </linearGradient>
+    <radialGradient id="reflet" cx="0.3" cy="0.2" r="0.75">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.95" />
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.18" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="feuille" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#41464f" />
+      <stop offset="1" stop-color="#15181c" />
+    </linearGradient>
+    <filter id="ombre" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="7" stdDeviation="11" flood-color="#0c0f14" flood-opacity="0.22" />
+    </filter>
   </defs>
-  <rect width="512" height="512" fill="url(#fond)" />
-  <rect x="120" y="418" width="272" height="12" rx="6" fill="#2a2f3a" />
-  <g fill="#3fae6b">
-    <rect x="140" y="300" width="64" height="118" rx="14" />
-    <rect x="224" y="244" width="64" height="174" rx="14" />
-    <rect x="308" y="178" width="64" height="240" rx="14" />
+
+  <!-- Dalle de verre -->
+  <rect width="512" height="512" fill="url(#verre)" />
+  <!-- Reflet « liquid glass » -->
+  <rect width="512" height="512" fill="url(#reflet)" />
+  <!-- Filet de bord (haut clair / bas sombre) pour la profondeur -->
+  <rect x="3" y="3" width="506" height="506" rx="2" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="3" />
+
+  <!-- Feuille graphite -->
+  <g filter="url(#ombre)">
+    <g transform="translate(256,360)" fill="url(#feuille)">
+      <g transform="rotate(0)   scale(206)"><path d="M0,0 C-0.13,-0.33 -0.07,-0.82 0,-1 C0.07,-0.82 0.13,-0.33 0,0 Z"/></g>
+      <g transform="rotate(30)  scale(182)"><path d="M0,0 C-0.13,-0.33 -0.07,-0.82 0,-1 C0.07,-0.82 0.13,-0.33 0,0 Z"/></g>
+      <g transform="rotate(-30) scale(182)"><path d="M0,0 C-0.13,-0.33 -0.07,-0.82 0,-1 C0.07,-0.82 0.13,-0.33 0,0 Z"/></g>
+      <g transform="rotate(58)  scale(140)"><path d="M0,0 C-0.13,-0.33 -0.07,-0.82 0,-1 C0.07,-0.82 0.13,-0.33 0,0 Z"/></g>
+      <g transform="rotate(-58) scale(140)"><path d="M0,0 C-0.13,-0.33 -0.07,-0.82 0,-1 C0.07,-0.82 0.13,-0.33 0,0 Z"/></g>
+      <g transform="rotate(84)  scale(96)"><path d="M0,0 C-0.13,-0.33 -0.07,-0.82 0,-1 C0.07,-0.82 0.13,-0.33 0,0 Z"/></g>
+      <g transform="rotate(-84) scale(96)"><path d="M0,0 C-0.13,-0.33 -0.07,-0.82 0,-1 C0.07,-0.82 0.13,-0.33 0,0 Z"/></g>
+    </g>
+    <rect x="250" y="356" width="12" height="54" rx="6" fill="#15181c" />
   </g>
-  <path d="M150 286 L256 224 L362 150" fill="none" stroke="#e6e8ec" stroke-width="12"
-        stroke-linecap="round" stroke-linejoin="round" opacity="0.85" />
-  <circle cx="362" cy="150" r="14" fill="#e6e8ec" />
 </svg>
