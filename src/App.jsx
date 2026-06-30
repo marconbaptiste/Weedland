@@ -14,7 +14,6 @@ import Caisse from './pages/Caisse';
 import Chromes from './pages/Chromes';
 import Fidelite from './pages/Fidelite';
 import Stocks from './pages/Stocks';
-import Historique from './pages/Historique';
 import Paiements from './pages/Paiements';
 import Dashboard from './pages/Dashboard';
 import Comptes from './pages/Comptes';
@@ -58,7 +57,6 @@ export default function App() {
           <Route path="caisse" element={<Caisse />} />
           <Route path="chromes" element={<Chromes />} />
           <Route path="stocks" element={<Stocks />} />
-          <Route path="historique" element={<Historique />} />
           <Route path="support" element={<Support />} />
           <Route path="f/:clientId" element={<Fidelite />} />
 

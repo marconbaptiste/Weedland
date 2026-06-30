@@ -53,9 +53,6 @@ export default function Layout() {
           <NavLink to="/stocks" className={lienActif}>
             Stocks
           </NavLink>
-          <NavLink to="/historique" className={lienActif}>
-            Historique
-          </NavLink>
           {estAdmin && (
             <>
               <NavLink to="/dashboard" className={lienActif}>
