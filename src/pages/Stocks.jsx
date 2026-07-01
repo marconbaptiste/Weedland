@@ -36,6 +36,8 @@ export default function Stocks() {
   const [delta, setDelta] = useState({}); // id -> mouvement saisi (string)
   const [importOuvert, setImportOuvert] = useState(false);
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
+  const [tri, setTri] = useState('nom'); // 'nom' | 'quantite'
+  const [nouvelleCat, setNouvelleCat] = useState(false); // saisie d'une nouvelle catégorie à la création
 
   const charger = useCallback(async () => {
     const { data } = await supabase
@@ -177,12 +179,23 @@ export default function Stocks() {
   const valeurStock = somme(produits.map((p) => arrondi(Number(p.quantite) * Number(p.prix_achat))));
   const nbAlertes = produits.filter(enAlerte).length;
 
+  // Catégories réellement saisies (pour le sélecteur à la création/import).
+  const categoriesReelles = [...new Set(produits.map((p) => (p.categorie ?? '').trim()).filter(Boolean))].sort(
+    (a, b) => a.localeCompare(b),
+  );
+
   // Regroupement par catégorie pour l'affichage.
   const parCategorie = {};
   filtres.forEach((p) => {
     const cle = p.categorie?.trim() || 'Sans catégorie';
     (parCategorie[cle] ??= []).push(p);
   });
+  // Tri des produits DANS chaque catégorie : par nom (A→Z) ou par quantité (↓).
+  const comparer =
+    tri === 'quantite'
+      ? (a, b) => Number(b.quantite) - Number(a.quantite) || a.nom.localeCompare(b.nom)
+      : (a, b) => a.nom.localeCompare(b.nom);
+  Object.values(parCategorie).forEach((arr) => arr.sort(comparer));
   const categories = Object.keys(parCategorie).sort((a, b) => a.localeCompare(b));
 
   return (
@@ -213,21 +226,62 @@ export default function Stocks() {
           value={recherche}
           onChange={(e) => setRecherche(e.target.value)}
         />
+        <div className="tri-ligne">
+          <span className="tri-label">Classer&nbsp;:</span>
+          <div className="bascule">
+            <button type="button" className={tri === 'nom' ? 'actif' : ''} onClick={() => setTri('nom')}>
+              Par nom
+            </button>
+            <button type="button" className={tri === 'quantite' ? 'actif' : ''} onClick={() => setTri('quantite')}>
+              Par quantité
+            </button>
+          </div>
+        </div>
         {creationOuverte ? (
           <form className="form-chrome" onSubmit={creer}>
             <label className="field">
               <span>Catégorie / type de produit</span>
-              <input
-                list="categories-stock"
-                value={form.categorie}
-                onChange={(e) => setForm((f) => ({ ...f, categorie: e.target.value }))}
-                placeholder="ex. Fleurs, Résines, Huiles…"
-              />
-              <datalist id="categories-stock">
-                {categories.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
+              {categoriesReelles.length > 0 && !nouvelleCat ? (
+                <select
+                  value={form.categorie}
+                  onChange={(e) => {
+                    if (e.target.value === '__nouvelle__') {
+                      setNouvelleCat(true);
+                      setForm((f) => ({ ...f, categorie: '' }));
+                    } else {
+                      setForm((f) => ({ ...f, categorie: e.target.value }));
+                    }
+                  }}
+                >
+                  <option value="" disabled>
+                    Choisir une catégorie…
+                  </option>
+                  {categoriesReelles.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                  <option value="__nouvelle__">＋ Nouvelle catégorie…</option>
+                </select>
+              ) : (
+                <input
+                  value={form.categorie}
+                  onChange={(e) => setForm((f) => ({ ...f, categorie: e.target.value }))}
+                  placeholder="ex. Fleurs, Résines, Huiles…"
+                />
+              )}
+              {categoriesReelles.length > 0 && nouvelleCat && (
+                <button
+                  type="button"
+                  className="btn btn-discret lien-retour-cat"
+                  onClick={() => {
+                    setNouvelleCat(false);
+                    setForm((f) => ({ ...f, categorie: '' }));
+                  }}
+                >
+                  ↩ Choisir une catégorie existante
+                </button>
+              )}
             </label>
             <label className="field">
               <span>Produit</span>
@@ -267,7 +321,14 @@ export default function Stocks() {
           </form>
         ) : (
           <div className="form-inline">
-            <button className="btn" onClick={() => setCreationOuverte(true)}>
+            <button
+              className="btn"
+              onClick={() => {
+                setNouvelleCat(false);
+                setForm(FORM_VIDE);
+                setCreationOuverte(true);
+              }}
+            >
               + Ajouter un produit
             </button>
             <button type="button" className="btn" onClick={() => setImportOuvert(true)}>
@@ -284,7 +345,7 @@ export default function Stocks() {
 
       {importOuvert && (
         <ImportFacture
-          categories={categories}
+          categories={categoriesReelles}
           onClose={() => setImportOuvert(false)}
           onImported={() => charger()}
         />
