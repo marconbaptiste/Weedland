@@ -55,33 +55,8 @@ export default function Layout() {
             Stocks
           </NavLink>
           {estAdmin && (
-            <>
-              <NavLink to="/dashboard" className={lienActif}>
-                Dashboard
-              </NavLink>
-              <NavLink to="/comptabilite" className={lienActif}>
-                Comptabilité
-              </NavLink>
-              <NavLink to="/promotions" className={lienActif}>
-                Promotions
-              </NavLink>
-              <NavLink to="/paiements" className={lienActif}>
-                Paiements
-              </NavLink>
-              <NavLink to="/journal" className={lienActif}>
-                Journal
-              </NavLink>
-              <NavLink to="/comptes" className={lienActif}>
-                Comptes
-              </NavLink>
-              <NavLink to="/import" className={lienActif}>
-                Import
-              </NavLink>
-            </>
-          )}
-          {estAdmin && !estSuperadmin && (
-            <NavLink to="/support" className={lienActif}>
-              Support
+            <NavLink to="/gestion" className={lienActif}>
+              Gestion
             </NavLink>
           )}
           {estSuperadmin && (

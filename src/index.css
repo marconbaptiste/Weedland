@@ -1824,3 +1824,25 @@ h2 { font-weight: 650; letter-spacing: -0.2px; }
   .cartes-kpi { grid-template-columns: repeat(4, 1fr); }
   .contenu { padding: 1.5rem 1.5rem 3rem; }
 }
+
+/* ---- Hub Gestion (regroupement des outils admin) ---- */
+.hub-section { display: flex; flex-direction: column; gap: 0.6rem; }
+.hub-section h2 { margin: 0.2rem 0 0; }
+.hub-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.8rem;
+}
+.hub-carte {
+  text-decoration: none;
+  color: var(--texte);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem;
+  transition: transform 0.1s ease, border-color 0.15s;
+}
+.hub-carte:hover { transform: translateY(-2px); border-color: var(--bordure-forte); }
+.hub-emoji { font-size: 1.7rem; line-height: 1; }
+.hub-nom { font-weight: 650; }
+.hub-desc { color: var(--texte-doux); font-size: 0.85rem; line-height: 1.35; }

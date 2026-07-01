@@ -14,6 +14,7 @@ import Caisse from './pages/Caisse';
 import Chromes from './pages/Chromes';
 import Fidelite from './pages/Fidelite';
 import Stocks from './pages/Stocks';
+import Gestion from './pages/Gestion';
 import Paiements from './pages/Paiements';
 import Dashboard from './pages/Dashboard';
 import Comptes from './pages/Comptes';
@@ -62,6 +63,7 @@ export default function App() {
 
           {/* Réservé à l'admin */}
           <Route element={<RequireAdmin />}>
+            <Route path="gestion" element={<Gestion />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="comptabilite" element={<Comptabilite />} />
             <Route path="promotions" element={<Promotions />} />
