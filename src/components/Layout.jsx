@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import Aide from './Aide';
+import Logo from './Logo';
 
 const lienActif = ({ isActive }) => (isActive ? 'nav-lien actif' : 'nav-lien');
 
@@ -12,7 +13,7 @@ export default function Layout() {
     <div className="app">
       <header className="entete">
         <div className="entete-haut">
-          <span className="logo">Gestion</span>
+          <Logo />
           <div className="entete-droite">
             {estSuperadmin && (
               <NavLink to="/pilote" className="btn btn-discret" title="Panneau pilote">

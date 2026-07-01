@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
+import Logo from '../components/Logo';
 
 export default function Login() {
   const { connexion, connexionGoogle } = useAuth();
@@ -33,7 +34,8 @@ export default function Login() {
   return (
     <div className="page-connexion">
       <form className="card carte-connexion" onSubmit={soumettre}>
-        <h1 className="logo-connexion">Gestion</h1>
+        <Logo taille={40} className="marque-hero" />
+        <p className="statut" style={{ marginTop: '-0.25rem' }}>Connecte-toi à ton espace</p>
         <label className="field">
           <span>Email</span>
           <input

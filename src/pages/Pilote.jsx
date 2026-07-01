@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { formatDateFr } from '../lib/format';
 import Messagerie from '../components/Messagerie';
+import Logo from '../components/Logo';
 
 // Mode pilote (super-admin) — panneau d'accueil : on choisit un magasin à
 // piloter. Chaque carte porte un indicateur de messages (cliquable pour
@@ -86,7 +87,7 @@ export default function Pilote() {
   return (
     <div className="page-connexion pilote">
       <div className="pilote-tete">
-        <span className="logo">Gestion</span>
+        <Logo taille={30} className="marque-hero" />
         <h1 className="logo-connexion">🧭 Mode pilote</h1>
         <p className="statut">Choisis un magasin à piloter.</p>
       </div>
