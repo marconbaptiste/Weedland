@@ -1637,12 +1637,22 @@ textarea,
   padding: 1.1rem 1.15rem;
 }
 
-/* En-tête vitrée */
+/* En-tête vitrée — dégradé liquid glass + prolongé sous l'encoche (safe-area)
+   pour un raccord net avec la barre d'état, sans cassure blanche. */
 .entete {
-  background: rgba(18, 20, 25, 0.68);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding-top: env(safe-area-inset-top);
+  background:
+    linear-gradient(180deg, rgba(79, 208, 138, 0.13), rgba(79, 208, 138, 0) 72%),
+    linear-gradient(180deg, rgba(31, 38, 35, 0.9) 0%, rgba(16, 18, 23, 0.72) 100%);
   backdrop-filter: var(--flou);
   -webkit-backdrop-filter: var(--flou);
   border-bottom: 1px solid var(--bordure);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 10px 26px rgba(0, 0, 0, 0.28);
 }
 .logo { font-weight: 700; font-size: 1.1rem; }
 
