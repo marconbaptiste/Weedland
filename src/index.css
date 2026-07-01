@@ -2,17 +2,22 @@
    Weedland — thème sombre par défaut, mobile-first.
    ============================================================================ */
 :root {
-  --fond: #0f1115;
-  --fond-carte: #181b22;
-  --fond-input: #20242d;
-  --bordure: #2a2f3a;
-  --texte: #e6e8ec;
-  --texte-doux: #9aa3b2;
-  --accent: #3fae6b;
-  --accent-fonce: #2f8a52;
-  --rouge: #e5534b;
-  --vert: #3fae6b;
-  --rayon: 12px;
+  --fond: #14161b;
+  --fond-carte: rgba(255, 255, 255, 0.055);
+  --fond-input: rgba(255, 255, 255, 0.05);
+  --bordure: rgba(255, 255, 255, 0.10);
+  --bordure-forte: rgba(255, 255, 255, 0.18);
+  --texte: #f2f4f8;
+  --texte-doux: #a6aebd;
+  --accent: #4fd08a;
+  --accent-fonce: #38b673;
+  --accent-contraste: #062316;
+  --rouge: #ff6b6b;
+  --vert: #4fd08a;
+  --rayon: 16px;
+  --rayon-lg: 22px;
+  --ombre: 0 10px 34px rgba(0, 0, 0, 0.40);
+  --flou: blur(22px) saturate(160%);
 }
 
 * {
@@ -21,10 +26,15 @@
 
 body {
   margin: 0;
-  background: var(--fond);
+  min-height: 100vh;
+  background:
+    radial-gradient(1100px 720px at 12% -12%, rgba(79, 208, 138, 0.10) 0%, rgba(79, 208, 138, 0) 55%),
+    radial-gradient(900px 700px at 95% 8%, rgba(120, 140, 175, 0.12) 0%, rgba(120, 140, 175, 0) 50%),
+    linear-gradient(168deg, #1b1f26 0%, #101216 100%) fixed;
   color: var(--texte);
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  letter-spacing: 0.1px;
 }
 
 h1 {
@@ -1610,4 +1620,207 @@ textarea,
   textarea {
     padding: 0.55rem 0.7rem;
   }
+}
+
+/* ============================================================================
+   LIQUID GLASS — refonte visuelle Kanabiz (surcouche, chargée en dernier)
+   ============================================================================ */
+
+/* Cartes / panneaux en verre */
+.card {
+  background: var(--fond-carte);
+  backdrop-filter: var(--flou);
+  -webkit-backdrop-filter: var(--flou);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-lg);
+  box-shadow: var(--ombre);
+  padding: 1.1rem 1.15rem;
+}
+
+/* En-tête vitrée */
+.entete {
+  background: rgba(18, 20, 25, 0.68);
+  backdrop-filter: var(--flou);
+  -webkit-backdrop-filter: var(--flou);
+  border-bottom: 1px solid var(--bordure);
+}
+.logo { font-weight: 700; font-size: 1.1rem; }
+
+/* Marque (feuille + nom) */
+.marque {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  color: var(--texte);
+  text-decoration: none;
+}
+.marque-mark { color: var(--texte); display: block; }
+.marque-nom {
+  font-size: 1.18rem;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+.marque-hero {
+  flex-direction: column;
+  gap: 0.55rem;
+  width: 100%;
+  justify-content: center;
+}
+.marque-hero .marque-nom { font-size: 1.7rem; }
+
+/* Navigation en pastilles */
+.nav { gap: 0.3rem; padding: 0.35rem 0.6rem 0.5rem; }
+.nav-lien {
+  border-radius: 999px;
+  border-bottom: none !important;
+  padding: 0.5rem 0.95rem;
+  transition: background 0.15s, color 0.15s;
+}
+.nav-lien:hover { color: var(--texte); }
+.nav-lien.actif {
+  color: var(--texte);
+  background: var(--bordure-forte);
+  border-bottom: none !important;
+}
+
+/* Boutons pilulaires */
+.btn {
+  border-radius: 999px;
+  border: 1px solid var(--bordure);
+  background: var(--fond-carte);
+  backdrop-filter: var(--flou);
+  -webkit-backdrop-filter: var(--flou);
+  color: var(--texte);
+  font-weight: 600;
+  padding: 0.6rem 1.05rem;
+  transition: transform 0.08s ease, background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.btn:hover { border-color: var(--bordure-forte); }
+.btn:active { transform: scale(0.97); }
+.btn-primary {
+  background: linear-gradient(135deg, #5bdd97 0%, var(--accent-fonce) 100%);
+  color: var(--accent-contraste);
+  border: none;
+  box-shadow: 0 8px 22px rgba(79, 208, 138, 0.30);
+  font-weight: 700;
+}
+.btn-primary:hover { box-shadow: 0 10px 26px rgba(79, 208, 138, 0.42); }
+.btn-discret { background: transparent; border-color: transparent; color: var(--texte-doux); backdrop-filter: none; }
+.btn-discret:hover { color: var(--texte); background: var(--fond-carte); }
+.btn-lg { padding: 0.85rem 1.5rem; font-size: 1.02rem; }
+
+/* Champs de saisie en verre */
+input, textarea, select {
+  background: var(--fond-input);
+  border: 1px solid var(--bordure);
+  border-radius: 12px;
+  color: var(--texte);
+  padding: 0.65rem 0.8rem;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79, 208, 138, 0.16);
+}
+input::placeholder, textarea::placeholder { color: var(--texte-doux); }
+
+/* KPIs vitrés */
+.cartes-kpi { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+.kpi {
+  background: var(--fond-carte);
+  backdrop-filter: var(--flou);
+  -webkit-backdrop-filter: var(--flou);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  padding: 0.9rem 1rem;
+}
+.kpi-label { color: var(--texte-doux); font-size: 0.82rem; }
+.kpi-valeur { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.3px; display: block; margin-top: 0.15rem; }
+
+/* Badges */
+.badge { border-radius: 999px; padding: 0.2rem 0.6rem; font-size: 0.78rem; font-weight: 600; }
+.badge-solde, .badge.badge-solde { background: rgba(79, 208, 138, 0.16); color: #7ee2ad; }
+.badge-dette, .badge.badge-dette { background: rgba(255, 107, 107, 0.16); color: #ff9d9d; }
+
+/* Modales vitrées */
+.aide-fond { background: rgba(6, 8, 12, 0.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.aide-modale, .modale-client {
+  background: rgba(28, 32, 40, 0.85);
+  backdrop-filter: var(--flou);
+  -webkit-backdrop-filter: var(--flou);
+  border: 1px solid var(--bordure-forte);
+  border-radius: var(--rayon-lg);
+}
+
+/* Tables plus douces */
+.tableau th { color: var(--texte-doux); font-weight: 600; }
+.tableau td, .tableau th { border-color: var(--bordure); }
+
+/* Bulles rondes de l'accueil (raccourcis) */
+.bulle-rond {
+  background: var(--fond-carte);
+  backdrop-filter: var(--flou);
+  -webkit-backdrop-filter: var(--flou);
+  border: 1px solid var(--bordure-forte);
+  color: var(--texte);
+  box-shadow: var(--ombre);
+}
+.bulle-raccourci:hover .bulle-rond,
+.bulle-raccourci:active .bulle-rond { background: var(--bordure-forte); }
+
+/* Titres */
+h1 { font-weight: 700; letter-spacing: -0.4px; }
+h2 { font-weight: 650; letter-spacing: -0.2px; }
+
+/* ---- Landing Kanabiz ---- */
+.landing-tete {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.2rem; max-width: 1100px; margin: 0 auto;
+}
+.landing-hero {
+  text-align: center; padding: 2.4rem 1.2rem 1.5rem; max-width: 780px; margin: 0 auto;
+}
+.landing-hero-logo { display: flex; justify-content: center; margin-bottom: 1rem; color: var(--texte); }
+.landing-hero h1 { font-size: clamp(1.8rem, 6vw, 3rem); line-height: 1.08; margin-bottom: 1rem; }
+.landing-hero .accentue {
+  background: linear-gradient(120deg, #7ee2ad, #4fd08a);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.landing-sous { color: var(--texte-doux); font-size: 1.08rem; max-width: 620px; margin: 0 auto 1.6rem; line-height: 1.5; }
+.landing-actions { display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap; }
+.landing-features {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem; max-width: 1000px; margin: 2.5rem auto; padding: 0 1.2rem;
+}
+.feature-card { text-align: left; }
+.feature-emoji { font-size: 1.8rem; margin-bottom: 0.5rem; }
+.feature-card h3 { margin: 0 0 0.35rem; font-size: 1.05rem; }
+.feature-card p { color: var(--texte-doux); margin: 0; line-height: 1.45; }
+.landing-etapes { max-width: 1000px; margin: 2rem auto; padding: 0 1.2rem; text-align: center; }
+.etapes-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-top: 1.2rem; }
+.etape-card { text-align: center; }
+.etape-num {
+  width: 2.4rem; height: 2.4rem; border-radius: 999px; margin: 0 auto 0.6rem;
+  display: flex; align-items: center; justify-content: center; font-weight: 700;
+  background: linear-gradient(135deg, #5bdd97, var(--accent-fonce)); color: var(--accent-contraste);
+}
+.landing-cta {
+  text-align: center; max-width: 640px; margin: 2.5rem auto; padding: 2rem 1.2rem;
+  display: flex; flex-direction: column; align-items: center; gap: 1rem; color: var(--texte);
+}
+.landing-pied {
+  display: flex; align-items: center; justify-content: center; gap: 1rem; flex-wrap: wrap;
+  padding: 2rem 1.2rem; color: var(--texte-doux); border-top: 1px solid var(--bordure); margin-top: 1.5rem;
+}
+.landing-liens { display: flex; gap: 1rem; }
+.landing-liens a { color: var(--texte-doux); text-decoration: none; }
+.landing-liens a:hover { color: var(--texte); }
+
+/* Aération desktop/tablette */
+@media (min-width: 700px) {
+  .cartes-kpi { grid-template-columns: repeat(4, 1fr); }
+  .contenu { padding: 1.5rem 1.5rem 3rem; }
 }

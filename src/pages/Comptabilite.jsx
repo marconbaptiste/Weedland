@@ -207,7 +207,7 @@ export default function Comptabilite() {
 
   function exporterPDF() {
     telechargerPDF(`comptabilite-${debut}_${fin}.pdf`, {
-      titre: 'Weedland — Comptabilité',
+      titre: 'Kanabiz — Comptabilité',
       sousTitre: `${formatDateFr(debut)} → ${formatDateFr(fin)}`,
       resume: [
         ['CA', formatEuros(caPeriode)],

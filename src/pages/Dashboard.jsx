@@ -190,7 +190,7 @@ export default function Dashboard() {
       `${r.pourcentage} %`, formatEuros(r.interessement),
     ]);
     telechargerPDF(`recap-${debut}_${fin}.pdf`, {
-      titre: 'Weedland — Récapitulatif',
+      titre: 'Kanabiz — Récapitulatif',
       sousTitre,
       resume,
       entetes,
