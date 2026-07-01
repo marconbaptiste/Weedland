@@ -1846,3 +1846,59 @@ h2 { font-weight: 650; letter-spacing: -0.2px; }
 .hub-emoji { font-size: 1.7rem; line-height: 1; }
 .hub-nom { font-weight: 650; }
 .hub-desc { color: var(--texte-doux); font-size: 0.85rem; line-height: 1.35; }
+
+/* ============================================================================
+   Cloisonnement écran + en-tête mobile (burger) + icônes
+   ============================================================================ */
+html, body { overflow-x: clip; max-width: 100%; }
+.app { width: 100%; max-width: 1200px; overflow-x: clip; }
+.contenu, .page, .card { max-width: 100%; }
+.entete-droite { min-width: 0; }
+
+/* Bouton icône rond (déconnexion, etc.) */
+.btn-icone {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; padding: 0; flex: none;
+  border-radius: 999px; cursor: pointer;
+  background: var(--fond-carte); border: 1px solid var(--bordure); color: var(--texte);
+}
+.btn-icone:hover { border-color: var(--bordure-forte); }
+.btn-icone svg { width: 18px; height: 18px; }
+
+/* Burger : masqué sur desktop */
+.burger { display: none; }
+.burger span { display: block; height: 2px; width: 20px; background: var(--texte); border-radius: 2px; transition: transform 0.2s, opacity 0.2s; }
+
+/* Sélecteur magasin plus compact */
+.select-magasin { max-width: 7.5rem; }
+
+@media (max-width: 720px) {
+  /* Le burger remplace la barre de nav en ligne */
+  .burger {
+    display: inline-flex; flex-direction: column; justify-content: center; gap: 5px;
+    width: 40px; height: 40px; padding: 0 10px; flex: none;
+    border-radius: 12px; cursor: pointer;
+    background: var(--fond-carte); border: 1px solid var(--bordure);
+  }
+  .burger.actif span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .burger.actif span:nth-child(2) { opacity: 0; }
+  .burger.actif span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+  .profil { display: none; }              /* gagne de la place */
+  .select-magasin { max-width: 6.2rem; font-size: 0.8rem; }
+  .entete-haut { padding: 0.6rem 0.8rem; }
+  .entete-droite { gap: 0.4rem; }
+
+  /* Nav repliée par défaut, dépliée en panneau vertical au clic burger */
+  .nav { display: none; }
+  .nav.ouvert {
+    display: flex; flex-direction: column; gap: 0.25rem;
+    padding: 0.5rem 0.7rem 0.7rem; overflow: visible;
+    border-top: 1px solid var(--bordure);
+  }
+  .nav.ouvert .nav-lien {
+    border-radius: 12px; padding: 0.85rem 1rem; font-size: 1rem;
+    white-space: normal;
+  }
+  .nav.ouvert .nav-lien.actif { background: var(--bordure-forte); }
+}
