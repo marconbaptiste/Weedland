@@ -208,7 +208,7 @@ export default function Profil() {
       {outil === 'scanner' && <ScannerFidelite onClose={fermerOutil} />}
 
       {estAdmin && (
-        <p className="periode-info">Tu es administrateur — retrouve la vue consolidée dans le Dashboard.</p>
+        <p className="periode-info">Tu es administrateur — retrouve la vue consolidée dans Comptabilité (menu Gestion).</p>
       )}
     </div>
   );

@@ -8,8 +8,7 @@ function sections(estSuperadmin) {
     {
       titre: 'Chiffres & pilotage',
       outils: [
-        { to: '/dashboard', emoji: '📊', nom: 'Tableau de bord', desc: 'CA, intéressement, vue consolidée + exports.' },
-        { to: '/comptabilite', emoji: '📈', nom: 'Comptabilité', desc: 'CA, charges, fournisseurs, bénéfice.' },
+        { to: '/comptabilite', emoji: '📈', nom: 'Comptabilité', desc: 'CA, bénéfice, intéressement/heures par employé, exports CSV/PDF.' },
         { to: '/journal', emoji: '🧾', nom: 'Journal', desc: 'Flux d’activité récent.' },
       ],
     },
