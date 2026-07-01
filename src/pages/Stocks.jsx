@@ -6,6 +6,8 @@ import { somme } from '../lib/comptabilite';
 import ChampMontant from '../components/ChampMontant';
 import ImportFacture from '../components/ImportFacture';
 import ListeCourses from '../components/ListeCourses';
+import HistoriqueStock from '../components/HistoriqueStock';
+import { journaliserMouvement } from '../lib/mouvementsStock';
 
 const UNITES = ['g', 'kg', 'mg', 'ml', 'pièce'];
 const FORM_VIDE = {
@@ -33,6 +35,7 @@ export default function Stocks() {
   const [editForm, setEditForm] = useState(FORM_VIDE);
   const [delta, setDelta] = useState({}); // id -> mouvement saisi (string)
   const [importOuvert, setImportOuvert] = useState(false);
+  const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
 
   const charger = useCallback(async () => {
     const { data } = await supabase
@@ -51,16 +54,30 @@ export default function Stocks() {
     e.preventDefault();
     const nom = form.nom.trim();
     if (!nom) return;
-    const { error } = await supabase.from('stocks').insert({
-      categorie: form.categorie.trim(),
-      nom,
-      quantite: parseMontant(form.quantite),
-      unite: form.unite,
-      seuil_alerte: parseMontant(form.seuil_alerte),
-      prix_achat: parseMontant(form.prix_achat),
-      prix_vente: parseMontant(form.prix_vente),
-    });
+    const quantite = parseMontant(form.quantite);
+    const { data, error } = await supabase
+      .from('stocks')
+      .insert({
+        categorie: form.categorie.trim(),
+        nom,
+        quantite,
+        unite: form.unite,
+        seuil_alerte: parseMontant(form.seuil_alerte),
+        prix_achat: parseMontant(form.prix_achat),
+        prix_vente: parseMontant(form.prix_vente),
+      })
+      .select('id')
+      .single();
     if (!error) {
+      if (quantite > 0) {
+        await journaliserMouvement({
+          stock_id: data?.id ?? null,
+          produit: nom,
+          delta: quantite,
+          quantite_apres: quantite,
+          motif: 'creation',
+        });
+      }
       setForm(FORM_VIDE);
       setCreationOuverte(false);
       charger();
@@ -83,12 +100,14 @@ export default function Stocks() {
   async function enregistrerEdition(id) {
     const nom = editForm.nom.trim();
     if (!nom) return;
+    const ancien = produits.find((p) => p.id === id);
+    const nouvelleQte = parseMontant(editForm.quantite);
     const { error } = await supabase
       .from('stocks')
       .update({
         categorie: editForm.categorie.trim(),
         nom,
-        quantite: parseMontant(editForm.quantite),
+        quantite: nouvelleQte,
         unite: editForm.unite,
         seuil_alerte: parseMontant(editForm.seuil_alerte),
         prix_achat: parseMontant(editForm.prix_achat),
@@ -96,6 +115,16 @@ export default function Stocks() {
       })
       .eq('id', id);
     if (!error) {
+      const ecart = ancien ? arrondi(nouvelleQte - Number(ancien.quantite)) : 0;
+      if (ecart !== 0) {
+        await journaliserMouvement({
+          stock_id: id,
+          produit: nom,
+          delta: ecart,
+          quantite_apres: nouvelleQte,
+          motif: 'correction',
+        });
+      }
       setEdition(null);
       charger();
     }
@@ -103,7 +132,18 @@ export default function Stocks() {
 
   async function supprimer(id) {
     if (!window.confirm('Supprimer ce produit du stock ?')) return;
-    await supabase.from('stocks').delete().eq('id', id);
+    const produit = produits.find((p) => p.id === id);
+    const { error } = await supabase.from('stocks').delete().eq('id', id);
+    if (!error && produit && Number(produit.quantite) > 0) {
+      // Le produit part avec sa quantité : on trace la sortie correspondante.
+      await journaliserMouvement({
+        stock_id: null, // la ligne stock disparaît (on delete set null)
+        produit: produit.nom,
+        delta: -Number(produit.quantite),
+        quantite_apres: 0,
+        motif: 'suppression',
+      });
+    }
     charger();
   }
 
@@ -114,6 +154,17 @@ export default function Stocks() {
     const nouvelle = Math.max(0, arrondi(Number(p.quantite) + signe * d));
     const { error } = await supabase.from('stocks').update({ quantite: nouvelle }).eq('id', p.id);
     if (!error) {
+      // On trace la variation réelle (le stock ne descend jamais sous 0).
+      const ecart = arrondi(nouvelle - Number(p.quantite));
+      if (ecart !== 0) {
+        await journaliserMouvement({
+          stock_id: p.id,
+          produit: p.nom,
+          delta: ecart,
+          quantite_apres: nouvelle,
+          motif: signe > 0 ? 'entree' : 'sortie',
+        });
+      }
       setDelta((x) => ({ ...x, [p.id]: '' }));
       charger();
     }
@@ -222,9 +273,14 @@ export default function Stocks() {
             <button type="button" className="btn" onClick={() => setImportOuvert(true)}>
               📄 Importer depuis une facture
             </button>
+            <button type="button" className="btn" onClick={() => setHistoriqueOuvert(true)}>
+              📋 Historique des mouvements
+            </button>
           </div>
         )}
       </div>
+
+      {historiqueOuvert && <HistoriqueStock onClose={() => setHistoriqueOuvert(false)} />}
 
       {importOuvert && (
         <ImportFacture

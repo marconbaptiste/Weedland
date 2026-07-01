@@ -5,6 +5,7 @@ import { formatEuros, formatDateFr, formatNombre } from '../lib/format';
 import { somme } from '../lib/comptabilite';
 import { cleEntete } from '../lib/csv';
 import { analyserFichiers, analyserChromes, analyserStocks } from '../lib/importHistorique';
+import { journaliserMouvement } from '../lib/mouvementsStock';
 
 const UNITES = ['g', 'kg', 'mg', 'ml', 'pièce'];
 
@@ -129,7 +130,7 @@ export default function Import() {
       const ex = map.get(cleEntete(l.nom));
       if (ex) {
         const q = ajouterQte ? Number(ex.quantite) + l.quantite : l.quantite;
-        aMaj.push({ id: ex.id, quantite: q });
+        aMaj.push({ id: ex.id, nom: ex.nom, quantite: q, delta: q - Number(ex.quantite) });
       } else {
         aInserer.push({
           categorie: cat || l.categorie || null,
@@ -144,12 +145,34 @@ export default function Import() {
     }
     const erreurs = [];
     if (aInserer.length) {
-      const { error } = await supabase.from('stocks').insert(aInserer);
+      const { data: crees, error } = await supabase.from('stocks').insert(aInserer).select('id, nom, quantite');
       if (error) erreurs.push(error.message);
+      // Trace chaque nouveau produit importé (mouvement d'entrée, motif import).
+      for (const c of crees ?? []) {
+        if (Number(c.quantite) > 0) {
+          await journaliserMouvement({
+            stock_id: c.id,
+            produit: c.nom,
+            delta: Number(c.quantite),
+            quantite_apres: Number(c.quantite),
+            motif: 'import',
+          });
+        }
+      }
     }
     for (const u of aMaj) {
       const { error } = await supabase.from('stocks').update({ quantite: u.quantite }).eq('id', u.id);
       if (error) { erreurs.push(error.message); break; }
+      // Trace la variation apportée par l'import (delta = ce qui a été ajouté).
+      if (u.delta) {
+        await journaliserMouvement({
+          stock_id: u.id,
+          produit: u.nom,
+          delta: u.delta,
+          quantite_apres: u.quantite,
+          motif: 'import',
+        });
+      }
     }
     setEnCours(false);
     if (erreurs.length) { setStatut(`Erreur — ${erreurs.join(' · ')}`); return; }
