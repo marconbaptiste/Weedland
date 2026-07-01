@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatEuros, formatNombre, formatDateFr } from '../lib/format';
-import { aujourdhuiISO, intervallePeriode } from '../lib/dates';
+import { aujourdhuiISO, intervallePeriode, decalerReference } from '../lib/dates';
 import { somme } from '../lib/comptabilite';
 import { telechargerCSV, telechargerPDF } from '../lib/export';
 
@@ -211,7 +211,7 @@ export default function Dashboard() {
             ['semaine', 'Semaine'],
             ['mois', 'Mois'],
             ['annee', 'Année'],
-            ['perso', 'Période'],
+            ['perso', 'Sur-mesure'],
           ].map(([p, libelle]) => (
             <button key={p} className={periode === p ? 'actif' : ''} onClick={() => setPeriode(p)}>
               {libelle}
@@ -231,8 +231,26 @@ export default function Dashboard() {
           </div>
         ) : (
           <label className="field">
-            <span>Date de référence</span>
-            <input type="date" value={reference} onChange={(e) => setReference(e.target.value)} />
+            <span>{periode === 'jour' ? 'Jour' : periode === 'semaine' ? 'Semaine du' : periode === 'annee' ? 'Année' : 'Mois'}</span>
+            <div className="nav-periode">
+              <button
+                type="button"
+                className="btn btn-discret"
+                onClick={() => setReference((r) => decalerReference(periode, r, -1))}
+                aria-label="Période précédente"
+              >
+                ‹
+              </button>
+              <input type="date" value={reference} onChange={(e) => setReference(e.target.value)} />
+              <button
+                type="button"
+                className="btn btn-discret"
+                onClick={() => setReference((r) => decalerReference(periode, r, 1))}
+                aria-label="Période suivante"
+              >
+                ›
+              </button>
+            </div>
           </label>
         )}
         <label className="field">
