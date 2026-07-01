@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifier, analyserFichiers, analyserChromes } from './importHistorique.js';
+import { classifier, analyserFichiers, analyserChromes, analyserStocks } from './importHistorique.js';
 import { parseCSV } from './csv.js';
 
 const REVENUS = `Date;CA;CB;Moro
@@ -67,5 +67,26 @@ describe('analyserChromes', () => {
     // montant avec virgule décimale dans un champ, séparateur ailleurs
     expect(r).toContainEqual({ date: '2026-06-11', surnom: 'Costaud (pote de Redouane)', type: 'avance', montant: 5.4 });
     expect(r).toContainEqual({ date: '2026-06-13', surnom: 'Mel', type: 'remboursement', montant: 20 });
+  });
+});
+
+describe('analyserStocks', () => {
+  it('mappe catégorie / produit / quantité avec en-têtes souples', () => {
+    const csv = `Catégorie;Produit;Quantité
+Fleurs;Amnesia;120,5
+Résines;Charas;30
+;;`; // ligne vide ignorée
+    const r = analyserStocks(csv);
+    expect(r).toHaveLength(2);
+    expect(r[0]).toEqual({ categorie: 'Fleurs', nom: 'Amnesia', quantite: 120.5 });
+    expect(r[1]).toEqual({ categorie: 'Résines', nom: 'Charas', quantite: 30 });
+  });
+
+  it('accepte des noms de colonnes variés (qté, article) et ignore les lignes sans produit', () => {
+    const csv = `article,qte
+Huile 10%,8
+,5`;
+    const r = analyserStocks(csv);
+    expect(r).toEqual([{ categorie: '', nom: 'Huile 10%', quantite: 8 }]);
   });
 });
