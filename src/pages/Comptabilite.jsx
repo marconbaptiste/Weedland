@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { parseMontant, formatEuros, formatDateFr } from '../lib/format';
+import { parseMontant, formatEuros, formatNombre, formatDateFr } from '../lib/format';
 import {
   premierDuMois,
   moisPrecedent,
@@ -10,7 +10,7 @@ import {
 } from '../lib/dates';
 import { useAuth } from '../auth/AuthProvider';
 import { somme } from '../lib/comptabilite';
-import { telechargerPDF } from '../lib/export';
+import { telechargerCSV, telechargerPDF } from '../lib/export';
 import { compresserImage } from '../lib/image';
 import { lireMontant } from '../lib/ocr';
 import ListeMontants from '../components/ListeMontants';
@@ -36,6 +36,14 @@ export default function Comptabilite() {
   const [charges, setCharges] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
   const [statutOcr, setStatutOcr] = useState('');
+  // Section « Équipe » (rapatriée de l'ancien Dashboard) : intéressement /
+  // heures par employé, filtrable par employé, + total des paiements.
+  const [employes, setEmployes] = useState([]);
+  const [employeFiltre, setEmployeFiltre] = useState('');
+  const [caEmpRows, setCaEmpRows] = useState([]); // v_ca_jour par clôture (avances/rembours.)
+  const [intRows, setIntRows] = useState([]); // v_interessement_employe (propriétaires + partagés)
+  const [chromesEmpRows, setChromesEmpRows] = useState([]); // chromes avec employe_id
+  const [totalPaiements, setTotalPaiements] = useState(0);
 
   const enMois = periode === 'mois';
   const [debut, fin] =
@@ -77,6 +85,45 @@ export default function Comptabilite() {
   useEffect(() => {
     charger();
   }, [charger]);
+
+  // Liste des employés (pour le filtre de la section Équipe).
+  useEffect(() => {
+    supabase.from('users').select('id, nom').order('nom').then(({ data }) => setEmployes(data ?? []));
+  }, []);
+
+  // Détail intéressement / heures par employé sur la période (section Équipe).
+  // Le filtre par employé n'agit QUE sur cette section (le CA global reste
+  // consolidé, tous employés confondus).
+  const chargerEquipe = useCallback(async () => {
+    let qCa = supabase
+      .from('v_ca_jour')
+      .select('caisse_id, date, employe_id, avances, remboursements')
+      .gte('date', debut)
+      .lte('date', fin);
+    let qInt = supabase
+      .from('v_interessement_employe')
+      .select('caisse_id, employe_id, date, est_proprietaire, heures_travaillees, pourcentage_interessement, ca_jour, encaissements, interessement')
+      .gte('date', debut)
+      .lte('date', fin)
+      .order('date', { ascending: false });
+    let qChr = supabase.from('chromes').select('date, employe_id, type, montant').gte('date', debut).lte('date', fin);
+    let qPay = supabase.from('paiements_employes').select('montant').gte('date', debut).lte('date', fin);
+    if (employeFiltre) {
+      qCa = qCa.eq('employe_id', employeFiltre);
+      qInt = qInt.eq('employe_id', employeFiltre);
+      qChr = qChr.eq('employe_id', employeFiltre);
+      qPay = qPay.eq('employe_id', employeFiltre);
+    }
+    const [ca, ir, chr, pay] = await Promise.all([qCa, qInt, qChr, qPay]);
+    setCaEmpRows(ca.data ?? []);
+    setIntRows(ir.data ?? []);
+    setChromesEmpRows(chr.data ?? []);
+    setTotalPaiements(somme((pay.data ?? []).map((p) => p.montant)));
+  }, [debut, fin, employeFiltre]);
+
+  useEffect(() => {
+    chargerEquipe();
+  }, [chargerEquipe]);
 
   // --- CRUD (mode Mois uniquement) ---
   const setteur = { charges: setCharges, fournisseurs: setFournisseurs };
@@ -205,6 +252,74 @@ export default function Comptabilite() {
     ...fournisseurs.map((f) => ({ label: f.libelle || 'Fournisseur', valeur: parseMontant(f.montant) })),
   ];
 
+  // --- Détail par employé (intéressement / heures), rapatrié du Dashboard ---
+  const nomEmploye = (id) => employes.find((e) => e.id === id)?.nom ?? '—';
+  const apportCaisse = new Map(caEmpRows.map((r) => [r.caisse_id, r]));
+  const lignesCloture = intRows.map((r) => {
+    const ca = apportCaisse.get(r.caisse_id);
+    return {
+      cle: `${r.caisse_id}:${r.employe_id}`,
+      date: r.date,
+      employe_id: r.employe_id,
+      est_proprietaire: r.est_proprietaire,
+      ca_jour: r.ca_jour,
+      encaissements: r.encaissements,
+      avances: r.est_proprietaire ? ca?.avances ?? 0 : null,
+      remboursements: r.est_proprietaire ? ca?.remboursements ?? 0 : null,
+      heures: r.heures_travaillees,
+      pourcentage: r.pourcentage_interessement,
+      interessement: r.interessement,
+    };
+  });
+  // Jours de chromes SANS clôture → lignes « hors clôture » (CA = avances − remb.).
+  const chromeParCle = new Map();
+  chromesEmpRows.forEach((c) => {
+    const cle = `${c.employe_id}|${c.date}`;
+    const v = chromeParCle.get(cle) ?? { avances: 0, remboursements: 0 };
+    if (c.type === 'avance') v.avances = somme([v.avances, c.montant]);
+    else v.remboursements = somme([v.remboursements, c.montant]);
+    chromeParCle.set(cle, v);
+  });
+  const closureCles = new Set(caEmpRows.map((r) => `${r.employe_id}|${r.date}`));
+  const lignesOrphelines = [...chromeParCle.entries()]
+    .filter(([cle]) => !closureCles.has(cle))
+    .map(([cle, v]) => {
+      const [employe_id, date] = cle.split('|');
+      return {
+        cle: `orphan:${cle}`,
+        date,
+        employe_id,
+        est_proprietaire: true,
+        orphelin: true,
+        ca_jour: somme([v.avances, -v.remboursements]),
+        encaissements: null,
+        avances: v.avances,
+        remboursements: v.remboursements,
+        heures: 0,
+        pourcentage: 0,
+        interessement: 0,
+      };
+    });
+  const lignesDetail = [...lignesCloture, ...lignesOrphelines].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return (b.est_proprietaire ? 1 : 0) - (a.est_proprietaire ? 1 : 0);
+  });
+  const nomLigne = (r) =>
+    nomEmploye(r.employe_id) + (r.orphelin ? ' (hors clôture)' : r.est_proprietaire ? '' : ' (partagé)');
+  const totalInteressement = somme(intRows.map((r) => r.interessement));
+  const totalHeures = somme(intRows.map((r) => r.heures_travaillees));
+
+  function exporterCSV() {
+    const entetes = [
+      'Date', 'Employé', 'Avances', 'Remboursements', 'CA', 'Encaissements', 'Heures', '% intéress.', 'Intéressement',
+    ];
+    const lignes = lignesDetail.map((r) => [
+      r.date, nomLigne(r), r.avances ?? '', r.remboursements ?? '',
+      r.ca_jour ?? '', r.encaissements ?? '', r.heures, r.pourcentage, r.interessement,
+    ]);
+    telechargerCSV(`comptabilite-${debut}_${fin}.csv`, entetes, lignes);
+  }
+
   function exporterPDF() {
     telechargerPDF(`comptabilite-${debut}_${fin}.pdf`, {
       titre: 'Kanabiz — Comptabilité',
@@ -216,6 +331,9 @@ export default function Comptabilite() {
         ['Fournisseurs', formatEuros(totalFournisseurs)],
         ['Bénéfice', formatEuros(benefice)],
         [`CA cumulé ${debut.slice(0, 4)}`, formatEuros(caAnnee)],
+        ['Intéressement', formatEuros(totalInteressement)],
+        ['Heures travaillées', `${formatNombre(totalHeures)} h`],
+        ['Paiements employés', formatEuros(totalPaiements)],
       ],
       sections: [
         enMois
@@ -223,6 +341,14 @@ export default function Comptabilite() {
           : { titre: 'CA par mois', entetes: ['Mois', 'CA'], lignes: parMois.map((m) => [m.mois, formatEuros(m.ca)]) },
         { titre: 'Charges', entetes: ['Libellé', 'Montant'], lignes: charges.map((c) => [c.libelle || '—', formatEuros(parseMontant(c.montant))]) },
         { titre: 'Fournisseurs', entetes: ['Libellé', 'Montant'], lignes: fournisseurs.map((f) => [f.libelle || '—', formatEuros(parseMontant(f.montant))]) },
+        {
+          titre: 'Intéressement & heures par employé',
+          entetes: ['Date', 'Employé', 'CA', 'Heures', 'Intéress.'],
+          lignes: lignesDetail.map((r) => [
+            formatDateFr(r.date), nomLigne(r), r.ca_jour != null ? formatEuros(r.ca_jour) : '—',
+            formatNombre(r.heures), formatEuros(r.interessement),
+          ]),
+        },
       ],
     });
   }
@@ -258,7 +384,10 @@ export default function Comptabilite() {
           </label>
         )}
 
-        <button type="button" className="btn" onClick={exporterPDF}>Export PDF</button>
+        <div className="form-inline">
+          <button type="button" className="btn" onClick={exporterCSV}>Export CSV / Excel</button>
+          <button type="button" className="btn" onClick={exporterPDF}>Export PDF</button>
+        </div>
         <p className="periode-info">{formatDateFr(debut)} → {formatDateFr(fin)}</p>
       </div>
 
@@ -336,6 +465,59 @@ export default function Comptabilite() {
           les charges et fournisseurs (avec justificatifs).
         </p>
       )}
+
+      <div className="card">
+        <div className="entete-client">
+          <h2>Équipe — intéressement &amp; heures</h2>
+          <label className="field filtre-employe">
+            <span>Employé</span>
+            <select value={employeFiltre} onChange={(e) => setEmployeFiltre(e.target.value)}>
+              <option value="">Tous</option>
+              {employes.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.nom}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="cartes-kpi">
+          <div className="kpi"><span className="kpi-label">Intéressement</span><span className="kpi-valeur">{formatEuros(totalInteressement)}</span></div>
+          <div className="kpi"><span className="kpi-label">Heures</span><span className="kpi-valeur">{formatNombre(totalHeures)} h</span></div>
+          <div className="kpi"><span className="kpi-label">Paiements employés</span><span className="kpi-valeur">{formatEuros(totalPaiements)}</span></div>
+        </div>
+        <table className="tableau">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Employé</th>
+              <th className="droite">CA</th>
+              <th className="droite">Encaiss.</th>
+              <th className="droite">Avances</th>
+              <th className="droite">Rembours.</th>
+              <th className="droite">Heures</th>
+              <th className="droite">Intéress.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lignesDetail.map((r) => (
+              <tr key={r.cle}>
+                <td>{formatDateFr(r.date)}</td>
+                <td>{nomLigne(r)}</td>
+                <td className="droite">{r.ca_jour != null ? formatEuros(r.ca_jour) : '—'}</td>
+                <td className="droite">{r.encaissements != null ? formatEuros(r.encaissements) : '—'}</td>
+                <td className="droite">{r.avances != null ? formatEuros(r.avances) : '—'}</td>
+                <td className="droite">{r.remboursements != null ? formatEuros(r.remboursements) : '—'}</td>
+                <td className="droite">{formatNombre(r.heures)}</td>
+                <td className="droite">{formatEuros(r.interessement)}</td>
+              </tr>
+            ))}
+            {lignesDetail.length === 0 && (
+              <tr><td colSpan={8} className="vide">Aucune donnée sur la période.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <div className="card recap">
         <div className="recap-ligne"><span>CA</span><strong>{formatEuros(caPeriode)}</strong></div>

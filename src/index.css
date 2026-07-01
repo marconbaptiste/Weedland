@@ -1309,6 +1309,13 @@ details > summary {
   align-self: flex-start;
   margin-top: 0.35rem;
 }
+/* Filtre « employé » dans l'en-tête de la section Équipe (Comptabilité). */
+.filtre-employe {
+  min-width: 8rem;
+}
+.filtre-employe select {
+  min-height: 36px;
+}
 .cartes-kpi {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

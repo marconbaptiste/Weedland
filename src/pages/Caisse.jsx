@@ -20,16 +20,6 @@ export default function Caisse() {
         ? 'Toutes les clôtures du mois, tous les employés.'
         : 'Vos clôtures passées et journées partagées.',
     },
-    ...(estAdmin
-      ? [
-          {
-            to: '/dashboard',
-            emoji: '📊',
-            nom: 'Tableau de bord',
-            desc: 'CA, intéressement, vue consolidée + exports.',
-          },
-        ]
-      : []),
   ];
 
   return (
