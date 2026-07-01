@@ -106,3 +106,25 @@ export function analyserChromes(texte) {
   }
   return out;
 }
+
+/**
+ * Analyse un CSV de stocks (colonnes catégorie / produit / quantité, en-têtes
+ * souples). Renvoie [{ categorie, nom, quantite }] pour les lignes ayant un nom.
+ * Fonction pure (testée).
+ */
+export function analyserStocks(texte) {
+  const rows = parseCSVObjets(texte);
+  if (rows.length === 0) return [];
+  const cles = Object.keys(rows[0]);
+  const trouver = (cands) => cles.find((k) => cands.some((c) => k.includes(c)));
+  const kCat = trouver(['categorie', 'category', 'famille', 'rayon']);
+  const kNom = trouver(['produit', 'article', 'designation', 'libelle', 'nom', 'product']);
+  const kQte = trouver(['quantite', 'quantity', 'qte', 'qty', 'stock']);
+  return rows
+    .map((r) => ({
+      categorie: (kCat ? r[kCat] : '').trim(),
+      nom: (kNom ? r[kNom] : '').trim(),
+      quantite: parseMontant(kQte ? r[kQte] : '0'),
+    }))
+    .filter((r) => r.nom);
+}
