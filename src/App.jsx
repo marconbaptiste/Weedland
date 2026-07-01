@@ -11,6 +11,8 @@ import Carte from './pages/Carte';
 import RejoindreCarte from './pages/RejoindreCarte';
 import Profil from './pages/Profil';
 import Caisse from './pages/Caisse';
+import Cloture from './pages/Cloture';
+import Historique from './pages/Historique';
 import Chromes from './pages/Chromes';
 import Fidelite from './pages/Fidelite';
 import Stocks from './pages/Stocks';
@@ -56,6 +58,8 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Accueil />} />
           <Route path="caisse" element={<Caisse />} />
+          <Route path="caisse/cloture" element={<Cloture />} />
+          <Route path="caisse/historique" element={<Historique />} />
           <Route path="chromes" element={<Chromes />} />
           <Route path="stocks" element={<Stocks />} />
           <Route path="support" element={<Support />} />

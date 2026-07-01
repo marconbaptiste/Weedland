@@ -38,10 +38,10 @@ export default function GuideDemarrage() {
         { ok: etat.produits > 0, texte: 'Ajoute tes produits en stock', lien: '/stocks', libLien: 'Stocks' },
         { ok: etat.employes > 1, texte: 'Crée les comptes de tes employés', lien: '/comptes', libLien: 'Comptes' },
         { ok: etat.clients > 0, texte: 'Enregistre tes premiers clients', lien: '/chromes', libLien: 'Clients' },
-        { ok: etat.clotures > 0, texte: 'Fais ta première clôture de caisse', lien: '/caisse', libLien: 'Caisse' },
+        { ok: etat.clotures > 0, texte: 'Fais ta première clôture de caisse', lien: '/caisse/cloture', libLien: 'Clôture' },
       ]
     : [
-        { ok: etat.clotures > 0, texte: 'Fais ta première clôture de caisse', lien: '/caisse', libLien: 'Caisse' },
+        { ok: etat.clotures > 0, texte: 'Fais ta première clôture de caisse', lien: '/caisse/cloture', libLien: 'Clôture' },
         { ok: etat.chromes > 0, texte: 'Enregistre une avance ou un remboursement client', lien: '/chromes', libLien: 'Clients' },
       ];
   const faites = etapes.filter((e) => e.ok).length;
