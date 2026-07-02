@@ -191,12 +191,24 @@ export default function Chromes() {
     }
   }
 
+  // Édition partagée de la fiche (surnom / téléphone / note) via la fonction
+  // SECURITY DEFINER `client_maj` : tout membre du magasin peut corriger une
+  // fiche, sans pouvoir toucher aux colonnes sensibles (fidélité, magasin…).
+  async function majFiche({ surnom, telephone, description }) {
+    return supabase.rpc('client_maj', {
+      p_client: clientSel.client_id,
+      p_surnom: surnom,
+      p_telephone: telephone,
+      p_note: description,
+    });
+  }
+
   async function renommerClient() {
     const surnom = window.prompt('Nouveau surnom du client :', clientSel.surnom);
     if (surnom == null) return;
     const s = surnom.trim();
     if (!s) return;
-    const { error } = await supabase.from('clients').update({ surnom: s }).eq('id', clientSel.client_id);
+    const { error } = await majFiche({ surnom: s, telephone: clientSel.telephone, description: clientSel.description });
     if (error) {
       setMsgClient(`Renommage impossible : ${error.message}`);
       return;
@@ -213,10 +225,7 @@ export default function Chromes() {
     );
     if (saisie == null) return;
     const telephone = saisie.trim() || null;
-    const { error } = await supabase
-      .from('clients')
-      .update({ telephone })
-      .eq('id', clientSel.client_id);
+    const { error } = await majFiche({ surnom: clientSel.surnom, telephone, description: clientSel.description });
     if (error) {
       setMsgClient(`Modification impossible : ${error.message}`);
       return;
@@ -226,13 +235,15 @@ export default function Chromes() {
     chargerClients();
   }
 
-  // Note interne (= description du client) — édition réservée à l'admin (RLS).
+  // Note interne (= description du client) — éditable par tout membre du magasin
+  // via `client_maj` (fonction SECURITY DEFINER, colonnes limitées).
   async function enregistrerNote() {
     const valeur = note.trim() || null;
-    const { error } = await supabase
-      .from('clients')
-      .update({ description: valeur })
-      .eq('id', clientSel.client_id);
+    const { error } = await majFiche({
+      surnom: clientSel.surnom,
+      telephone: clientSel.telephone,
+      description: valeur,
+    });
     if (error) {
       setNoteMsg(`Enregistrement impossible : ${error.message}`);
       return;
@@ -561,7 +572,7 @@ export default function Chromes() {
                   📞 <a href={`tel:${clientSel.telephone.replace(/\s/g, '')}`}>{clientSel.telephone}</a>
                 </p>
               )}
-              {ongletClient === 'fiche' && estAdmin && (
+              {ongletClient === 'fiche' && (
                 <div className="form-inline">
                   <button type="button" className="btn" onClick={renommerClient}>
                     Renommer
@@ -569,9 +580,11 @@ export default function Chromes() {
                   <button type="button" className="btn" onClick={modifierTelephone}>
                     {clientSel.telephone ? 'Modifier le téléphone' : 'Ajouter un téléphone'}
                   </button>
-                  <button type="button" className="btn btn-discret" onClick={supprimerClient}>
-                    Supprimer la fiche
-                  </button>
+                  {estAdmin && (
+                    <button type="button" className="btn btn-discret" onClick={supprimerClient}>
+                      Supprimer la fiche
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -868,22 +881,18 @@ export default function Chromes() {
                   </div>
                   <p className="statut">
                     Repère interne pour le personnel (jamais de nom réel).
-                    {estAdmin ? '' : ' Seul l’admin peut la modifier.'}
                   </p>
                   <textarea
                     rows={5}
                     value={note}
-                    disabled={!estAdmin}
                     onChange={(e) => setNote(e.target.value)}
                     placeholder="Signe distinctif, préférences, rappel…"
                   />
-                  {estAdmin && (
-                    <div className="form-inline">
-                      <button type="button" className="btn btn-primary" onClick={enregistrerNote}>
-                        Enregistrer la note
-                      </button>
-                    </div>
-                  )}
+                  <div className="form-inline">
+                    <button type="button" className="btn btn-primary" onClick={enregistrerNote}>
+                      Enregistrer la note
+                    </button>
+                  </div>
                   {noteMsg && <p className="statut">{noteMsg}</p>}
                 </div>
               )}
