@@ -389,9 +389,14 @@ textarea:focus {
   /* safe-area (encoche / barre d'accueil) quand l'app est en plein écran. */
   padding: calc(1rem + env(safe-area-inset-top)) 1rem calc(1rem + env(safe-area-inset-bottom));
 }
-.carte-connexion {
+/* Carte de connexion / inscription : sélecteur double (.card.carte-connexion)
+   pour battre la règle générique « .card { max-width: 100% } » déclarée plus
+   bas — sinon sur tablette/ordinateur la carte s'étale et la mise en page casse
+   (texte de consentement repoussé). Toujours centrée, largeur confortable. */
+.card.carte-connexion {
   width: 100%;
-  max-width: 360px;
+  max-width: 380px;
+  margin: 0 auto;
 }
 .logo-connexion {
   text-align: center;
