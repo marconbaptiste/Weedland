@@ -225,11 +225,10 @@ export default function Carte() {
   return (
     <div className="page-connexion">
       <div className="card carte-connexion" style={{ textAlign: 'center' }}>
-        {etat.logo ? (
+        {etat.logo && (
           <img className="carte-logo" src={urlLogo(etat.logo)} alt={etat.magasin || 'Logo du magasin'} />
-        ) : (
-          <span className="logo">{etat.magasin || NOM}</span>
         )}
+        <span className="logo carte-nom-magasin">{etat.magasin || NOM}</span>
         <h1 className="logo-connexion">🎟️ Ma carte de fidélité</h1>
         <p className="statut">
           <strong>{etat.surnom}</strong>

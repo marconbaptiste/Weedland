@@ -1323,6 +1323,11 @@ details > summary {
   margin: 0 auto 0.4rem;
   display: block;
 }
+.carte-nom-magasin {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
 .apercu-logo {
   display: flex;
   justify-content: center;
