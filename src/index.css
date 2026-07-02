@@ -110,8 +110,10 @@ h2 {
 }
 .contenu {
   padding: 1rem;
-  /* Marge basse pour que le bouton flottant ne masque pas le dernier contenu. */
-  padding-bottom: 5rem;
+  /* Marge basse pour que le bouton flottant ne masque pas le dernier contenu.
+     + safe-area en bas pour ne pas passer sous la barre d'accueil (app plein
+     écran ajoutée à l'écran d'accueil). */
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom));
 }
 .page {
   display: flex;
@@ -384,7 +386,8 @@ textarea:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  /* safe-area (encoche / barre d'accueil) quand l'app est en plein écran. */
+  padding: calc(1rem + env(safe-area-inset-top)) 1rem calc(1rem + env(safe-area-inset-bottom));
 }
 .carte-connexion {
   width: 100%;
