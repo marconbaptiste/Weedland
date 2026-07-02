@@ -3,6 +3,7 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { exporterMagasin } from '../lib/exportMagasin';
+import BoutonAbonnement from './BoutonAbonnement';
 
 /** Écran affiché quand l'abonnement du magasin est expiré / suspendu. */
 function AbonnementExpire() {
@@ -43,6 +44,7 @@ function AbonnementExpire() {
         </p>
         {estAdmin && (
           <>
+            <BoutonAbonnement libelle="💳 Gérer mon abonnement" className="btn btn-primary" />
             <button className="btn" onClick={exporter} disabled={enExport}>
               {enExport ? 'Export…' : '⬇️ Exporter mes données'}
             </button>
