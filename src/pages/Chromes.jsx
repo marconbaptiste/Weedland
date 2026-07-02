@@ -35,6 +35,11 @@ export default function Chromes() {
   const [nouveau, setNouveau] = useState({ surnom: '', description: '', telephone: '' });
   const [creationOuverte, setCreationOuverte] = useState(false);
 
+  // Fenêtre client scindée en 3 onglets-boutons : Fiche / Chromes / Note.
+  const [ongletClient, setOngletClient] = useState('fiche'); // 'fiche' | 'chromes' | 'note'
+  const [note, setNote] = useState('');
+  const [noteMsg, setNoteMsg] = useState('');
+
   const [type, setType] = useState('avance');
   const [montant, setMontant] = useState('');
   const [date, setDate] = useState(aujourdhuiISO());
@@ -111,6 +116,9 @@ export default function Chromes() {
     async (client) => {
       setClientSel(client);
       setMsgClient('');
+      setOngletClient('fiche');
+      setNote(client.description ?? '');
+      setNoteMsg('');
       const [{ data: chr }, { data: pr }] = await Promise.all([
         supabase
           .from('chromes')
@@ -215,6 +223,22 @@ export default function Chromes() {
     }
     setClientSel((c) => ({ ...c, telephone }));
     setMsgClient('Téléphone mis à jour ✅');
+    chargerClients();
+  }
+
+  // Note interne (= description du client) — édition réservée à l'admin (RLS).
+  async function enregistrerNote() {
+    const valeur = note.trim() || null;
+    const { error } = await supabase
+      .from('clients')
+      .update({ description: valeur })
+      .eq('id', clientSel.client_id);
+    if (error) {
+      setNoteMsg(`Enregistrement impossible : ${error.message}`);
+      return;
+    }
+    setClientSel((c) => ({ ...c, description: valeur }));
+    setNoteMsg('Note enregistrée ✅');
     chargerClients();
   }
 
@@ -518,15 +542,26 @@ export default function Chromes() {
                   {statutSolde(solde)} · {formatEuros(solde)}
                 </span>
               </div>
-              {clientSel.telephone && (
+              {/* 3 onglets-boutons : Fiche / Chromes / Note */}
+              <div className="bascule">
+                <button type="button" className={ongletClient === 'fiche' ? 'actif' : ''} onClick={() => setOngletClient('fiche')}>
+                  Fiche
+                </button>
+                <button type="button" className={ongletClient === 'chromes' ? 'actif' : ''} onClick={() => setOngletClient('chromes')}>
+                  Chromes
+                </button>
+                <button type="button" className={ongletClient === 'note' ? 'actif' : ''} onClick={() => setOngletClient('note')}>
+                  Note
+                </button>
+              </div>
+              {msgClient && <p className="statut">{msgClient}</p>}
+
+              {ongletClient === 'fiche' && clientSel.telephone && (
                 <p className="telephone-client">
                   📞 <a href={`tel:${clientSel.telephone.replace(/\s/g, '')}`}>{clientSel.telephone}</a>
                 </p>
               )}
-              {clientSel.description && (
-                <p className="description-client">{clientSel.description}</p>
-              )}
-              {estAdmin && (
+              {ongletClient === 'fiche' && estAdmin && (
                 <div className="form-inline">
                   <button type="button" className="btn" onClick={renommerClient}>
                     Renommer
@@ -539,8 +574,8 @@ export default function Chromes() {
                   </button>
                 </div>
               )}
-              {msgClient && <p className="statut">{msgClient}</p>}
 
+              {ongletClient === 'chromes' && (
               <div className="section-promos">
                 <div className="entete-client">
                   <h3>💸 Chromes — avances / remboursements</h3>
@@ -674,7 +709,9 @@ export default function Chromes() {
                   </tbody>
                 </table>
               </div>
+              )}
 
+              {ongletClient === 'fiche' && (
               <div className="section-promos">
                 <div className="entete-client">
                   <h3>🎟️ Carte de fidélité</h3>
@@ -724,7 +761,9 @@ export default function Chromes() {
                   <p className="statut">{fidelite.recompenses} récompense(s) déjà utilisée(s).</p>
                 )}
               </div>
+              )}
 
+              {ongletClient === 'fiche' && (
               <div className="section-promos">
                 <div className="entete-client">
                   <h3>★ Promos / traitements de faveur</h3>
@@ -820,6 +859,34 @@ export default function Chromes() {
                   {promos.length === 0 && <li className="vide">Aucune promo enregistrée.</li>}
                 </ul>
               </div>
+              )}
+
+              {ongletClient === 'note' && (
+                <div className="section-promos">
+                  <div className="entete-client">
+                    <h3>📝 Note interne</h3>
+                  </div>
+                  <p className="statut">
+                    Repère interne pour le personnel (jamais de nom réel).
+                    {estAdmin ? '' : ' Seul l’admin peut la modifier.'}
+                  </p>
+                  <textarea
+                    rows={5}
+                    value={note}
+                    disabled={!estAdmin}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Signe distinctif, préférences, rappel…"
+                  />
+                  {estAdmin && (
+                    <div className="form-inline">
+                      <button type="button" className="btn btn-primary" onClick={enregistrerNote}>
+                        Enregistrer la note
+                      </button>
+                    </div>
+                  )}
+                  {noteMsg && <p className="statut">{noteMsg}</p>}
+                </div>
+              )}
           </div>
         </div>
       )}
