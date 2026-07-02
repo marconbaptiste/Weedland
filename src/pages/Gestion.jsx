@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
+import BoutonAbonnement from '../components/BoutonAbonnement';
 
 // Hub d'administration (regroupe les anciens liens du menu admin en une seule
 // entrée « Gestion » → grille de cartes, plus court et ergonomique sur mobile).
@@ -51,6 +52,21 @@ export default function Gestion() {
           </div>
         </section>
       ))}
+
+      {/* Abonnement — self-service pour l'admin du magasin (le superadmin, lui,
+          gère les abonnements depuis le pilote). */}
+      {!estSuperadmin && (
+        <section className="hub-section">
+          <h2>Abonnement</h2>
+          <div className="card">
+            <p className="statut">
+              Gère ton moyen de paiement, retrouve tes factures ou résilie ton abonnement (portail
+              sécurisé Stripe).
+            </p>
+            <BoutonAbonnement />
+          </div>
+        </section>
+      )}
     </div>
   );
 }
