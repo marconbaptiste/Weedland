@@ -20,6 +20,7 @@ export function AuthProvider({ children }) {
   const [profilPret, setProfilPret] = useState(false);
   const [magasins, setMagasins] = useState([]); // liste (super-admin uniquement)
   const [magasinInfo, setMagasinInfo] = useState(null); // abonnement du magasin courant
+  const [magasinLogo, setMagasinLogo] = useState(null); // chemin du logo (bucket public)
 
   // Suivi de la session Supabase (persistée ~30 j et rafraîchie automatiquement).
   useEffect(() => {
@@ -80,14 +81,18 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!profil?.magasin_id) {
       setMagasinInfo(null);
+      setMagasinLogo(null);
       return;
     }
     supabase
       .from('magasins')
-      .select('abonnement, essai_fin')
+      .select('abonnement, essai_fin, logo')
       .eq('id', profil.magasin_id)
       .single()
-      .then(({ data }) => setMagasinInfo(data ?? null));
+      .then(({ data }) => {
+        setMagasinInfo(data ?? null);
+        setMagasinLogo(data?.logo ?? null);
+      });
   }, [profil?.magasin_id]);
 
   const estSuperadmin = profil?.role === 'superadmin';
@@ -115,6 +120,8 @@ export function AuthProvider({ children }) {
     magasins,
     magasinId: profil?.magasin_id ?? null,
     magasinInfo,
+    magasinLogo,
+    setMagasinLogo,
     magasinBloque,
     changerMagasin,
     chargement,

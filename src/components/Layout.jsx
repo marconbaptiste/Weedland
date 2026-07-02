@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import Aide from './Aide';
 import Logo from './Logo';
+import { urlLogo } from '../lib/logo';
 
 const lienActif = ({ isActive }) => (isActive ? 'nav-lien actif' : 'nav-lien');
 
@@ -18,8 +19,9 @@ function IconeDeconnexion() {
 }
 
 export default function Layout() {
-  const { profil, estAdmin, estSuperadmin, magasins, magasinId, changerMagasin, deconnexion } =
+  const { profil, estAdmin, estSuperadmin, magasins, magasinId, magasinLogo, changerMagasin, deconnexion } =
     useAuth();
+  const logoUrl = urlLogo(magasinLogo);
   const [menu, setMenu] = useState(false); // menu burger (mobile)
   const fermer = () => setMenu(false);
 
@@ -27,7 +29,11 @@ export default function Layout() {
     <div className="app">
       <header className="entete">
         <div className="entete-haut">
-          <Logo />
+          {logoUrl ? (
+            <img className="logo-magasin" src={logoUrl} alt="Logo du magasin" />
+          ) : (
+            <Logo />
+          )}
           <div className="entete-droite">
             {estSuperadmin && magasins.length > 0 && (
               <select

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { NOM } from '../lib/marque';
+import { urlLogo } from '../lib/logo';
 import QRClient from '../components/QRClient';
 
 // Génère l'icône de la carte de fidélité (🎟️ sur fond sombre arrondi) en PNG
@@ -58,7 +59,7 @@ export default function Carte() {
       return;
     }
     const r = data[0];
-    setEtat({ token: r.token, surnom: r.surnom, tampons: r.tampons, palier: r.palier, magasin: r.magasin });
+    setEtat({ token: r.token, surnom: r.surnom, tampons: r.tampons, palier: r.palier, magasin: r.magasin, logo: r.logo });
     setPromos(prs ?? []);
   }, [clientId]);
 
@@ -224,7 +225,11 @@ export default function Carte() {
   return (
     <div className="page-connexion">
       <div className="card carte-connexion" style={{ textAlign: 'center' }}>
-        <span className="logo">{NOM}</span>
+        {etat.logo ? (
+          <img className="carte-logo" src={urlLogo(etat.logo)} alt={etat.magasin || 'Logo du magasin'} />
+        ) : (
+          <span className="logo">{etat.magasin || NOM}</span>
+        )}
         <h1 className="logo-connexion">🎟️ Ma carte de fidélité</h1>
         <p className="statut">
           <strong>{etat.surnom}</strong>
