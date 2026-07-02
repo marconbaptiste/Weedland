@@ -614,57 +614,63 @@ export default function Chromes() {
                     {lignes.map((l) =>
                       editChrome === l.id ? (
                         <tr key={l.id}>
-                          <td>
-                            <input
-                              type="date"
-                              value={editChromeForm.date}
-                              onChange={(e) => setEditChromeForm((f) => ({ ...f, date: e.target.value }))}
-                            />
-                            <select
-                              value={editChromeForm.employe_id ?? ''}
-                              onChange={(e) =>
-                                setEditChromeForm((f) => ({ ...f, employe_id: e.target.value }))
-                              }
-                              aria-label="Employé attribué"
-                            >
-                              {employes.map((emp) => (
-                                <option key={emp.id} value={emp.id}>
-                                  {emp.nom}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="droite">
-                            <select
-                              value={editChromeForm.type}
-                              onChange={(e) => setEditChromeForm((f) => ({ ...f, type: e.target.value }))}
-                            >
-                              <option value="avance">Avance</option>
-                              <option value="remboursement">Remboursement</option>
-                            </select>
-                            <input
-                              className="champ-pourcentage"
-                              type="text"
-                              inputMode="decimal"
-                              value={editChromeForm.montant}
-                              onChange={(e) => setEditChromeForm((f) => ({ ...f, montant: e.target.value }))}
-                            />
-                          </td>
-                          <td className="actions-cellule">
-                            <button
-                              type="button"
-                              className="btn btn-discret"
-                              onClick={() => enregistrerEditChrome(l.id)}
-                            >
-                              Enregistrer
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-discret"
-                              onClick={() => setEditChrome(null)}
-                            >
-                              Annuler
-                            </button>
+                          <td colSpan={3}>
+                            <div className="bloc-form">
+                              <label className="field">
+                                <span>Date</span>
+                                <input
+                                  type="date"
+                                  value={editChromeForm.date}
+                                  onChange={(e) => setEditChromeForm((f) => ({ ...f, date: e.target.value }))}
+                                />
+                              </label>
+                              <label className="field">
+                                <span>Employé</span>
+                                <select
+                                  value={editChromeForm.employe_id ?? ''}
+                                  onChange={(e) =>
+                                    setEditChromeForm((f) => ({ ...f, employe_id: e.target.value }))
+                                  }
+                                >
+                                  {employes.map((emp) => (
+                                    <option key={emp.id} value={emp.id}>
+                                      {emp.nom}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="field">
+                                <span>Type</span>
+                                <select
+                                  value={editChromeForm.type}
+                                  onChange={(e) => setEditChromeForm((f) => ({ ...f, type: e.target.value }))}
+                                >
+                                  <option value="avance">Avance</option>
+                                  <option value="remboursement">Remboursement</option>
+                                </select>
+                              </label>
+                              <ChampMontant
+                                label="Montant"
+                                valeur={editChromeForm.montant}
+                                onChange={(v) => setEditChromeForm((f) => ({ ...f, montant: v }))}
+                              />
+                              <div className="form-inline">
+                                <button
+                                  type="button"
+                                  className="btn btn-primary"
+                                  onClick={() => enregistrerEditChrome(l.id)}
+                                >
+                                  Enregistrer
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn"
+                                  onClick={() => setEditChrome(null)}
+                                >
+                                  Annuler
+                                </button>
+                              </div>
+                            </div>
                           </td>
                         </tr>
                       ) : (
