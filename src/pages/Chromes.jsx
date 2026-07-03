@@ -8,6 +8,15 @@ import ChampMontant from '../components/ChampMontant';
 import ModaleQR from '../components/ModaleQR';
 import ModaleQRInscription from '../components/ModaleQRInscription';
 
+// Heure locale « HH:mm » d'un horodatage (affichée à côté de la date d'un chrome).
+const formatHeure = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ''
+    : new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(d);
+};
+
 // Module 2 — Chromes (avances / crédits clients).
 // RGPD : les clients sont identifiés par un SURNOM uniquement, jamais par leur
 // nom/prénom réel. La description est interne (visible seulement du personnel).
@@ -104,7 +113,7 @@ export default function Chromes() {
       const [{ data: chr }, { data: pr }] = await Promise.all([
         supabase
           .from('chromes')
-          .select('id, type, montant, date, employe_id, users(nom)')
+          .select('id, type, montant, date, created_at, employe_id, users(nom)')
           .eq('client_id', client.client_id)
           .order('date', { ascending: false })
           .order('created_at', { ascending: false }),
@@ -675,7 +684,10 @@ export default function Chromes() {
                         </tr>
                       ) : (
                         <tr key={l.id}>
-                          <td>{formatDateFr(l.date)}</td>
+                          <td>
+                            {formatDateFr(l.date)}
+                            {l.created_at && <span className="chrome-heure"> · {formatHeure(l.created_at)}</span>}
+                          </td>
                           <td className={`droite ${l.type === 'avance' ? 'dette' : 'solde-ok'}`}>
                             {l.type === 'avance' ? '+' : '−'} {formatEuros(l.montant)}
                           </td>

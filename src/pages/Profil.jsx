@@ -15,56 +15,50 @@ import ListeCourses from '../components/ListeCourses';
 // jour vit désormais sur la page Clients.
 export default function Profil() {
   const { utilisateur, profil, estAdmin } = useAuth();
-  const [stats, setStats] = useState({ caJour: 0, caSemaine: 0 });
-  const [statsPerso, setStatsPerso] = useState({ caMois: 0, intMois: 0, caAnnee: 0, intAnnee: 0 });
+  const aInteressement = (profil?.pourcentage_interessement ?? 0) > 0;
+  const [stats, setStats] = useState({ caJour: 0 });
+  const [statsPerso, setStatsPerso] = useState({ intMois: 0, intAnnee: 0 });
   const [outil, setOutil] = useState(null); // 'monnaie' | 'scanner' | 'courses' | null
   const [nbCourses, setNbCourses] = useState(0);
   const [coursesNouveau, setCoursesNouveau] = useState(false);
   const vusRef = useRef(null); // nb d'articles « déjà vus » (référence notif)
   const coursesOuvertRef = useRef(false);
 
+  // CA du jour de l'employé connecté (encaissements + avances − remboursements).
   useEffect(() => {
     const today = aujourdhuiISO();
-    const [deb, fin] = intervallePeriode('semaine');
     (async () => {
       const [{ data: cl }, { data: chr }] = await Promise.all([
-        supabase.from('v_ca_jour').select('date, encaissements').eq('employe_id', utilisateur.id).gte('date', deb).lte('date', fin),
-        supabase.from('chromes').select('date, type, montant, clients(surnom)').eq('employe_id', utilisateur.id).gte('date', deb).lte('date', fin),
+        supabase.from('v_ca_jour').select('encaissements').eq('employe_id', utilisateur.id).eq('date', today),
+        supabase.from('chromes').select('type, montant').eq('employe_id', utilisateur.id).eq('date', today),
       ]);
-      const enc = (d) => somme((cl ?? []).filter((r) => d(r.date)).map((r) => r.encaissements));
-      const av = (d) => somme((chr ?? []).filter((c) => c.type === 'avance' && d(c.date)).map((c) => c.montant));
-      const rb = (d) => somme((chr ?? []).filter((c) => c.type === 'remboursement' && d(c.date)).map((c) => c.montant));
-      const jour = (x) => x === today;
-      const tout = () => true;
-      setStats({
-        caJour: somme([enc(jour), av(jour), -rb(jour)]),
-        caSemaine: somme([enc(tout), av(tout), -rb(tout)]),
-      });
+      const enc = somme((cl ?? []).map((r) => r.encaissements));
+      const av = somme((chr ?? []).filter((c) => c.type === 'avance').map((c) => c.montant));
+      const rb = somme((chr ?? []).filter((c) => c.type === 'remboursement').map((c) => c.montant));
+      setStats({ caJour: somme([enc, av, -rb]) });
     })();
   }, [utilisateur.id]);
 
-  // Récap personnel : CA + intéressement du mois et de l'année (déplacé depuis
-  // la page Caisse).
+  // Intéressement du mois et de l'année (affiché uniquement si l'employé a un taux).
   useEffect(() => {
+    if (!aInteressement) return;
     (async () => {
       const [aDeb, aFin] = intervalleAnnee();
       const [mDeb, mFin] = intervallePeriode('mois');
       const { data } = await supabase
         .from('v_interessement_employe')
-        .select('date, est_proprietaire, ca_jour, interessement')
+        .select('date, interessement')
         .eq('employe_id', utilisateur.id)
         .gte('date', aDeb)
         .lte('date', aFin);
       const lignes = data ?? [];
       const dansMois = (d) => d >= mDeb && d <= mFin;
       setStatsPerso({
-        caMois: somme(lignes.filter((l) => l.est_proprietaire && dansMois(l.date)).map((l) => l.ca_jour)),
         intMois: somme(lignes.filter((l) => dansMois(l.date)).map((l) => l.interessement)),
-        caAnnee: somme(lignes.filter((l) => l.est_proprietaire).map((l) => l.ca_jour)),
         intAnnee: somme(lignes.map((l) => l.interessement)),
       });
     })();
-  }, [utilisateur.id]);
+  }, [utilisateur.id, aInteressement]);
 
   // Compteur de la liste de courses + notification quand un collègue ajoute.
   const chargerCourses = useCallback(async () => {
@@ -126,36 +120,26 @@ export default function Profil() {
           <span className="kpi-label">CA du jour</span>
           <span className="kpi-valeur">{formatEuros(stats.caJour)}</span>
         </div>
-        <div className="kpi">
-          <span className="kpi-label">CA de la semaine</span>
-          <span className="kpi-valeur">{formatEuros(stats.caSemaine)}</span>
-        </div>
       </div>
 
-      <div className="card">
-        <div className="histo-tete">
-          <strong>{profil?.nom}</strong>
-          <span className="badge badge-solde">{estAdmin ? 'Admin' : 'Employé'}</span>
-        </div>
-        <div className="cartes-kpi">
-          <div className="kpi">
-            <span className="kpi-label">CA du mois</span>
-            <span className="kpi-valeur">{formatEuros(statsPerso.caMois)}</span>
+      {aInteressement && (
+        <div className="card">
+          <div className="histo-tete">
+            <strong>{profil?.nom}</strong>
+            <span className="badge badge-solde">{estAdmin ? 'Admin' : 'Employé'}</span>
           </div>
-          <div className="kpi">
-            <span className="kpi-label">Intéressement du mois</span>
-            <span className="kpi-valeur">{formatEuros(statsPerso.intMois)}</span>
-          </div>
-          <div className="kpi">
-            <span className="kpi-label">CA de l’année</span>
-            <span className="kpi-valeur">{formatEuros(statsPerso.caAnnee)}</span>
-          </div>
-          <div className="kpi">
-            <span className="kpi-label">Intéressement de l’année</span>
-            <span className="kpi-valeur">{formatEuros(statsPerso.intAnnee)}</span>
+          <div className="cartes-kpi">
+            <div className="kpi">
+              <span className="kpi-label">Intéressement du mois</span>
+              <span className="kpi-valeur">{formatEuros(statsPerso.intMois)}</span>
+            </div>
+            <div className="kpi">
+              <span className="kpi-label">Intéressement de l’année</span>
+              <span className="kpi-valeur">{formatEuros(statsPerso.intAnnee)}</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="bulles-accueil">
         <button type="button" className="bulle-raccourci" onClick={() => setOutil('scanner')}>
