@@ -35,6 +35,54 @@ function genererIconeCarte(taille) {
   }
 }
 
+// Génère l'icône d'écran d'accueil à partir du LOGO du magasin : le logo est
+// dessiné centré (contain, avec marge) sur un carré arrondi sombre — iOS exige
+// un apple-touch-icon carré et opaque. Renvoie un data URI PNG, ou null si le
+// logo n'a pas pu être chargé/dessiné (CORS, etc.) → on retombe sur le 🎟️.
+function genererIconeLogo(url, taille) {
+  return new Promise((resolve) => {
+    if (!url) {
+      resolve(null);
+      return;
+    }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = taille;
+        c.height = taille;
+        const ctx = c.getContext('2d');
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        const r = Math.round(taille * 0.22);
+        ctx.fillStyle = '#0f1115';
+        ctx.beginPath();
+        ctx.moveTo(r, 0);
+        ctx.arcTo(taille, 0, taille, taille, r);
+        ctx.arcTo(taille, taille, 0, taille, r);
+        ctx.arcTo(0, taille, 0, 0, r);
+        ctx.arcTo(0, 0, taille, 0, r);
+        ctx.closePath();
+        ctx.fill();
+        const pad = taille * 0.16;
+        const dispo = taille - pad * 2;
+        const ratio = Math.min(dispo / img.width, dispo / img.height);
+        const w = img.width * ratio;
+        const h = img.height * ratio;
+        ctx.drawImage(img, (taille - w) / 2, (taille - h) / 2, w, h);
+        resolve(c.toDataURL('image/png'));
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
 // Page PUBLIQUE — carte de fidélité d'un client (ouverte en scannant son QR).
 // Lecture seule pour le client ; le personnel connecté peut ajouter un tampon.
 export default function Carte() {
@@ -96,6 +144,7 @@ export default function Carte() {
   }, []);
 
   const magasin = etat && !etat.introuvable ? etat.magasin : null;
+  const logo = etat && !etat.introuvable ? etat.logo : null;
 
   // Personnalise le raccourci écran d'accueil (au lieu de « Gestion ») :
   //  - onglet : « Carte de fidélité – <magasin> »
@@ -107,8 +156,6 @@ export default function Carte() {
     if (!magasin) return undefined;
     const titre = `Carte de fidélité – ${magasin}`;
     const libelle = `${magasin} Fidélité`;
-    const icone = genererIconeCarte(180);
-    const icone512 = genererIconeCarte(512);
 
     const prevTitre = document.title;
     document.title = titre;
@@ -124,44 +171,61 @@ export default function Carte() {
     }
     meta.setAttribute('content', libelle);
 
-    // Icône iOS (apple-touch-icon) = 🎟️ en PNG.
     const apple = document.querySelector('link[rel="apple-touch-icon"]');
     const prevApple = apple?.getAttribute('href');
-    if (apple && icone) apple.setAttribute('href', icone);
-
-    // Manifeste propre à la carte (Android) : nom + libellé + icône dédiés.
     const lien = document.querySelector('link[rel="manifest"]');
     const prevManifest = lien?.getAttribute('href');
-    let blobUrl;
-    if (lien) {
-      const manifeste = {
-        name: titre,
-        short_name: libelle,
-        start_url: window.location.pathname,
-        scope: window.location.pathname,
-        display: 'standalone',
-        background_color: '#0f1115',
-        theme_color: '#0f1115',
-        icons: [
-          icone512 && { src: icone512, sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/carte-icone.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-        ].filter(Boolean),
-      };
-      blobUrl = URL.createObjectURL(
-        new Blob([JSON.stringify(manifeste)], { type: 'application/manifest+json' }),
-      );
-      lien.setAttribute('href', blobUrl);
+
+    let annule = false;
+    const ref = { blobUrl: null }; // dernier manifeste (à révoquer au nettoyage)
+
+    // Applique une icône (180 + 512) à l'apple-touch-icon et au manifeste.
+    const appliquer = (icone, icone512) => {
+      if (annule) return;
+      if (apple && icone) apple.setAttribute('href', icone);
+      if (lien) {
+        const manifeste = {
+          name: titre,
+          short_name: libelle,
+          start_url: window.location.pathname,
+          scope: window.location.pathname,
+          display: 'standalone',
+          background_color: '#0f1115',
+          theme_color: '#0f1115',
+          icons: [
+            icone512 && { src: icone512, sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: '/carte-icone.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+          ].filter(Boolean),
+        };
+        const url = URL.createObjectURL(
+          new Blob([JSON.stringify(manifeste)], { type: 'application/manifest+json' }),
+        );
+        if (ref.blobUrl) URL.revokeObjectURL(ref.blobUrl);
+        ref.blobUrl = url;
+        lien.setAttribute('href', url);
+      }
+    };
+
+    // Défaut immédiat : icône 🎟️. Puis, si le magasin a un logo, on la remplace
+    // par le logo du magasin (chargement asynchrone).
+    appliquer(genererIconeCarte(180), genererIconeCarte(512));
+    if (logo) {
+      const src = urlLogo(logo);
+      Promise.all([genererIconeLogo(src, 180), genererIconeLogo(src, 512)]).then(([i180, i512]) => {
+        if (i180 || i512) appliquer(i180 || genererIconeCarte(180), i512 || genererIconeCarte(512));
+      });
     }
 
     return () => {
+      annule = true;
       document.title = prevTitre;
       if (apple && prevApple != null) apple.setAttribute('href', prevApple);
       if (lien && prevManifest) lien.setAttribute('href', prevManifest);
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      if (ref.blobUrl) URL.revokeObjectURL(ref.blobUrl);
       if (metaCree) meta.remove();
       else if (meta && prevMeta != null) meta.setAttribute('content', prevMeta);
     };
-  }, [magasin]);
+  }, [magasin, logo]);
 
   async function installer() {
     if (promptInstall) {
