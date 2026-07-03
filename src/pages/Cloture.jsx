@@ -114,6 +114,27 @@ export default function Cloture() {
     charger();
   }, [charger]);
 
+  // Rafraîchit les chromes du jour (avances/remboursements → récap) au retour sur
+  // l'onglet/la page : si un chrome a été saisi ailleurs (page Clients), le récap
+  // se met à jour sans toucher à la saisie en cours du formulaire.
+  useEffect(() => {
+    const recharger = async () => {
+      if (document.hidden) return;
+      const { data } = await supabase
+        .from('chromes')
+        .select('type, montant')
+        .eq('employe_id', utilisateur.id)
+        .eq('date', date);
+      setChromesJour(data ?? []);
+    };
+    document.addEventListener('visibilitychange', recharger);
+    window.addEventListener('focus', recharger);
+    return () => {
+      document.removeEventListener('visibilitychange', recharger);
+      window.removeEventListener('focus', recharger);
+    };
+  }, [utilisateur.id, date]);
+
   // Sauvegarde le brouillon à chaque modification (après le chargement initial).
   useEffect(() => {
     if (!pret.current) return;
