@@ -1313,6 +1313,10 @@ details > summary {
   color: var(--texte-doux);
   font-size: 0.9rem;
 }
+.chrome-heure {
+  color: var(--texte-doux);
+  font-size: 0.85em;
+}
 .lien-retour-cat {
   align-self: flex-start;
   margin-top: 0.35rem;
