@@ -8,6 +8,9 @@ import ChampMontant from '../components/ChampMontant';
 import ModaleQR from '../components/ModaleQR';
 import ModaleQRInscription from '../components/ModaleQRInscription';
 
+// Libellés des actions du journal des chromes.
+const LIB_ACTION = { creation: 'Créé', modification: 'Modifié', suppression: 'Supprimé' };
+
 // Heure locale « HH:mm » d'un horodatage (affichée à côté de la date d'un chrome).
 const formatHeure = (iso) => {
   if (!iso) return '';
@@ -26,6 +29,7 @@ export default function Chromes() {
   const [clients, setClients] = useState([]);
   const [clientSel, setClientSel] = useState(null);
   const [lignes, setLignes] = useState([]);
+  const [histoChrome, setHistoChrome] = useState([]); // journal des modifs de chromes du client
   const [promos, setPromos] = useState([]);
   const [clientsAvecPromo, setClientsAvecPromo] = useState(new Set());
   const [nouvellePromo, setNouvellePromo] = useState({ description: '', date: aujourdhuiISO() });
@@ -110,7 +114,7 @@ export default function Chromes() {
       setOngletClient('fiche');
       setNote(client.description ?? '');
       setNoteMsg('');
-      const [{ data: chr }, { data: pr }] = await Promise.all([
+      const [{ data: chr }, { data: pr }, { data: evt }] = await Promise.all([
         supabase
           .from('chromes')
           .select('id, type, montant, date, created_at, employe_id, users(nom)')
@@ -123,9 +127,16 @@ export default function Chromes() {
           .eq('client_id', client.client_id)
           .order('date', { ascending: false })
           .order('created_at', { ascending: false }),
+        supabase
+          .from('chrome_evenements')
+          .select('id, action, type, montant, date_chrome, created_at, auteur:employe_id(nom)')
+          .eq('client_id', client.client_id)
+          .order('created_at', { ascending: false })
+          .limit(50),
       ]);
       setLignes(chr ?? []);
       setPromos(pr ?? []);
+      setHistoChrome(evt ?? []);
       chargerFidelite(client.client_id);
     },
     [chargerFidelite],
@@ -721,6 +732,31 @@ export default function Chromes() {
                     )}
                   </tbody>
                 </table>
+
+                <div className="chrome-histo">
+                  <h4>🕓 Historique des modifications</h4>
+                  {histoChrome.length === 0 ? (
+                    <p className="vide">Aucune modification enregistrée.</p>
+                  ) : (
+                    <ul className="chrome-histo-liste">
+                      {histoChrome.map((e) => (
+                        <li key={e.id}>
+                          <span className="chrome-histo-quand">
+                            {formatDateFr(e.created_at)} · {formatHeure(e.created_at)}
+                          </span>
+                          <span className={`chrome-histo-action action-${e.action}`}>
+                            {LIB_ACTION[e.action] ?? e.action}
+                          </span>
+                          <span className="chrome-histo-montant">
+                            {e.type === 'avance' ? '+' : e.type === 'remboursement' ? '−' : ''}
+                            {e.montant != null ? formatEuros(e.montant) : ''}
+                          </span>
+                          <span className="chrome-histo-qui">{e.auteur?.nom ?? '—'}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
               )}
 

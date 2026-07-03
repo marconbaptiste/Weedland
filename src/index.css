@@ -1317,6 +1317,47 @@ details > summary {
   color: var(--texte-doux);
   font-size: 0.85em;
 }
+/* Historique inviolable des modifications d'un chrome (fiche client). */
+.chrome-histo {
+  margin-top: 0.9rem;
+  border-top: 1px solid var(--bordure);
+  padding-top: 0.6rem;
+}
+.chrome-histo h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+.chrome-histo-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.chrome-histo-liste li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--bordure);
+}
+.chrome-histo-quand {
+  color: var(--texte-doux);
+}
+.chrome-histo-qui {
+  grid-column: 1 / -1;
+  color: var(--texte-doux);
+  font-size: 0.8rem;
+}
+.chrome-histo-action {
+  font-weight: 600;
+}
+.action-creation { color: var(--accent); }
+.action-modification { color: #e0b34d; }
+.action-suppression { color: #e57373; }
 .lien-retour-cat {
   align-self: flex-start;
   margin-top: 0.35rem;
