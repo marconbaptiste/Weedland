@@ -255,6 +255,32 @@ export default function Chromes() {
     chargerClients();
   }
 
+  // Notification push individuelle (ex. objet oublié) → carte du client.
+  async function notifierClient() {
+    const saisie = window.prompt('Message à envoyer sur la carte de ce client :', '');
+    if (saisie == null) return;
+    const texte = saisie.trim();
+    if (!texte) return;
+    const { data, error } = await supabase.functions.invoke('envoyer-push', {
+      body: {
+        magasinId,
+        clientId: clientSel.client_id,
+        titre: 'Message du magasin',
+        corps: texte,
+        url: `/carte/${clientSel.client_id}`,
+      },
+    });
+    if (error || data?.error) {
+      setMsgClient(`Notification impossible : ${data?.error || error?.message || ''}`);
+      return;
+    }
+    setMsgClient(
+      data.envoyes > 0
+        ? `🔔 Notification envoyée (${data.envoyes}).`
+        : "Ce client n'a pas activé les notifications sur sa carte.",
+    );
+  }
+
   async function supprimerClient() {
     if (!window.confirm(`Supprimer définitivement la fiche « ${clientSel.surnom} » ?`)) return;
     const { error } = await supabase.from('clients').delete().eq('id', clientSel.client_id);
@@ -582,6 +608,11 @@ export default function Chromes() {
                   <button type="button" className="btn" onClick={modifierTelephone}>
                     {clientSel.telephone ? 'Modifier le téléphone' : 'Ajouter un téléphone'}
                   </button>
+                  {estAdmin && (
+                    <button type="button" className="btn btn-discret" onClick={notifierClient}>
+                      🔔 Notifier
+                    </button>
+                  )}
                   {estAdmin && (
                     <button type="button" className="btn btn-discret" onClick={supprimerClient}>
                       Supprimer la fiche
