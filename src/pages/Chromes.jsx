@@ -271,7 +271,14 @@ export default function Chromes() {
       },
     });
     if (error || data?.error) {
-      setMsgClient(`Notification impossible : ${data?.error || error?.message || ''}`);
+      let detail = data?.error || error?.message || '';
+      try {
+        const c = await error?.context?.json?.();
+        if (c?.error) detail = c.error;
+      } catch {
+        /* corps illisible */
+      }
+      setMsgClient(`Notification impossible : ${detail}`);
       return;
     }
     setMsgClient(
@@ -607,6 +614,13 @@ export default function Chromes() {
                   </button>
                   <button type="button" className="btn" onClick={modifierTelephone}>
                     {clientSel.telephone ? 'Modifier le téléphone' : 'Ajouter un téléphone'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setQrModal({ clientId: clientSel.client_id, surnom: clientSel.surnom })}
+                  >
+                    🎫 QR carte
                   </button>
                   {estAdmin && (
                     <button type="button" className="btn btn-discret" onClick={notifierClient}>
