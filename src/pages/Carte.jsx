@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { urlLogo } from '../lib/logo';
+import { activerPush, etatPush, pushSupporte } from '../lib/push';
 import QRClient from '../components/QRClient';
 
 // Génère l'icône de la carte de fidélité (🎟️ sur fond sombre arrondi) en PNG
@@ -93,6 +94,25 @@ export default function Carte() {
   const [promptInstall, setPromptInstall] = useState(null);
   const [afficheAide, setAfficheAide] = useState(false);
   const [promos, setPromos] = useState([]);
+  const [pushEtat, setPushEtat] = useState('inactif'); // non-supporte | refuse | actif | inactif
+
+  useEffect(() => {
+    etatPush().then(setPushEtat);
+  }, []);
+
+  async function activerNotifs() {
+    const r = await activerPush(clientId);
+    if (r.ok) {
+      setPushEtat('actif');
+      setMsg('🔔 Notifications activées !');
+    } else if (r.raison === 'refuse') {
+      setMsg('Notifications refusées — réactive-les dans les réglages du navigateur.');
+    } else if (r.raison === 'non-supporte') {
+      setMsg("Ajoute d'abord la carte à ton écran d'accueil pour activer les notifications.");
+    } else {
+      setMsg('Activation impossible pour le moment.');
+    }
+  }
 
   const charger = useCallback(async () => {
     // fidelite_token renvoie l'état + un token frais (rotatif) encodé dans le QR :
@@ -318,6 +338,15 @@ export default function Carte() {
           <a className="btn btn-wallet" href={walletUrl}>
              Ajouter à Apple Wallet
           </a>
+        )}
+
+        {!profil && pushSupporte() && pushEtat !== 'actif' && pushEtat !== 'refuse' && (
+          <button type="button" className="btn btn-primary" onClick={activerNotifs}>
+            🔔 Être prévenu des promos
+          </button>
+        )}
+        {!profil && pushEtat === 'actif' && (
+          <p className="statut">🔔 Notifications activées — tu seras prévenu des promos.</p>
         )}
 
         {promos.length > 0 && (

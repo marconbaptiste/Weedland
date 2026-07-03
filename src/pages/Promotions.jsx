@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatDateFr } from '../lib/format';
+import NotifierClients from '../components/NotifierClients';
 
 // Page admin — Promotions du magasin. Créées ici, elles s'affichent sur les
 // cartes de fidélité des clients (page publique /carte/:id) tant qu'elles sont
@@ -65,6 +66,8 @@ export default function Promotions() {
   return (
     <div className="page">
       <h1>Promotions</h1>
+
+      <NotifierClients />
       <p className="statut">
         Les promotions actives s’affichent directement sur la carte de fidélité des clients.
       </p>
