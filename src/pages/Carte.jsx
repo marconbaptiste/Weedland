@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
-import { NOM } from '../lib/marque';
 import { urlLogo } from '../lib/logo';
 import QRClient from '../components/QRClient';
 
@@ -228,7 +227,7 @@ export default function Carte() {
         {etat.logo && (
           <img className="carte-logo" src={urlLogo(etat.logo)} alt={etat.magasin || 'Logo du magasin'} />
         )}
-        <span className="logo carte-nom-magasin">{etat.magasin || NOM}</span>
+        {etat.magasin && <span className="logo carte-nom-magasin">{etat.magasin}</span>}
         <h1 className="logo-connexion">🎟️ Ma carte de fidélité</h1>
         <p className="statut">
           <strong>{etat.surnom}</strong>
