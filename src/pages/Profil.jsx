@@ -18,6 +18,7 @@ export default function Profil() {
   const aInteressement = (profil?.pourcentage_interessement ?? 0) > 0;
   const [stats, setStats] = useState({ caJour: 0 });
   const [statsPerso, setStatsPerso] = useState({ intMois: 0, intAnnee: 0 });
+  const [chromesJour, setChromesJour] = useState([]); // chromes du jour du magasin (tout le monde)
   const [outil, setOutil] = useState(null); // 'monnaie' | 'scanner' | 'courses' | null
   const [nbCourses, setNbCourses] = useState(0);
   const [coursesNouveau, setCoursesNouveau] = useState(false);
@@ -59,6 +60,27 @@ export default function Profil() {
       });
     })();
   }, [utilisateur.id, aInteressement]);
+
+  // Chromes du jour de TOUT le magasin (registre partagé) — visible par tous,
+  // employés inclus. Rechargé au retour sur l'onglet/la page.
+  useEffect(() => {
+    const recharger = () => {
+      if (document.hidden) return;
+      supabase
+        .from('chromes')
+        .select('type, montant, created_at, clients(surnom), users(nom)')
+        .eq('date', aujourdhuiISO())
+        .order('created_at', { ascending: false })
+        .then(({ data }) => setChromesJour(data ?? []));
+    };
+    recharger();
+    document.addEventListener('visibilitychange', recharger);
+    window.addEventListener('focus', recharger);
+    return () => {
+      document.removeEventListener('visibilitychange', recharger);
+      window.removeEventListener('focus', recharger);
+    };
+  }, []);
 
   // Compteur de la liste de courses + notification quand un collègue ajoute.
   const chargerCourses = useCallback(async () => {
@@ -110,6 +132,8 @@ export default function Profil() {
   }
 
   const prenom = (profil?.nom ?? '').split(' ')[0];
+  const avancesJour = chromesJour.filter((c) => c.type === 'avance');
+  const remboursementsJour = chromesJour.filter((c) => c.type === 'remboursement');
 
   return (
     <div className="page">
@@ -140,6 +164,39 @@ export default function Profil() {
           </div>
         </div>
       )}
+
+      <div className="card">
+        <h2>Chromes du jour</h2>
+        {chromesJour.length === 0 && <p className="vide">Aucun chrome aujourd’hui.</p>}
+        {avancesJour.length > 0 && (
+          <div className="histo-bloc">
+            <span className="histo-titre">Avances</span>
+            {avancesJour.map((a, i) => (
+              <div key={`a${i}`} className="histo-chrome">
+                <span>
+                  {a.clients?.surnom ?? 'client'}
+                  <span className="chrome-heure"> · {a.users?.nom ?? '—'}</span>
+                </span>
+                <span className="dette">+ {formatEuros(a.montant)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {remboursementsJour.length > 0 && (
+          <div className="histo-bloc">
+            <span className="histo-titre">Remboursements</span>
+            {remboursementsJour.map((r, i) => (
+              <div key={`r${i}`} className="histo-chrome">
+                <span>
+                  {r.clients?.surnom ?? 'client'}
+                  <span className="chrome-heure"> · {r.users?.nom ?? '—'}</span>
+                </span>
+                <span className="solde-ok">− {formatEuros(r.montant)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="bulles-accueil">
         <button type="button" className="bulle-raccourci" onClick={() => setOutil('scanner')}>
