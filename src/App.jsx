@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { RequireAuth, RequireAdmin, RequireSuperadmin } from './components/Gardes';
+import { RequireAuth, RequireAdmin, RequireSuperadmin, RequireOption } from './components/Gardes';
 import { useAuth } from './auth/AuthProvider';
 import Layout from './components/Layout';
 import Landing from './pages/Landing';
@@ -61,20 +61,30 @@ export default function App() {
           <Route path="caisse/cloture" element={<Cloture />} />
           <Route path="caisse/historique" element={<Historique />} />
           <Route path="chromes" element={<Chromes />} />
-          <Route path="stocks" element={<Stocks />} />
           <Route path="support" element={<Support />} />
-          <Route path="f/:clientId" element={<Fidelite />} />
+
+          {/* Modules à option d'abonnement */}
+          <Route element={<RequireOption option="stock" />}>
+            <Route path="stocks" element={<Stocks />} />
+          </Route>
+          <Route element={<RequireOption option="fidelite" />}>
+            <Route path="f/:clientId" element={<Fidelite />} />
+          </Route>
 
           {/* Réservé à l'admin */}
           <Route element={<RequireAdmin />}>
             <Route path="gestion" element={<Gestion />} />
             <Route path="comptabilite" element={<Comptabilite />} />
-            <Route path="promotions" element={<Promotions />} />
             <Route path="paiements" element={<Paiements />} />
             <Route path="journal" element={<Journal />} />
             <Route path="comptes" element={<Comptes />} />
-            <Route path="plannings" element={<Plannings />} />
             <Route path="import" element={<Import />} />
+            <Route element={<RequireOption option="planning" />}>
+              <Route path="plannings" element={<Plannings />} />
+            </Route>
+            <Route element={<RequireOption option="fidelite" />}>
+              <Route path="promotions" element={<Promotions />} />
+            </Route>
           </Route>
 
           {/* Réservé au super-admin (exploitant) */}

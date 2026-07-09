@@ -22,7 +22,7 @@ export default function Pilote() {
     const [{ data: mg }, { data: msg }] = await Promise.all([
       supabase
         .from('magasins')
-        .select('id, nom, abonnement, essai_fin, echeance, stripe_subscription_id')
+        .select('id, nom, abonnement, essai_fin, echeance, stripe_subscription_id, opt_planning, opt_stock, opt_fidelite')
         .order('nom'),
       supabase.from('messages').select('magasin_id, de_superadmin, lu'),
     ]);
@@ -51,6 +51,17 @@ export default function Pilote() {
   function fermerFil() {
     setFil(null);
     charger(); // rafraîchit les compteurs (messages marqués lus à l'ouverture)
+  }
+
+  // Active / désactive une option d'abonnement du magasin (superadmin).
+  const OPTIONS = [
+    { cle: 'opt_planning', label: '📅 Planning' },
+    { cle: 'opt_stock', label: '📦 Stock' },
+    { cle: 'opt_fidelite', label: '🎟️ Fidélité' },
+  ];
+  async function basculerOption(m, cle) {
+    setMagasins((liste) => liste.map((x) => (x.id === m.id ? { ...x, [cle]: !x[cle] } : x)));
+    await supabase.from('magasins').update({ [cle]: !m[cle] }).eq('id', m.id);
   }
 
   // Facturation Stripe : ouvre le checkout (s'abonner) ou le portail (gérer).
@@ -131,6 +142,19 @@ export default function Pilote() {
                 <button type="button" className="btn btn-discret" onClick={() => lierStripe(m)} title="Lier un client Stripe">
                   🔗
                 </button>
+              </div>
+              <div className="pilote-options">
+                {OPTIONS.map((o) => (
+                  <button
+                    key={o.cle}
+                    type="button"
+                    className={`option-chip ${m[o.cle] ? 'actif' : ''}`}
+                    onClick={() => basculerOption(m, o.cle)}
+                    title={m[o.cle] ? 'Option active — cliquer pour désactiver' : 'Option inactive — cliquer pour activer'}
+                  >
+                    {o.label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>

@@ -86,7 +86,7 @@ export function AuthProvider({ children }) {
     }
     supabase
       .from('magasins')
-      .select('abonnement, essai_fin, logo')
+      .select('abonnement, essai_fin, logo, opt_planning, opt_stock, opt_fidelite')
       .eq('id', profil.magasin_id)
       .single()
       .then(({ data }) => {
@@ -96,6 +96,15 @@ export function AuthProvider({ children }) {
   }, [profil?.magasin_id]);
 
   const estSuperadmin = profil?.role === 'superadmin';
+  // Options d'abonnement du magasin (paywall des modules). Le superadmin
+  // (exploitant) n'est jamais bridé : il voit tout pour pouvoir gérer/tester.
+  const options = estSuperadmin
+    ? { planning: true, stock: true, fidelite: true }
+    : {
+        planning: magasinInfo?.opt_planning ?? false,
+        stock: magasinInfo?.opt_stock ?? false,
+        fidelite: magasinInfo?.opt_fidelite ?? false,
+      };
   const aujourdHui = new Date().toISOString().slice(0, 10);
   const magasinBloque =
     !estSuperadmin &&
@@ -122,6 +131,7 @@ export function AuthProvider({ children }) {
     magasinInfo,
     magasinLogo,
     setMagasinLogo,
+    options,
     magasinBloque,
     changerMagasin,
     chargement,

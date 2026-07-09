@@ -103,6 +103,14 @@ export function RequireAdmin() {
   return <Outlet />;
 }
 
+/** Bloque l'accès à un module dont l'option d'abonnement n'est pas active. */
+export function RequireOption({ option }) {
+  const { options, chargement } = useAuth();
+  if (chargement) return <p className="centre">Chargement…</p>;
+  if (!options?.[option]) return <Navigate to="/" replace />;
+  return <Outlet />;
+}
+
 /** Bloque l'accès si non super-admin (exploitant de la plateforme). */
 export function RequireSuperadmin() {
   const { estSuperadmin, chargement } = useAuth();
