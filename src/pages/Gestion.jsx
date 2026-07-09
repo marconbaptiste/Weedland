@@ -17,6 +17,7 @@ function sections(estSuperadmin) {
     {
       titre: 'Équipe',
       outils: [
+        { to: '/plannings', emoji: '📅', nom: 'Plannings', desc: 'Présentiel des employés, par semaine.' },
         { to: '/paiements', emoji: '💸', nom: 'Paiements', desc: 'Payes des employés du mois.' },
         { to: '/comptes', emoji: '👥', nom: 'Comptes', desc: 'Créer / gérer les comptes et les rôles.' },
       ],
