@@ -1348,6 +1348,30 @@ details > summary {
   flex-shrink: 0;
 }
 
+/* Options d'abonnement (chips activables dans le pilote). */
+.pilote-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+.option-chip {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--bordure);
+  background: transparent;
+  color: var(--texte-doux);
+  cursor: pointer;
+  opacity: 0.6;
+}
+.option-chip.actif {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: var(--accent);
+  color: var(--texte);
+  opacity: 1;
+}
+
 /* Calendrier mensuel (Plannings). */
 .cal-tete {
   display: flex;

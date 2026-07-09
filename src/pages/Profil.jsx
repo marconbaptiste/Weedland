@@ -15,7 +15,7 @@ import CalendrierLecture from '../components/CalendrierLecture';
 // bulle « courses » porte une pastille de notification. Le détail des chromes du
 // jour vit désormais sur la page Clients.
 export default function Profil() {
-  const { utilisateur, profil, estAdmin } = useAuth();
+  const { utilisateur, profil, estAdmin, options } = useAuth();
   const aInteressement = (profil?.pourcentage_interessement ?? 0) > 0;
   const [stats, setStats] = useState({ caJour: 0 });
   const [statsPerso, setStatsPerso] = useState({ intMois: 0, intAnnee: 0 });
@@ -199,22 +199,26 @@ export default function Profil() {
         )}
       </div>
 
-      <CalendrierLecture />
+      {options.planning && <CalendrierLecture />}
 
       <div className="bulles-accueil">
-        <button type="button" className="bulle-raccourci" onClick={() => setOutil('scanner')}>
-          <span className="bulle-rond">🎟️</span>
-          <span className="bulle-label">Scanner fidélité</span>
-        </button>
-        <button type="button" className="bulle-raccourci" onClick={ouvrirCourses}>
-          <span className="bulle-rond">
-            🛒
-            {nbCourses > 0 && (
-              <span className={`fab-badge ${coursesNouveau ? 'nouveau' : ''}`}>{nbCourses}</span>
-            )}
-          </span>
-          <span className="bulle-label">Liste de courses</span>
-        </button>
+        {options.fidelite && (
+          <button type="button" className="bulle-raccourci" onClick={() => setOutil('scanner')}>
+            <span className="bulle-rond">🎟️</span>
+            <span className="bulle-label">Scanner fidélité</span>
+          </button>
+        )}
+        {options.stock && (
+          <button type="button" className="bulle-raccourci" onClick={ouvrirCourses}>
+            <span className="bulle-rond">
+              🛒
+              {nbCourses > 0 && (
+                <span className={`fab-badge ${coursesNouveau ? 'nouveau' : ''}`}>{nbCourses}</span>
+              )}
+            </span>
+            <span className="bulle-label">Liste de courses</span>
+          </button>
+        )}
         <button type="button" className="bulle-raccourci" onClick={() => setOutil('monnaie')}>
           <span className="bulle-rond">💶</span>
           <span className="bulle-label">Rendu de monnaie</span>

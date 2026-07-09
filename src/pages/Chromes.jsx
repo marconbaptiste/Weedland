@@ -24,7 +24,7 @@ const formatHeure = (iso) => {
 // RGPD : les clients sont identifiés par un SURNOM uniquement, jamais par leur
 // nom/prénom réel. La description est interne (visible seulement du personnel).
 export default function Chromes() {
-  const { utilisateur, estAdmin, magasinId } = useAuth();
+  const { utilisateur, estAdmin, magasinId, options } = useAuth();
   const [recherche, setRecherche] = useState('');
   const [clients, setClients] = useState([]);
   const [clientSel, setClientSel] = useState(null);
@@ -540,9 +540,11 @@ export default function Chromes() {
               <button className="btn" onClick={() => setCreationOuverte(true)}>
                 + Nouvelle fiche client
               </button>
-              <button type="button" className="btn" onClick={() => setQrInscription(true)}>
-                📲 QR d’inscription
-              </button>
+              {options.fidelite && (
+                <button type="button" className="btn" onClick={() => setQrInscription(true)}>
+                  📲 QR d’inscription
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -615,13 +617,15 @@ export default function Chromes() {
                   <button type="button" className="btn" onClick={modifierTelephone}>
                     {clientSel.telephone ? 'Modifier le téléphone' : 'Ajouter un téléphone'}
                   </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => setQrModal({ clientId: clientSel.client_id, surnom: clientSel.surnom })}
-                  >
-                    🎫 QR carte
-                  </button>
+                  {options.fidelite && (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setQrModal({ clientId: clientSel.client_id, surnom: clientSel.surnom })}
+                    >
+                      🎫 QR carte
+                    </button>
+                  )}
                   {estAdmin && (
                     <button type="button" className="btn btn-discret" onClick={notifierClient}>
                       🔔 Notifier
@@ -805,7 +809,7 @@ export default function Chromes() {
               </div>
               )}
 
-              {ongletClient === 'fiche' && (
+              {ongletClient === 'fiche' && options.fidelite && (
               <div className="section-promos">
                 <div className="entete-client">
                   <h3>🎟️ Carte de fidélité</h3>

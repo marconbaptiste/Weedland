@@ -19,7 +19,7 @@ function IconeDeconnexion() {
 }
 
 export default function Layout() {
-  const { profil, estAdmin, estSuperadmin, magasins, magasinId, magasinLogo, changerMagasin, deconnexion } =
+  const { profil, estAdmin, estSuperadmin, magasins, magasinId, magasinLogo, options, changerMagasin, deconnexion } =
     useAuth();
   const logoUrl = urlLogo(magasinLogo);
   const [menu, setMenu] = useState(false); // menu burger (mobile)
@@ -81,9 +81,11 @@ export default function Layout() {
           <NavLink to="/chromes" className={lienActif} onClick={fermer}>
             Clients
           </NavLink>
-          <NavLink to="/stocks" className={lienActif} onClick={fermer}>
-            Stocks
-          </NavLink>
+          {options.stock && (
+            <NavLink to="/stocks" className={lienActif} onClick={fermer}>
+              Stocks
+            </NavLink>
+          )}
           {estAdmin && (
             <NavLink to="/gestion" className={lienActif} onClick={fermer}>
               Gestion
