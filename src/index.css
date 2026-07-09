@@ -1391,6 +1391,10 @@ details > summary {
 .cal-jour.cal-aujourdhui {
   border-color: var(--accent);
 }
+.cal-jour.cal-selection {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  border-color: var(--accent);
+}
 .cal-num {
   font-size: 0.75rem;
   font-weight: 600;
