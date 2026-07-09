@@ -1317,6 +1317,30 @@ details > summary {
   color: var(--texte-doux);
   font-size: 0.85em;
 }
+/* Planning (présentiel employés). */
+.liste-planning {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.ligne-planning {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--bordure);
+}
+.planning-emp {
+  font-weight: 600;
+  flex: 1;
+}
+.planning-horaire {
+  color: var(--texte-doux);
+  font-variant-numeric: tabular-nums;
+}
 /* Historique inviolable des modifications d'un chrome (fiche client). */
 .chrome-histo {
   margin-top: 0.9rem;

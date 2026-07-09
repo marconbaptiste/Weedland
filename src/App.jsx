@@ -22,6 +22,7 @@ import Comptes from './pages/Comptes';
 import Promotions from './pages/Promotions';
 import Journal from './pages/Journal';
 import Comptabilite from './pages/Comptabilite';
+import Plannings from './pages/Plannings';
 import Magasins from './pages/Magasins';
 import Pilote from './pages/Pilote';
 import Support from './pages/Support';
@@ -72,6 +73,7 @@ export default function App() {
             <Route path="paiements" element={<Paiements />} />
             <Route path="journal" element={<Journal />} />
             <Route path="comptes" element={<Comptes />} />
+            <Route path="plannings" element={<Plannings />} />
             <Route path="import" element={<Import />} />
           </Route>
 
