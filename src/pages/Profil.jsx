@@ -8,6 +8,7 @@ import GuideDemarrage from '../components/GuideDemarrage';
 import CalculatriceMonnaie from '../components/CalculatriceMonnaie';
 import ScannerFidelite from '../components/ScannerFidelite';
 import ListeCourses from '../components/ListeCourses';
+import CalendrierLecture from '../components/CalendrierLecture';
 
 // Accueil après connexion : profil + CA (jour/semaine) + une rangée de
 // raccourcis en bulles (scanner fidélité, liste de courses, rendu monnaie). La
@@ -19,8 +20,6 @@ export default function Profil() {
   const [stats, setStats] = useState({ caJour: 0 });
   const [statsPerso, setStatsPerso] = useState({ intMois: 0, intAnnee: 0 });
   const [chromesJour, setChromesJour] = useState([]); // chromes du jour du magasin (tout le monde)
-  const [planningJour, setPlanningJour] = useState([]); // créneaux de présence du jour
-  const [employes, setEmployes] = useState([]); // id → nom (via collegues)
   const [outil, setOutil] = useState(null); // 'monnaie' | 'scanner' | 'courses' | null
   const [nbCourses, setNbCourses] = useState(0);
   const [coursesNouveau, setCoursesNouveau] = useState(false);
@@ -84,17 +83,6 @@ export default function Profil() {
     };
   }, []);
 
-  // Planning du jour (présentiel) — visible par tout le monde sur l'accueil.
-  useEffect(() => {
-    supabase.rpc('collegues').then(({ data }) => setEmployes(data ?? []));
-    supabase
-      .from('plannings')
-      .select('id, employe_id, debut, fin')
-      .eq('date', aujourdhuiISO())
-      .order('debut')
-      .then(({ data }) => setPlanningJour(data ?? []));
-  }, []);
-
   // Compteur de la liste de courses + notification quand un collègue ajoute.
   const chargerCourses = useCallback(async () => {
     const { count } = await supabase
@@ -147,8 +135,6 @@ export default function Profil() {
   const prenom = (profil?.nom ?? '').split(' ')[0];
   const avancesJour = chromesJour.filter((c) => c.type === 'avance');
   const remboursementsJour = chromesJour.filter((c) => c.type === 'remboursement');
-  const hhmm = (t) => (t ? String(t).slice(0, 5) : '');
-  const nomEmploye = (id) => employes.find((e) => e.id === id)?.nom ?? '—';
 
   return (
     <div className="page">
@@ -213,23 +199,7 @@ export default function Profil() {
         )}
       </div>
 
-      <div className="card">
-        <h2>Planning du jour</h2>
-        {planningJour.length === 0 ? (
-          <p className="vide">Aucun créneau prévu aujourd’hui.</p>
-        ) : (
-          <ul className="liste-planning">
-            {planningJour.map((c) => (
-              <li key={c.id} className="ligne-planning">
-                <span className="planning-emp">{nomEmploye(c.employe_id)}</span>
-                <span className="planning-horaire">
-                  {hhmm(c.debut)} – {hhmm(c.fin)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <CalendrierLecture />
 
       <div className="bulles-accueil">
         <button type="button" className="bulle-raccourci" onClick={() => setOutil('scanner')}>
