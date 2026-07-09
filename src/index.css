@@ -1341,6 +1341,81 @@ details > summary {
   color: var(--texte-doux);
   font-variant-numeric: tabular-nums;
 }
+.cal-pastille {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Calendrier mensuel (Plannings). */
+.cal-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+  font-size: 1.05rem;
+}
+.calendrier {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-entete {
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--texte-doux);
+  padding-bottom: 0.2rem;
+}
+.cal-jour {
+  min-height: 62px;
+  padding: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--bordure);
+  border-radius: 8px;
+  color: var(--texte);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+.cal-jour.cal-vide {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+}
+.cal-jour.cal-aujourdhui {
+  border-color: var(--accent);
+}
+.cal-num {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--texte-doux);
+}
+.cal-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cal-chip {
+  font-size: 0.62rem;
+  line-height: 1.2;
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-plus {
+  font-size: 0.62rem;
+  color: var(--texte-doux);
+}
 /* Historique inviolable des modifications d'un chrome (fiche client). */
 .chrome-histo {
   margin-top: 0.9rem;
