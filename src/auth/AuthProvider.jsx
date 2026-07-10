@@ -86,7 +86,7 @@ export function AuthProvider({ children }) {
     }
     supabase
       .from('magasins')
-      .select('abonnement, essai_fin, logo, opt_planning, opt_stock, opt_fidelite')
+      .select('abonnement, essai_fin, logo, gratuit, opt_planning, opt_stock, opt_fidelite')
       .eq('id', profil.magasin_id)
       .single()
       .then(({ data }) => {
@@ -97,8 +97,9 @@ export function AuthProvider({ children }) {
 
   const estSuperadmin = profil?.role === 'superadmin';
   // Options d'abonnement du magasin (paywall des modules). Le superadmin
-  // (exploitant) n'est jamais bridé : il voit tout pour pouvoir gérer/tester.
-  const options = estSuperadmin
+  // (exploitant) n'est jamais bridé ; un magasin `gratuit` (ex. le magasin
+  // originel Weedland) a toujours toutes les options, sans facturation.
+  const options = estSuperadmin || magasinInfo?.gratuit
     ? { planning: true, stock: true, fidelite: true }
     : {
         planning: magasinInfo?.opt_planning ?? false,

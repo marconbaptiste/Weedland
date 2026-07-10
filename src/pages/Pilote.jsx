@@ -22,7 +22,7 @@ export default function Pilote() {
     const [{ data: mg }, { data: msg }] = await Promise.all([
       supabase
         .from('magasins')
-        .select('id, nom, abonnement, essai_fin, echeance, stripe_subscription_id, opt_planning, opt_stock, opt_fidelite')
+        .select('id, nom, abonnement, essai_fin, echeance, stripe_subscription_id, gratuit, opt_planning, opt_stock, opt_fidelite')
         .order('nom'),
       supabase.from('messages').select('magasin_id, de_superadmin, lu'),
     ]);
@@ -144,6 +144,7 @@ export default function Pilote() {
                 </button>
               </div>
               <div className="pilote-options">
+                {m.gratuit && <span className="option-chip actif" title="Toutes options offertes">🎁 Gratuit</span>}
                 {OPTIONS.map((o) => (
                   <button
                     key={o.cle}
