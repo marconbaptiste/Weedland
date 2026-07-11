@@ -65,21 +65,19 @@ export default function Gestion() {
         <LogoMagasin />
       </section>
 
-      {/* Abonnement — self-service pour l'admin du magasin (le superadmin, lui,
-          gère les abonnements depuis le pilote). */}
-      {!estSuperadmin && (
-        <section className="hub-section">
-          <h2>Abonnement</h2>
-          <GestionOptions />
-          <div className="card">
-            <p className="statut">
-              Gère ton moyen de paiement, retrouve tes factures ou résilie ton abonnement (portail
-              sécurisé Stripe).
-            </p>
-            <BoutonAbonnement />
-          </div>
-        </section>
-      )}
+      {/* Abonnement & options — self-service (visible aussi au superadmin pour
+          gérer/tester le magasin qu'il pilote). */}
+      <section className="hub-section">
+        <h2>Abonnement</h2>
+        <GestionOptions />
+        <div className="card">
+          <p className="statut">
+            Gère ton moyen de paiement, retrouve tes factures ou résilie ton abonnement (portail
+            sécurisé Stripe).
+          </p>
+          <BoutonAbonnement />
+        </div>
+      </section>
     </div>
   );
 }
