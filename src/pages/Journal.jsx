@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../auth/AuthProvider';
 import { formatEuros } from '../lib/format';
 
 // Journal principal (admin) — flux d'activité du magasin, le plus simplifié
@@ -20,9 +21,11 @@ function dateCourte(iso) {
 }
 
 export default function Journal() {
+  const { magasinId } = useAuth();
   const [evenements, setEvenements] = useState([]);
 
   useEffect(() => {
+    if (!magasinId) return;
     (async () => {
       const [caisse, chromes, users] = await Promise.all([
         supabase
@@ -35,7 +38,10 @@ export default function Journal() {
           .select('id, date, created_at, type, montant, employe_id, clients(surnom)')
           .order('date', { ascending: false })
           .limit(200),
-        supabase.from('users').select('id, nom'),
+        // Cloisonné au magasin courant : évite qu'un superadmin transfère au
+        // navigateur les noms d'employés des autres magasins (défense en
+        // profondeur ; la RLS l'autoriserait sinon pour ce rôle).
+        supabase.from('users').select('id, nom').eq('magasin_id', magasinId),
       ]);
 
       const noms = Object.fromEntries((users.data ?? []).map((u) => [u.id, u.nom]));
@@ -67,7 +73,7 @@ export default function Journal() {
 
       setEvenements(items.slice(0, 250));
     })();
-  }, []);
+  }, [magasinId]);
 
   // Montant signé + couleur, cohérent avec le reste de l'app (Profil) :
   // avance = + rouge (la dette du client augmente), remboursement = − vert
