@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import BoutonAbonnement from '../components/BoutonAbonnement';
+import GestionOptions from '../components/GestionOptions';
 import LogoMagasin from '../components/LogoMagasin';
 
 // Hub d'administration (regroupe les anciens liens du menu admin en une seule
@@ -69,6 +70,7 @@ export default function Gestion() {
       {!estSuperadmin && (
         <section className="hub-section">
           <h2>Abonnement</h2>
+          <GestionOptions />
           <div className="card">
             <p className="statut">
               Gère ton moyen de paiement, retrouve tes factures ou résilie ton abonnement (portail

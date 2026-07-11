@@ -1348,6 +1348,31 @@ details > summary {
   flex-shrink: 0;
 }
 
+/* Liste des options d'abonnement (self-service admin). */
+.liste-options {
+  list-style: none;
+  margin: 0.6rem 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.ligne-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--bordure);
+}
+.option-nom {
+  flex: 1;
+  font-weight: 600;
+}
+.option-prix {
+  color: var(--texte-doux);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Options d'abonnement (chips activables dans le pilote). */
 .pilote-options {
   display: flex;
