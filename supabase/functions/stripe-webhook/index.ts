@@ -42,6 +42,18 @@ Deno.serve(async (req) => {
       essai_fin: jourISO(sub.trial_end),
       echeance: jourISO(sub.current_period_end),
     };
+
+    // Options : dérive les drapeaux opt_* des lignes de l'abonnement (une ligne
+    // par option payée). Ne touche un drapeau que si son prix est configuré.
+    const prixOpt: Record<string, string | undefined> = {
+      opt_planning: Deno.env.get("STRIPE_PRICE_PLANNING"),
+      opt_stock: Deno.env.get("STRIPE_PRICE_STOCK"),
+      opt_fidelite: Deno.env.get("STRIPE_PRICE_FIDELITE"),
+    };
+    const prixPresents = new Set((sub.items?.data ?? []).map((it) => it.price?.id));
+    for (const [col, pid] of Object.entries(prixOpt)) {
+      if (pid) patch[col] = prixPresents.has(pid);
+    }
     const svc = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"));
     const magasinId = sub.metadata?.magasin_id;
     const customer = typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
