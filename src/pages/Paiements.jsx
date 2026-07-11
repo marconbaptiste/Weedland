@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatDateFr } from '../lib/format';
 import { aujourdhuiISO, intervallePeriode } from '../lib/dates';
 import { somme } from '../lib/comptabilite';
@@ -7,6 +8,7 @@ import ChampMontant from '../components/ChampMontant';
 
 // Module 3 — Paiements employés (réservé admin). Total par employé / mois courant.
 export default function Paiements() {
+  const { magasinId } = useAuth();
   const [employes, setEmployes] = useState([]);
   const [paiements, setPaiements] = useState([]);
   const [form, setForm] = useState({
@@ -21,8 +23,10 @@ export default function Paiements() {
   const [debutMois, finMois] = intervallePeriode('mois');
 
   const charger = useCallback(async () => {
+    if (!magasinId) return;
     const [emp, pay] = await Promise.all([
-      supabase.from('users').select('id, nom').order('nom'),
+      // Cloisonné au magasin actif (la RLS de `users` est large pour le superadmin).
+      supabase.from('users').select('id, nom').eq('magasin_id', magasinId).order('nom'),
       supabase
         .from('paiements_employes')
         .select('id, employe_id, montant, motif, date, users(nom)')
@@ -32,7 +36,7 @@ export default function Paiements() {
     ]);
     setEmployes(emp.data ?? []);
     setPaiements(pay.data ?? []);
-  }, [debutMois, finMois]);
+  }, [debutMois, finMois, magasinId]);
 
   useEffect(() => {
     charger();

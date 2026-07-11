@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatNombre } from '../lib/format';
 import { premierDuMois, intervallePeriode } from '../lib/dates';
 import { somme } from '../lib/comptabilite';
@@ -14,6 +15,7 @@ const labelMois = (m) =>
 
 // Outil admin — Éditeur de bulletins de paie (enregistrés par employé/mois).
 export default function FichesPaie() {
+  const { magasinId } = useAuth();
   const [employes, setEmployes] = useState([]);
   const [employeId, setEmployeId] = useState('');
   const [mois, setMois] = useState(premierDuMois());
@@ -29,7 +31,8 @@ export default function FichesPaie() {
 
   // Chargement initial : employés + infos employeur mémorisées.
   useEffect(() => {
-    supabase.from('users').select('id, nom').order('nom').then(({ data }) => setEmployes(data ?? []));
+    if (magasinId)
+      supabase.from('users').select('id, nom').eq('magasin_id', magasinId).order('nom').then(({ data }) => setEmployes(data ?? []));
     supabase
       .from('parametres')
       .select('valeur')

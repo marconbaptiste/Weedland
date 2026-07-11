@@ -10,7 +10,7 @@ import ChampMontant from '../components/ChampMontant';
 //   fiches lisibles, avec le détail des chromes par client.
 // - Employé : son propre historique (clôtures + journées partagées).
 export default function Historique() {
-  const { utilisateur, estAdmin } = useAuth();
+  const { utilisateur, estAdmin, magasinId } = useAuth();
 
   // ---------- Vue employé (personnelle) ----------
   const [perso, setPerso] = useState([]);
@@ -42,7 +42,7 @@ export default function Historique() {
         .gte('date', debut)
         .lte('date', fin)
         .order('date', { ascending: false }),
-      supabase.from('users').select('id, nom'),
+      supabase.from('users').select('id, nom').eq('magasin_id', magasinId),
       supabase
         .from('chromes')
         .select('date, employe_id, type, montant, modifie_le, modifie_par, clients(surnom)')
@@ -64,7 +64,7 @@ export default function Historique() {
       });
     });
     setChromes(map);
-  }, [mois]);
+  }, [mois, magasinId]);
 
   useEffect(() => {
     if (estAdmin) chargerAdmin();

@@ -86,10 +86,13 @@ export default function Comptabilite() {
     charger();
   }, [charger]);
 
-  // Liste des employés (pour le filtre de la section Équipe).
+  // Liste des employés (pour le filtre de la section Équipe). Cloisonnée au
+  // magasin actif : la RLS de `users` laisse un superadmin voir tous les
+  // magasins, on filtre donc explicitement ici.
   useEffect(() => {
-    supabase.from('users').select('id, nom').order('nom').then(({ data }) => setEmployes(data ?? []));
-  }, []);
+    if (!magasinId) return;
+    supabase.from('users').select('id, nom').eq('magasin_id', magasinId).order('nom').then(({ data }) => setEmployes(data ?? []));
+  }, [magasinId]);
 
   // Détail intéressement / heures par employé sur la période (section Équipe).
   // Le filtre par employé n'agit QUE sur cette section (le CA global reste
