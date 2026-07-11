@@ -21,6 +21,7 @@ import Paiements from './pages/Paiements';
 import Comptes from './pages/Comptes';
 import Promotions from './pages/Promotions';
 import Journal from './pages/Journal';
+import JournalModifs from './pages/JournalModifs';
 import Comptabilite from './pages/Comptabilite';
 import Plannings from './pages/Plannings';
 import Magasins from './pages/Magasins';
@@ -76,7 +77,8 @@ export default function App() {
             <Route path="gestion" element={<Gestion />} />
             <Route path="comptabilite" element={<Comptabilite />} />
             <Route path="paiements" element={<Paiements />} />
-            <Route path="journal" element={<Journal />} />
+            <Route path="journal" element={<JournalModifs />} />
+            <Route path="journal-chromes" element={<Journal />} />
             <Route path="comptes" element={<Comptes />} />
             <Route path="import" element={<Import />} />
             <Route element={<RequireOption option="planning" />}>
