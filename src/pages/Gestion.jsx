@@ -12,8 +12,8 @@ function sections(estSuperadmin, options) {
       titre: 'Chiffres & pilotage',
       outils: [
         { to: '/comptabilite', emoji: '📈', nom: 'Comptabilité', desc: 'CA, bénéfice, intéressement/heures par employé, exports CSV/PDF.' },
-        { to: '/journal', emoji: '🧾', nom: 'Journal', desc: 'Modifications des chromes : qui, quand, quoi.' },
-        { to: '/journal-chromes', emoji: '📒', nom: 'Journal chromes', desc: 'Flux d’activité récent (clôtures, chromes, paiements).' },
+        { to: '/journal', emoji: '🧾', nom: 'Journal', desc: 'Activité du comptoir : clôtures de caisse et chromes.' },
+        { to: '/journal-chromes', emoji: '📒', nom: 'Journal chromes', desc: 'Modifications des chromes : qui, quand, quoi.' },
       ],
     },
     {

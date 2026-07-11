@@ -77,8 +77,8 @@ export default function App() {
             <Route path="gestion" element={<Gestion />} />
             <Route path="comptabilite" element={<Comptabilite />} />
             <Route path="paiements" element={<Paiements />} />
-            <Route path="journal" element={<JournalModifs />} />
-            <Route path="journal-chromes" element={<Journal />} />
+            <Route path="journal" element={<Journal />} />
+            <Route path="journal-chromes" element={<JournalModifs />} />
             <Route path="comptes" element={<Comptes />} />
             <Route path="import" element={<Import />} />
             <Route element={<RequireOption option="planning" />}>
