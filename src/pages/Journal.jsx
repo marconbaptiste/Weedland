@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { formatEuros, formatDateFr } from '../lib/format';
+import { formatEuros } from '../lib/format';
 
 // Journal principal (admin) — flux d'activité du magasin, le plus simplifié
 // possible : tout ce que fait l'équipe au comptoir (clôtures de caisse +
@@ -11,6 +11,12 @@ import { formatEuros, formatDateFr } from '../lib/format';
 // users, ce qui rendait l'embed ambigu et vidait la requête).
 function heure(iso) {
   return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Date compacte jj/mm/aa pour tenir dans la largeur de l'écran mobile.
+function dateCourte(iso) {
+  const [a, m, j] = (iso ?? '').split('-');
+  return a ? `${j}/${m}/${a.slice(2)}` : '';
 }
 
 export default function Journal() {
@@ -77,7 +83,7 @@ export default function Journal() {
       <h1>Journal</h1>
       <p className="periode-info">Activité récente du comptoir : clôtures de caisse et chromes.</p>
       <div className="card">
-        <table className="tableau">
+        <table className="tableau journal-tableau">
           <thead>
             <tr>
               <th>Nom</th>
@@ -92,7 +98,7 @@ export default function Journal() {
               return (
                 <tr key={e.cle}>
                   <td>{e.nom}</td>
-                  <td>{formatDateFr(e.date)}</td>
+                  <td>{dateCourte(e.date)}</td>
                   <td>{heure(e.created_at)}</td>
                   <td>
                     <strong className={m.classe}>{m.texte}</strong>

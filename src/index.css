@@ -1833,6 +1833,36 @@ textarea,
   }
 }
 
+/* Journal : au contraire on veut que TOUT tienne dans la largeur (pas de
+   défilement horizontal) — colonnes à largeurs fixes + retour à la ligne. */
+.journal-tableau {
+  table-layout: fixed;
+  width: 100%;
+}
+.journal-tableau th:nth-child(1),
+.journal-tableau td:nth-child(1) { width: 24%; }
+.journal-tableau th:nth-child(2),
+.journal-tableau td:nth-child(2) { width: 21%; }
+.journal-tableau th:nth-child(3),
+.journal-tableau td:nth-child(3) { width: 14%; }
+.journal-tableau .journal-apropos { color: var(--texte-doux); }
+@media (max-width: 640px) {
+  .journal-tableau {
+    display: table;
+    overflow-x: visible;
+    white-space: normal;
+    font-size: 0.8rem;
+  }
+  .journal-tableau th,
+  .journal-tableau td {
+    padding: 0.5rem 0.25rem;
+    vertical-align: top;
+    word-break: break-word;
+  }
+  /* Le montant reste d'un seul bloc ; seul le « · à qui » passe à la ligne. */
+  .journal-tableau strong { white-space: nowrap; }
+}
+
 /* Téléphone : on densifie l'affichage (moins d'espaces vides) pour faire
    tenir un maximum d'outils à l'écran sans scroller. */
 @media (max-width: 640px) {
