@@ -78,6 +78,7 @@ export default function GestionOptions() {
     );
   }
 
+  const abonne = Boolean(mag?.stripe_subscription_id);
   const total = BASE + OPTIONS.filter((o) => mag?.[o.col]).reduce((s, o) => s + o.prix, 0);
 
   return (
@@ -85,30 +86,33 @@ export default function GestionOptions() {
       <h2>Abonnement & options</h2>
       <p className="statut">Offre de base <strong>{BASE} € HT/mois</strong>. Ajoute les options quand tu veux.</p>
 
-      {!mag?.stripe_subscription_id ? (
-        <>
-          <p className="statut">Abonne-toi à l’offre de base pour activer des options (essai 14 jours, sans engagement).</p>
-          <button type="button" className="btn btn-primary" onClick={sabonner}>S’abonner (49 € HT/mois)</button>
-        </>
+      <ul className="liste-options">
+        {OPTIONS.map((o) => (
+          <li key={o.cle} className="ligne-option">
+            <span className="option-nom">{o.nom}</span>
+            <span className="option-prix">+{o.prix} €</span>
+            {abonne ? (
+              <button
+                type="button"
+                className={`btn ${mag?.[o.col] ? 'btn-discret' : 'btn-primary'}`}
+                disabled={busy === o.cle}
+                onClick={() => basculer(o, !mag?.[o.col])}
+              >
+                {busy === o.cle ? '…' : mag?.[o.col] ? 'Retirer' : 'Ajouter'}
+              </button>
+            ) : (
+              <span className="option-prix" title="Abonne-toi à l’offre de base pour activer">🔒</span>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {abonne ? (
+        <p className="periode-info">Total actuel : <strong>{total} € HT/mois</strong></p>
       ) : (
         <>
-          <ul className="liste-options">
-            {OPTIONS.map((o) => (
-              <li key={o.cle} className="ligne-option">
-                <span className="option-nom">{o.nom}</span>
-                <span className="option-prix">+{o.prix} €</span>
-                <button
-                  type="button"
-                  className={`btn ${mag?.[o.col] ? 'btn-discret' : 'btn-primary'}`}
-                  disabled={busy === o.cle}
-                  onClick={() => basculer(o, !mag?.[o.col])}
-                >
-                  {busy === o.cle ? '…' : mag?.[o.col] ? 'Retirer' : 'Ajouter'}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <p className="periode-info">Total actuel : <strong>{total} € HT/mois</strong></p>
+          <p className="statut">Abonne-toi à l’offre de base pour activer les options (essai 14 jours, sans engagement).</p>
+          <button type="button" className="btn btn-primary" onClick={sabonner}>S’abonner (49 € HT/mois)</button>
         </>
       )}
       {msg && <p className="statut">{msg}</p>}
