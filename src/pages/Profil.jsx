@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { formatEuros } from '../lib/format';
@@ -221,6 +222,12 @@ export default function Profil() {
           <span className="bulle-rond">💶</span>
           <span className="bulle-label">Rendu de monnaie</span>
         </button>
+        {estAdmin && (
+          <Link to="/journal" className="bulle-raccourci">
+            <span className="bulle-rond">🧾</span>
+            <span className="bulle-label">Journal</span>
+          </Link>
+        )}
       </div>
 
       {options.planning && <CalendrierLecture />}

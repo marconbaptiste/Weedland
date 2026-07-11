@@ -36,8 +36,8 @@ export default function JournalModifs() {
 
   return (
     <div className="page">
-      <h1>Journal</h1>
-      <p className="periode-info">Historique des modifications de chromes (création, correction, suppression).</p>
+      <h1>Journal chromes</h1>
+      <p className="periode-info">Modifications des chromes : création, correction, suppression.</p>
       <div className="card">
         <table className="tableau">
           <thead>
