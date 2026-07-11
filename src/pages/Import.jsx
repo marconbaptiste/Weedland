@@ -13,7 +13,7 @@ const UNITES = ['g', 'kg', 'mg', 'ml', 'pièce'];
 // - Tableur : dépose les CSV exportés (caisse/charges/fournisseurs), dispatch auto.
 // - Chromes : un CSV détaillé de dettes clients (rattaché par surnom, sans doublon).
 export default function Import() {
-  const { utilisateur } = useAuth();
+  const { utilisateur, magasinId } = useAuth();
   const [mode, setMode] = useState('tableur');
   const [employes, setEmployes] = useState([]);
   const [employeId, setEmployeId] = useState(utilisateur.id);
@@ -29,8 +29,11 @@ export default function Import() {
   const [ajouterQte, setAjouterQte] = useState(true);
 
   useEffect(() => {
-    supabase.from('users').select('id, nom').order('nom').then(({ data }) => setEmployes(data ?? []));
-  }, []);
+    if (!magasinId) return;
+    // Cloisonné au magasin actif (évite d'affecter un import à un employé d'un
+    // autre magasin quand c'est un superadmin qui importe).
+    supabase.from('users').select('id, nom').eq('magasin_id', magasinId).order('nom').then(({ data }) => setEmployes(data ?? []));
+  }, [magasinId]);
 
   // ----- Tableur (caisse / charges / fournisseurs) -----
   async function choisirFichiers(e) {
