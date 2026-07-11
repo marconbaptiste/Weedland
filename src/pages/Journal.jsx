@@ -63,7 +63,7 @@ export default function Journal() {
 
   return (
     <div className="page">
-      <h1>Journal</h1>
+      <h1>Journal chromes</h1>
       <div className="card">
         <ul className="journal">
           {evenements.map((e) => (
