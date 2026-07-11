@@ -12,6 +12,7 @@ function heure(iso) {
 
 export default function Journal() {
   const [evenements, setEvenements] = useState([]);
+  const [diag, setDiag] = useState({ nbClotures: 0, nbChromes: 0, erreur: '' });
 
   useEffect(() => {
     (async () => {
@@ -27,6 +28,12 @@ export default function Journal() {
           .order('date', { ascending: false })
           .limit(200),
       ]);
+
+      setDiag({
+        nbClotures: (caisse.data ?? []).length,
+        nbChromes: (chromes.data ?? []).length,
+        erreur: caisse.error?.message ?? '',
+      });
 
       const items = [
         ...(caisse.data ?? []).map((c) => ({
@@ -62,6 +69,10 @@ export default function Journal() {
     <div className="page">
       <h1>Journal</h1>
       <p className="periode-info">Activité récente du comptoir : clôtures de caisse et chromes.</p>
+      <p className="periode-info">
+        {diag.nbClotures} clôture(s) · {diag.nbChromes} chrome(s)
+        {diag.erreur && ` · erreur clôtures : ${diag.erreur}`}
+      </p>
       <div className="card">
         <table className="tableau">
           <thead>
