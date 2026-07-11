@@ -19,18 +19,19 @@ export default function Journal() {
         supabase
           .from('caisse_jour')
           .select('id, date, created_at, ventes_directes, users(nom)')
-          .order('created_at', { ascending: false })
-          .limit(100),
+          .order('date', { ascending: false })
+          .limit(200),
         supabase
           .from('chromes')
           .select('id, date, created_at, type, montant, users(nom), clients(surnom)')
-          .order('created_at', { ascending: false })
-          .limit(100),
+          .order('date', { ascending: false })
+          .limit(200),
       ]);
 
       const items = [
         ...(caisse.data ?? []).map((c) => ({
           cle: `caisse-${c.id}`,
+          date: c.date,
           created_at: c.created_at,
           nom: c.users?.nom ?? '—',
           mouvement: `Clôture caisse · ${formatEuros(c.ventes_directes)}`,
@@ -38,6 +39,7 @@ export default function Journal() {
         })),
         ...(chromes.data ?? []).map((c) => ({
           cle: `chrome-${c.id}`,
+          date: c.date,
           created_at: c.created_at,
           nom: c.users?.nom ?? '—',
           mouvement:
@@ -46,9 +48,13 @@ export default function Journal() {
             (c.clients?.surnom ? ` · ${c.clients.surnom}` : ''),
           classe: c.type === 'avance' ? 'action-suppression' : 'action-modification',
         })),
-      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      ]
+        // Tri par jour d'activité (date métier) puis par heure de saisie : ainsi
+        // la clôture d'un jour reste côte à côte avec les chromes du même jour,
+        // même si elle a été enregistrée/importée à un autre moment.
+        .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : new Date(b.created_at) - new Date(a.created_at)));
 
-      setEvenements(items.slice(0, 150));
+      setEvenements(items.slice(0, 250));
     })();
   }, []);
 
@@ -70,7 +76,7 @@ export default function Journal() {
             {evenements.map((e) => (
               <tr key={e.cle}>
                 <td>{e.nom}</td>
-                <td>{formatDateFr(e.created_at)}</td>
+                <td>{formatDateFr(e.date)}</td>
                 <td>{heure(e.created_at)}</td>
                 <td className={e.classe}>{e.mouvement}</td>
               </tr>
