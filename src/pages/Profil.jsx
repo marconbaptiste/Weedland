@@ -199,8 +199,6 @@ export default function Profil() {
         )}
       </div>
 
-      {options.planning && <CalendrierLecture />}
-
       <div className="bulles-accueil">
         {options.fidelite && (
           <button type="button" className="bulle-raccourci" onClick={() => setOutil('scanner')}>
@@ -224,6 +222,8 @@ export default function Profil() {
           <span className="bulle-label">Rendu de monnaie</span>
         </button>
       </div>
+
+      {options.planning && <CalendrierLecture />}
 
       <GuideDemarrage />
 
