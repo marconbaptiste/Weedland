@@ -101,7 +101,11 @@ export default function Carte() {
   }, []);
 
   async function activerNotifs() {
-    const r = await activerPush(clientId);
+    if (!etat.token) {
+      setMsg('Patiente une seconde puis réessaie.');
+      return;
+    }
+    const r = await activerPush(clientId, etat.token);
     if (r.ok) {
       setPushEtat('actif');
       setMsg('🔔 Notifications activées !');

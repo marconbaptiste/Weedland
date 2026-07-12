@@ -56,7 +56,7 @@ export default function Comptes() {
 
   async function retirerEmail(email) {
     if (!window.confirm(`Retirer ${email} des comptes autorisés ?`)) return;
-    await supabase.from('comptes_autorises').delete().eq('email', email);
+    await supabase.from('comptes_autorises').delete().eq('email', email).eq('magasin_id', magasinId);
     charger();
   }
 

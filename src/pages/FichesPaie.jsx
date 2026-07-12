@@ -33,13 +33,15 @@ export default function FichesPaie() {
   useEffect(() => {
     if (magasinId)
       supabase.from('users').select('id, nom').eq('magasin_id', magasinId).order('nom').then(({ data }) => setEmployes(data ?? []));
-    supabase
-      .from('parametres')
-      .select('valeur')
-      .eq('cle', 'employeur')
-      .maybeSingle()
-      .then(({ data }) => setEmployeur(data?.valeur ?? {}));
-  }, []);
+    if (magasinId)
+      supabase
+        .from('parametres')
+        .select('valeur')
+        .eq('cle', 'employeur')
+        .eq('magasin_id', magasinId)
+        .maybeSingle()
+        .then(({ data }) => setEmployeur(data?.valeur ?? {}));
+  }, [magasinId]);
 
   // Chargement du bulletin pour (employé, mois).
   const charger = useCallback(async () => {
@@ -182,7 +184,10 @@ export default function FichesPaie() {
   async function enregistrerEmployeur() {
     await supabase
       .from('parametres')
-      .upsert({ cle: 'employeur', valeur: employeur, updated_at: new Date().toISOString() }, { onConflict: 'cle' });
+      .upsert(
+        { cle: 'employeur', valeur: employeur, magasin_id: magasinId, updated_at: new Date().toISOString() },
+        { onConflict: 'magasin_id,cle' },
+      );
     setStatut('Employeur enregistré ✅');
   }
 
