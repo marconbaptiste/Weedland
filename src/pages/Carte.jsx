@@ -101,11 +101,16 @@ export default function Carte() {
   }, []);
 
   async function activerNotifs() {
-    if (!etat.token) {
+    // Tire un token FRAIS juste avant l'appel : `etat.token` peut être périmé si
+    // un scan/rotation a eu lieu depuis le dernier rafraîchissement (le serveur
+    // exige le fid_token courant pour enregistrer le push).
+    const { data } = await supabase.rpc('fidelite_token', { p_client: clientId, p_ttl_sec: 60 });
+    const token = data?.[0]?.token ?? etat.token;
+    if (!token) {
       setMsg('Patiente une seconde puis réessaie.');
       return;
     }
-    const r = await activerPush(clientId, etat.token);
+    const r = await activerPush(clientId, token);
     if (r.ok) {
       setPushEtat('actif');
       setMsg('🔔 Notifications activées !');
