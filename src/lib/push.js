@@ -24,7 +24,9 @@ function base64UrlVersUint8(base64) {
 }
 
 // Demande la permission, s'abonne au push, enregistre l'abonnement du client.
-export async function activerPush(clientId) {
+// `token` = jeton courant de la carte (fid_token), preuve de possession exigée
+// côté serveur pour empêcher un tiers de lier son endpoint à la carte d'autrui.
+export async function activerPush(clientId, token) {
   if (!pushSupporte()) return { ok: false, raison: 'non-supporte' };
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') return { ok: false, raison: 'refuse' };
@@ -43,6 +45,7 @@ export async function activerPush(clientId) {
     p_endpoint: sub.endpoint,
     p_p256dh: j.keys.p256dh,
     p_auth: j.keys.auth,
+    p_token: token,
   });
   if (error) return { ok: false, raison: error.message };
   return { ok: true };
