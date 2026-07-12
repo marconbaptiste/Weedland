@@ -1,7 +1,8 @@
 import { supabase } from './supabase';
 
 // Clé publique VAPID (sûre à exposer). Définie dans Vercel : VITE_VAPID_PUBLIC_KEY.
-const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+// .trim() : robustesse à un espace/retour à la ligne collé par erreur dans la var.
+const VAPID_PUBLIC = (import.meta.env.VITE_VAPID_PUBLIC_KEY || '').trim();
 
 export function pushSupporte() {
   return (
