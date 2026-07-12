@@ -36,13 +36,13 @@ export default function Profil() {
         supabase.from('chromes').select('type, montant').eq('employe_id', utilisateur.id).eq('date', today),
       ]);
       // CA = ventes directes (CB+espèces de la clôture) + avances − remboursements
-      // + virements. On somme depuis `chromes` (pas depuis v_ca_jour.encaissements,
-      // qui inclut déjà les virements) pour éviter tout double comptage, et pour
+      // + autres. On somme depuis `chromes` (pas depuis v_ca_jour.encaissements,
+      // qui inclut déjà les autres) pour éviter tout double comptage, et pour
       // couvrir aussi les jours SANS clôture.
       const vd = somme((cl ?? []).map((r) => r.ventes_directes));
       const av = somme((chr ?? []).filter((c) => c.type === 'avance').map((c) => c.montant));
       const rb = somme((chr ?? []).filter((c) => c.type === 'remboursement').map((c) => c.montant));
-      const vir = somme((chr ?? []).filter((c) => c.type === 'virement').map((c) => c.montant));
+      const vir = somme((chr ?? []).filter((c) => c.type === 'autre').map((c) => c.montant));
       setStats({ caJour: somme([vd, av, vir, -rb]) });
     })();
   }, [utilisateur.id]);
@@ -141,7 +141,7 @@ export default function Profil() {
   const prenom = (profil?.nom ?? '').split(' ')[0];
   const avancesJour = chromesJour.filter((c) => c.type === 'avance');
   const remboursementsJour = chromesJour.filter((c) => c.type === 'remboursement');
-  const virementsJour = chromesJour.filter((c) => c.type === 'virement');
+  const autresJour = chromesJour.filter((c) => c.type === 'autre');
 
   return (
     <div className="page">
@@ -204,10 +204,10 @@ export default function Profil() {
             ))}
           </div>
         )}
-        {virementsJour.length > 0 && (
+        {autresJour.length > 0 && (
           <div className="histo-bloc">
-            <span className="histo-titre">Virements 🏦</span>
-            {virementsJour.map((v, i) => (
+            <span className="histo-titre">Autres</span>
+            {autresJour.map((v, i) => (
               <div key={`v${i}`} className="histo-chrome">
                 <span>
                   {v.clients?.surnom ?? 'client'}

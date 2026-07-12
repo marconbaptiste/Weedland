@@ -184,7 +184,7 @@ export default function Cloture() {
   // (et non recalculé). Dès qu'on édite un champ, on repasse au calcul auto.
   const afficherDeclare = Boolean(caisseId) && !modifie && ventesDeclarees != null;
   const caAffiche = afficherDeclare
-    ? somme([ventesDeclarees, resume.avances, resume.virements, -resume.remboursements])
+    ? somme([ventesDeclarees, resume.avances, resume.autres, -resume.remboursements])
     : resume.ca;
   const intAffiche = afficherDeclare
     ? interessement(caAffiche, tauxParDefaut, diviseur)
@@ -365,10 +365,10 @@ export default function Cloture() {
           <span>Remboursements (chromes)</span>
           <strong>{formatEuros(resume.remboursements)}</strong>
         </div>
-        {resume.virements > 0 && (
+        {resume.autres > 0 && (
           <div className="recap-ligne">
-            <span>Virements 🏦 (chromes)</span>
-            <strong>{formatEuros(resume.virements)}</strong>
+            <span>Autres (chromes)</span>
+            <strong>{formatEuros(resume.autres)}</strong>
           </div>
         )}
         <hr />
@@ -382,7 +382,7 @@ export default function Cloture() {
             <span className="recap-valeur">{formatEuros(resume.encaissements)}</span>
           </div>
         </div>
-        <p className="statut">CA = CB + espèces + avances − remboursements + virements.</p>
+        <p className="statut">CA = CB + espèces + avances − remboursements + autres.</p>
         <hr />
         <div className="recap-ligne">
           <span>

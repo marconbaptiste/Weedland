@@ -1,26 +1,26 @@
 -- ============================================================================
--- Migration — Paiement par VIREMENT (achat réglé par virement bancaire)
+-- Migration — Paiement « autre » (achat réglé autrement : virement, chèque…)
 -- À exécuter dans l'éditeur SQL Supabase après les migrations existantes.
 --
--- Besoin : certains clients règlent un ACHAT par virement. On l'enregistre sur
--- la fiche client (comme une avance/un remboursement), mais un virement est de
--- l'argent RÉELLEMENT ENTRÉ pour une VENTE → il AJOUTE au CA ET aux
--- encaissements du jour (comme les espèces/CB). Contrairement à une avance il ne
--- crée AUCUNE dette, et contrairement à un remboursement ce n'est pas le
--- remboursement d'une dette → il n'affecte PAS le solde du client.
+-- Besoin : certains clients règlent un ACHAT autrement qu'en CB/espèces (ex.
+-- virement). On l'enregistre sur la fiche client (comme une avance/un
+-- remboursement), mais c'est de l'argent RÉELLEMENT ENTRÉ pour une VENTE → il
+-- AJOUTE au CA ET aux encaissements du jour (comme les espèces/CB). Contrairement
+-- à une avance il ne crée AUCUNE dette, et contrairement à un remboursement ce
+-- n'est pas le remboursement d'une dette → il n'affecte PAS le solde du client.
 --
--- Modèle : nouveau type de `chromes` = 'virement'.
---   CA du jour    = ventes_directes + avances − remboursements + VIREMENTS
---   Encaissements = CB + espèces + VIREMENTS
---   Solde client  = Σ avances − Σ remboursements  (inchangé : virement exclu)
+-- Modèle : nouveau type de `chromes` = 'autre'.
+--   CA du jour    = ventes_directes + avances − remboursements + AUTRES
+--   Encaissements = CB + espèces + AUTRES
+--   Solde client  = Σ avances − Σ remboursements  (inchangé : 'autre' exclu)
 -- ============================================================================
 
--- 1) Autoriser le type 'virement' sur les chromes.
+-- 1) Autoriser le type 'autre' sur les chromes.
 alter table public.chromes drop constraint if exists chromes_type_check;
 alter table public.chromes
-  add constraint chromes_type_check check (type in ('avance', 'remboursement', 'virement'));
+  add constraint chromes_type_check check (type in ('avance', 'remboursement', 'autre'));
 
--- 2) v_chromes_jour : agréger aussi les virements par (date, employé).
+-- 2) v_chromes_jour : agréger aussi les 'autre' par (date, employé).
 create or replace view public.v_chromes_jour
 with (security_invoker = on) as
 select
@@ -28,11 +28,11 @@ select
   employe_id,
   coalesce(sum(montant) filter (where type = 'avance'), 0)        as avances,
   coalesce(sum(montant) filter (where type = 'remboursement'), 0) as remboursements,
-  coalesce(sum(montant) filter (where type = 'virement'), 0)      as virements
+  coalesce(sum(montant) filter (where type = 'autre'), 0)         as autres
 from public.chromes
 group by date, employe_id;
 
--- 3) v_ca_jour : intégrer les virements au CA, aux encaissements et à
+-- 3) v_ca_jour : intégrer les 'autre' au CA, aux encaissements et à
 --    l'intéressement. (On recrée d'abord la vue dépendante.)
 drop view if exists public.v_interessement_employe;
 drop view if exists public.v_ca_jour;
@@ -52,14 +52,14 @@ select
   1 + (select count(*) from public.caisse_partage p where p.caisse_id = c.id) as nb_partageurs,
   coalesce(ch.avances, 0)        as avances,
   coalesce(ch.remboursements, 0) as remboursements,
-  coalesce(ch.virements, 0)      as virements,
-  c.ventes_directes + coalesce(ch.avances, 0) - coalesce(ch.remboursements, 0) + coalesce(ch.virements, 0) as ca_jour,
-  c.cb + c.especes + coalesce(ch.virements, 0)                                as encaissements,
-  c.ventes_directes + coalesce(ch.remboursements, 0) + coalesce(ch.virements, 0) as encaissements_attendus,
-  (c.cb + c.especes + coalesce(ch.virements, 0))
-    - (c.ventes_directes + coalesce(ch.remboursements, 0) + coalesce(ch.virements, 0)) as ecart,
+  coalesce(ch.autres, 0)         as autres,
+  c.ventes_directes + coalesce(ch.avances, 0) - coalesce(ch.remboursements, 0) + coalesce(ch.autres, 0) as ca_jour,
+  c.cb + c.especes + coalesce(ch.autres, 0)                                    as encaissements,
+  c.ventes_directes + coalesce(ch.remboursements, 0) + coalesce(ch.autres, 0)  as encaissements_attendus,
+  (c.cb + c.especes + coalesce(ch.autres, 0))
+    - (c.ventes_directes + coalesce(ch.remboursements, 0) + coalesce(ch.autres, 0)) as ecart,
   round(
-    (c.ventes_directes + coalesce(ch.avances, 0) - coalesce(ch.remboursements, 0) + coalesce(ch.virements, 0))
+    (c.ventes_directes + coalesce(ch.avances, 0) - coalesce(ch.remboursements, 0) + coalesce(ch.autres, 0))
       / (1 + (select count(*) from public.caisse_partage p where p.caisse_id = c.id))
       * u.pourcentage_interessement / 100,
     2

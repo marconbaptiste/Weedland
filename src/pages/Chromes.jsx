@@ -662,14 +662,14 @@ export default function Chromes() {
                     </button>
                     <button
                       type="button"
-                      className={type === 'virement' ? 'actif' : ''}
-                      onClick={() => setType('virement')}
+                      className={type === 'autre' ? 'actif' : ''}
+                      onClick={() => setType('autre')}
                     >
-                      Virement 🏦
+                      Autre
                     </button>
                   </div>
-                  {type === 'virement' && (
-                    <p className="periode-info">Achat réglé par virement — compté dans le CA du jour, sans créer de dette.</p>
+                  {type === 'autre' && (
+                    <p className="periode-info">Encaissement « autre » (virement, chèque…) — compté dans le CA du jour, sans créer de dette.</p>
                   )}
                   <ChampMontant label="Montant" valeur={montant} onChange={setMontant} />
                   <label className="field">
@@ -726,7 +726,7 @@ export default function Chromes() {
                                 >
                                   <option value="avance">Avance</option>
                                   <option value="remboursement">Remboursement</option>
-                                  <option value="virement">Virement</option>
+                                  <option value="autre">Autre</option>
                                 </select>
                               </label>
                               <ChampMontant
@@ -762,7 +762,7 @@ export default function Chromes() {
                           <td className={`droite ${l.type === 'avance' ? 'dette' : l.type === 'remboursement' ? 'solde-ok' : ''}`}>
                             {l.type === 'avance' ? '+ ' : l.type === 'remboursement' ? '− ' : ''}
                             {formatEuros(l.montant)}
-                            {l.type === 'virement' && <span className="chrome-heure"> · 🏦 virement</span>}
+                            {l.type === 'autre' && <span className="chrome-heure"> · autre</span>}
                           </td>
                           <td className="actions-cellule">
                             {/* Registre partagé : tout employé du magasin peut ajuster un chrome. */}
