@@ -62,11 +62,14 @@ export default function Comptabilite() {
       ? supabase.from('fournisseurs').select('id, libelle, montant, justificatif').eq('mois', mois).order('created_at')
       : supabase.from('fournisseurs').select('id, libelle, montant').gte('mois', premierDuMois(debut)).lte('mois', fin).order('mois');
 
-    // CA = encaissements (clôtures) + avances − remboursements (TOUS les chromes
-    // de la période, même ceux saisis un jour sans clôture : montants dus oubliés).
+    // CA = ventes directes (clôtures) + avances − remboursements + virements (TOUS
+    // les chromes de la période, même ceux saisis un jour sans clôture). On part de
+    // ventes_directes (CB+espèces, hors virement) et on ajoute les virements depuis
+    // `chromes` : pas de double comptage (v_ca_jour.encaissements inclut déjà les
+    // virements), et les virements des jours SANS clôture sont bien pris en compte.
     const [enc, an, chr, anChr, ch, fo] = await Promise.all([
-      supabase.from('v_ca_jour').select('date, encaissements').gte('date', debut).lte('date', fin),
-      supabase.from('v_ca_jour').select('encaissements').gte('date', anneeDebut).lte('date', anneeFin),
+      supabase.from('v_ca_jour').select('date, ventes_directes').gte('date', debut).lte('date', fin),
+      supabase.from('v_ca_jour').select('ventes_directes').gte('date', anneeDebut).lte('date', anneeFin),
       supabase.from('chromes').select('date, type, montant').gte('date', debut).lte('date', fin),
       supabase.from('chromes').select('type, montant').gte('date', anneeDebut).lte('date', anneeFin),
       reqCharges,
@@ -76,8 +79,9 @@ export default function Comptabilite() {
     setChromesRows(chr.data ?? []);
     const av = (rows) => somme((rows ?? []).filter((c) => c.type === 'avance').map((c) => c.montant));
     const rb = (rows) => somme((rows ?? []).filter((c) => c.type === 'remboursement').map((c) => c.montant));
-    const anEnc = somme((an.data ?? []).map((r) => r.encaissements));
-    setCaAnnee(somme([anEnc, av(anChr.data), -rb(anChr.data)]));
+    const vir = (rows) => somme((rows ?? []).filter((c) => c.type === 'virement').map((c) => c.montant));
+    const anVd = somme((an.data ?? []).map((r) => r.ventes_directes));
+    setCaAnnee(somme([anVd, av(anChr.data), vir(anChr.data), -rb(anChr.data)]));
     setCharges(ch.data ?? []);
     setFournisseurs(fo.data ?? []);
   }, [debut, fin, mois, enMois]);
@@ -100,7 +104,7 @@ export default function Comptabilite() {
   const chargerEquipe = useCallback(async () => {
     let qCa = supabase
       .from('v_ca_jour')
-      .select('caisse_id, date, employe_id, avances, remboursements')
+      .select('caisse_id, date, employe_id, avances, remboursements, virements')
       .gte('date', debut)
       .lte('date', fin);
     let qInt = supabase
@@ -203,24 +207,30 @@ export default function Comptabilite() {
   }
 
   // --- Totaux ---
-  // CA par jour = encaissements de la journée + avances − remboursements du jour,
-  // sur l'UNION des jours de clôture ET des jours de chromes (montants dus saisis
-  // en retard inclus). Pas de double comptage : encaissements ↔ clôtures,
-  // avances/remboursements ↔ table chromes.
+  // CA par jour = ventes directes + avances − remboursements + virements, sur
+  // l'UNION des jours de clôture ET des jours de chromes (montants saisis en
+  // retard inclus). Pas de double comptage : ventes_directes ↔ clôtures,
+  // avances/remboursements/virements ↔ table chromes. Encaissements affichés =
+  // ventes directes + virements (argent réellement entré).
   const jours = (() => {
     const map = {};
-    const j = (date) => (map[date] ??= { enc: 0, av: 0, rb: 0 });
+    const j = (date) => (map[date] ??= { vd: 0, av: 0, rb: 0, vir: 0 });
     encRows.forEach((r) => {
       const d = j(r.date);
-      d.enc = somme([d.enc, r.encaissements]);
+      d.vd = somme([d.vd, r.ventes_directes]);
     });
     chromesRows.forEach((r) => {
       const d = j(r.date);
       if (r.type === 'avance') d.av = somme([d.av, r.montant]);
+      else if (r.type === 'virement') d.vir = somme([d.vir, r.montant]);
       else d.rb = somme([d.rb, r.montant]);
     });
     return Object.entries(map)
-      .map(([date, v]) => ({ date, encaissements: v.enc, ca: somme([v.enc, v.av, -v.rb]) }))
+      .map(([date, v]) => ({
+        date,
+        encaissements: somme([v.vd, v.vir]),
+        ca: somme([v.vd, v.av, v.vir, -v.rb]),
+      }))
       .sort((a, b) => a.date.localeCompare(b.date));
   })();
 
@@ -269,6 +279,7 @@ export default function Comptabilite() {
       encaissements: r.encaissements,
       avances: r.est_proprietaire ? ca?.avances ?? 0 : null,
       remboursements: r.est_proprietaire ? ca?.remboursements ?? 0 : null,
+      virements: r.est_proprietaire ? ca?.virements ?? 0 : null,
       heures: r.heures_travaillees,
       pourcentage: r.pourcentage_interessement,
       interessement: r.interessement,
@@ -278,8 +289,9 @@ export default function Comptabilite() {
   const chromeParCle = new Map();
   chromesEmpRows.forEach((c) => {
     const cle = `${c.employe_id}|${c.date}`;
-    const v = chromeParCle.get(cle) ?? { avances: 0, remboursements: 0 };
+    const v = chromeParCle.get(cle) ?? { avances: 0, remboursements: 0, virements: 0 };
     if (c.type === 'avance') v.avances = somme([v.avances, c.montant]);
+    else if (c.type === 'virement') v.virements = somme([v.virements, c.montant]);
     else v.remboursements = somme([v.remboursements, c.montant]);
     chromeParCle.set(cle, v);
   });
@@ -294,10 +306,11 @@ export default function Comptabilite() {
         employe_id,
         est_proprietaire: true,
         orphelin: true,
-        ca_jour: somme([v.avances, -v.remboursements]),
-        encaissements: null,
+        ca_jour: somme([v.avances, -v.remboursements, v.virements]),
+        encaissements: somme([v.virements]),
         avances: v.avances,
         remboursements: v.remboursements,
+        virements: v.virements,
         heures: 0,
         pourcentage: 0,
         interessement: 0,
@@ -314,10 +327,10 @@ export default function Comptabilite() {
 
   function exporterCSV() {
     const entetes = [
-      'Date', 'Employé', 'Avances', 'Remboursements', 'CA', 'Encaissements', 'Heures', '% intéress.', 'Intéressement',
+      'Date', 'Employé', 'Avances', 'Remboursements', 'Virements', 'CA', 'Encaissements', 'Heures', '% intéress.', 'Intéressement',
     ];
     const lignes = lignesDetail.map((r) => [
-      r.date, nomLigne(r), r.avances ?? '', r.remboursements ?? '',
+      r.date, nomLigne(r), r.avances ?? '', r.remboursements ?? '', r.virements ?? '',
       r.ca_jour ?? '', r.encaissements ?? '', r.heures, r.pourcentage, r.interessement,
     ]);
     telechargerCSV(`comptabilite-${debut}_${fin}.csv`, entetes, lignes);
@@ -498,6 +511,7 @@ export default function Comptabilite() {
               <th className="droite">Encaiss.</th>
               <th className="droite">Avances</th>
               <th className="droite">Rembours.</th>
+              <th className="droite">Virements</th>
               <th className="droite">Heures</th>
               <th className="droite">Intéress.</th>
             </tr>
@@ -511,12 +525,13 @@ export default function Comptabilite() {
                 <td className="droite">{r.encaissements != null ? formatEuros(r.encaissements) : '—'}</td>
                 <td className="droite">{r.avances != null ? formatEuros(r.avances) : '—'}</td>
                 <td className="droite">{r.remboursements != null ? formatEuros(r.remboursements) : '—'}</td>
+                <td className="droite">{r.virements != null ? formatEuros(r.virements) : '—'}</td>
                 <td className="droite">{formatNombre(r.heures)}</td>
                 <td className="droite">{formatEuros(r.interessement)}</td>
               </tr>
             ))}
             {lignesDetail.length === 0 && (
-              <tr><td colSpan={8} className="vide">Aucune donnée sur la période.</td></tr>
+              <tr><td colSpan={9} className="vide">Aucune donnée sur la période.</td></tr>
             )}
           </tbody>
         </table>

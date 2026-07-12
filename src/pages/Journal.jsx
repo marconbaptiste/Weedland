@@ -61,9 +61,10 @@ export default function Journal() {
           date: c.date,
           created_at: c.created_at,
           nom: noms[c.employe_id] ?? '—',
-          type: c.type, // 'avance' | 'remboursement'
+          type: c.type, // 'avance' | 'remboursement' | 'virement'
           montant: c.montant,
-          apropos: c.clients?.surnom ?? 'client',
+          apropos:
+            (c.type === 'virement' ? '🏦 ' : '') + (c.clients?.surnom ?? 'client'),
         })),
       ]
         // Tri par jour d'activité (date métier) puis par heure de saisie : ainsi

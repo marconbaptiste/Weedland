@@ -4,14 +4,16 @@
 // testées dans comptabilite.test.js.
 //
 // Règles métier :
-//   CA du jour      = ventes_directes + Σ avances du jour − Σ remboursements du jour
-//   Encaissements   = CB + espèces  (argent réellement entré en caisse)
-//   Solde client    = Σ avances − Σ remboursements
+//   CA du jour      = ventes_directes + Σ avances − Σ remboursements + Σ virements
+//   Encaissements   = CB + espèces + virements  (argent réellement entré)
+//   Solde client    = Σ avances − Σ remboursements  (virement exclu)
 //   Réconciliation  = (CB + espèces) doit égaler (ventes_directes + remboursements du jour)
 //
 // Pourquoi CA ≠ Encaissements : une AVANCE (chrome) compte dans le CA mais
 // n'entre PAS en caisse (crédit accordé au client). Un REMBOURSEMENT entre en
-// caisse mais a déjà été déduit du CA le jour où il est saisi.
+// caisse mais a déjà été déduit du CA le jour où il est saisi. Un VIREMENT est
+// une VENTE payée par virement : il ajoute au CA ET aux encaissements (comme
+// les espèces/CB), sans créer de dette (donc sans toucher le solde client).
 //
 // Tous les calculs se font en CENTIMES (entiers) pour éviter les erreurs de
 // virgule flottante (ex. 0,1 + 0,2 !== 0,3 en flottant binaire).
@@ -46,6 +48,15 @@ export function totalRemboursements(lignes) {
 }
 
 /**
+ * Total des virements (achats réglés par virement bancaire) d'une liste de
+ * chromes. Un virement est une VENTE payée : il entre dans le CA et les
+ * encaissements, mais n'affecte pas le solde (dette) du client.
+ */
+export function totalVirements(lignes) {
+  return somme(lignes.filter((l) => l.type === 'virement').map((l) => l.montant));
+}
+
+/**
  * Solde dû d'un client = Σ avances − Σ remboursements.
  * > 0 : le client doit de l'argent. 0 : soldé.
  */
@@ -59,16 +70,19 @@ export function statutSolde(solde) {
 }
 
 /**
- * CA du jour = ventes_directes + avances − remboursements.
- * @param {{ventesDirectes:number, avances:number, remboursements:number}} p
+ * CA du jour = ventes_directes + avances − remboursements + virements.
+ * Un virement est une vente payée par virement → il ajoute au CA.
+ * @param {{ventesDirectes:number, avances:number, remboursements:number, virements:number}} p
  */
-export function caJour({ ventesDirectes = 0, avances = 0, remboursements = 0 }) {
-  return enEuros(enCentimes(ventesDirectes) + enCentimes(avances) - enCentimes(remboursements));
+export function caJour({ ventesDirectes = 0, avances = 0, remboursements = 0, virements = 0 }) {
+  return enEuros(
+    enCentimes(ventesDirectes) + enCentimes(avances) - enCentimes(remboursements) + enCentimes(virements),
+  );
 }
 
-/** Encaissements du jour = CB + espèces. */
-export function encaissements({ cb = 0, especes = 0 }) {
-  return enEuros(enCentimes(cb) + enCentimes(especes));
+/** Encaissements du jour = CB + espèces + virements (argent réellement entré). */
+export function encaissements({ cb = 0, especes = 0, virements = 0 }) {
+  return enEuros(enCentimes(cb) + enCentimes(especes) + enCentimes(virements));
 }
 
 /**
@@ -90,9 +104,9 @@ export function interessement(ca, pourcentage, nbPersonnes = 1) {
  * (ventes_directes + remboursements du jour).
  * @returns {{reel:number, attendu:number, ecart:number, coherent:boolean}}
  */
-export function reconciliation({ cb = 0, especes = 0, ventesDirectes = 0, remboursements = 0 }) {
-  const reelC = enCentimes(cb) + enCentimes(especes);
-  const attenduC = enCentimes(ventesDirectes) + enCentimes(remboursements);
+export function reconciliation({ cb = 0, especes = 0, ventesDirectes = 0, remboursements = 0, virements = 0 }) {
+  const reelC = enCentimes(cb) + enCentimes(especes) + enCentimes(virements);
+  const attenduC = enCentimes(ventesDirectes) + enCentimes(remboursements) + enCentimes(virements);
   const ecartC = reelC - attenduC;
   return {
     reel: enEuros(reelC),
@@ -111,16 +125,18 @@ export function reconciliation({ cb = 0, especes = 0, ventesDirectes = 0, rembou
 export function resumeJour(caisse, lignesChromes = []) {
   const avances = totalAvances(lignesChromes);
   const remboursements = totalRemboursements(lignesChromes);
+  const virements = totalVirements(lignesChromes);
   const ventesDirectes = Number(caisse.ventes_directes) || 0;
   const cb = Number(caisse.cb) || 0;
   const especes = Number(caisse.especes) || 0;
-  const ca = caJour({ ventesDirectes, avances, remboursements });
+  const ca = caJour({ ventesDirectes, avances, remboursements, virements });
   return {
     avances,
     remboursements,
+    virements,
     ca,
-    encaissements: encaissements({ cb, especes }),
-    reconciliation: reconciliation({ cb, especes, ventesDirectes, remboursements }),
+    encaissements: encaissements({ cb, especes, virements }),
+    reconciliation: reconciliation({ cb, especes, ventesDirectes, remboursements, virements }),
     interessement: interessement(ca, caisse.pourcentage_interessement, caisse.nb_partageurs),
   };
 }
