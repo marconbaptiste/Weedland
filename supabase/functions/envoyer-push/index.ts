@@ -12,7 +12,9 @@ const cors = {
 const env = (n: string) => {
   const v = Deno.env.get(n);
   if (!v) throw new Error(`Secret manquant : ${n}`);
-  return v;
+  // .trim() : robustesse aux espaces/retours à la ligne collés par erreur dans
+  // un secret (ex. clé VAPID copiée depuis un bloc de code sur mobile).
+  return v.trim();
 };
 const json = (o: unknown, status = 200) =>
   new Response(JSON.stringify(o), { status, headers: { ...cors, "Content-Type": "application/json" } });
