@@ -320,8 +320,8 @@ export default function Carte() {
         {etat.logo && (
           <img className="carte-logo" src={urlLogo(etat.logo)} alt={etat.magasin || 'Logo du magasin'} />
         )}
-        {etat.magasin && <span className="logo carte-nom-magasin">{etat.magasin}</span>}
-        <h1 className="logo-connexion">🎟️ Ma carte de fidélité</h1>
+        <h1 className="logo-connexion carte-titre-magasin">{etat.magasin || 'Carte de fidélité'}</h1>
+        <p className="statut carte-sous-titre">🎟️ Carte de fidélité</p>
         <p className="statut">
           <strong>{etat.surnom}</strong>
         </p>
