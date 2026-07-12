@@ -54,9 +54,9 @@ export default function Historique() {
     const map = {};
     (chr.data ?? []).forEach((c) => {
       const k = `${c.employe_id}|${c.date}`;
-      if (!map[k]) map[k] = { avances: [], remboursements: [], virements: [] };
+      if (!map[k]) map[k] = { avances: [], remboursements: [], autres: [] };
       const cible =
-        c.type === 'avance' ? map[k].avances : c.type === 'virement' ? map[k].virements : map[k].remboursements;
+        c.type === 'avance' ? map[k].avances : c.type === 'autre' ? map[k].autres : map[k].remboursements;
       cible.push({
         surnom: c.clients?.surnom ?? 'client',
         montant: c.montant,
@@ -170,7 +170,7 @@ export default function Historique() {
         employe_id,
         date,
         closure: closures.find((c) => `${c.employe_id}|${c.date}` === cle) ?? null,
-        det: chromes[cle] || { avances: [], remboursements: [], virements: [] },
+        det: chromes[cle] || { avances: [], remboursements: [], autres: [] },
       };
     })
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
@@ -270,10 +270,10 @@ export default function Historique() {
                   </div>
                 )}
 
-                {det.virements.length > 0 && (
+                {det.autres.length > 0 && (
                   <div className="histo-bloc">
-                    <span className="histo-titre">Virements 🏦</span>
-                    {det.virements.map((v, i) => (
+                    <span className="histo-titre">Autres</span>
+                    {det.autres.map((v, i) => (
                       <div key={i} className="histo-chrome">
                         <span>{v.surnom}</span>
                         <span>{formatEuros(v.montant)}</span>
