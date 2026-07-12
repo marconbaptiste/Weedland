@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext(null);
@@ -77,23 +77,28 @@ export function AuthProvider({ children }) {
       .then(({ data }) => setMagasins(data ?? []));
   }, [profil?.role]);
 
-  // Abonnement / période d'essai du magasin de l'utilisateur (pour le blocage).
-  useEffect(() => {
+  // Abonnement / options / période d'essai du magasin courant. Extrait en
+  // callback pour pouvoir le rappeler à la volée (ex. après un changement
+  // d'option, afin que la nav et l'accès aux modules se mettent à jour sans
+  // rechargement manuel de l'app).
+  const rechargerMagasin = useCallback(async () => {
     if (!profil?.magasin_id) {
       setMagasinInfo(null);
       setMagasinLogo(null);
       return;
     }
-    supabase
+    const { data } = await supabase
       .from('magasins')
       .select('abonnement, essai_fin, logo, gratuit, opt_planning, opt_stock, opt_fidelite')
       .eq('id', profil.magasin_id)
-      .single()
-      .then(({ data }) => {
-        setMagasinInfo(data ?? null);
-        setMagasinLogo(data?.logo ?? null);
-      });
+      .single();
+    setMagasinInfo(data ?? null);
+    setMagasinLogo(data?.logo ?? null);
   }, [profil?.magasin_id]);
+
+  useEffect(() => {
+    rechargerMagasin();
+  }, [rechargerMagasin]);
 
   const estSuperadmin = profil?.role === 'superadmin';
   // Options d'abonnement du magasin (paywall des modules). Le superadmin
@@ -132,6 +137,7 @@ export function AuthProvider({ children }) {
     magasinInfo,
     magasinLogo,
     setMagasinLogo,
+    rechargerMagasin,
     options,
     magasinBloque,
     changerMagasin,

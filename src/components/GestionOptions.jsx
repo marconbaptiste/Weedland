@@ -12,7 +12,7 @@ const BASE = 49;
 // Écran self-service — l'admin gère son abonnement : offre de base 49 € HT +
 // options à la carte, ajoutées/retirées en direct sur son abonnement Stripe.
 export default function GestionOptions() {
-  const { magasinId } = useAuth();
+  const { magasinId, rechargerMagasin } = useAuth();
   const [mag, setMag] = useState(null);
   const [chargement, setChargement] = useState(true);
   const [busy, setBusy] = useState(null);
@@ -65,6 +65,11 @@ export default function GestionOptions() {
       return;
     }
     setMag((m) => ({ ...m, [o.col]: actif }));
+    // Recharge l'info magasin dans l'AuthProvider → la nav et l'accès aux
+    // modules (fidélité, stock, planning) s'actualisent immédiatement, sans
+    // que le client ait à rafraîchir l'application.
+    await rechargerMagasin?.();
+    setMsg(actif ? 'Option activée ✅' : 'Option retirée.');
   }
 
   if (chargement) return <div className="card"><p className="statut">Chargement de l’abonnement…</p></div>;
