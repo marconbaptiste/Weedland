@@ -54,8 +54,9 @@ export default function Historique() {
     const map = {};
     (chr.data ?? []).forEach((c) => {
       const k = `${c.employe_id}|${c.date}`;
-      if (!map[k]) map[k] = { avances: [], remboursements: [] };
-      const cible = c.type === 'avance' ? map[k].avances : map[k].remboursements;
+      if (!map[k]) map[k] = { avances: [], remboursements: [], virements: [] };
+      const cible =
+        c.type === 'avance' ? map[k].avances : c.type === 'virement' ? map[k].virements : map[k].remboursements;
       cible.push({
         surnom: c.clients?.surnom ?? 'client',
         montant: c.montant,
@@ -169,7 +170,7 @@ export default function Historique() {
         employe_id,
         date,
         closure: closures.find((c) => `${c.employe_id}|${c.date}` === cle) ?? null,
-        det: chromes[cle] || { avances: [], remboursements: [] },
+        det: chromes[cle] || { avances: [], remboursements: [], virements: [] },
       };
     })
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
@@ -262,6 +263,23 @@ export default function Historique() {
                         {r.modifie_le && (
                           <span className="histo-modif">
                             ✏️ corrigé par {noms[r.modifie_par] ?? '—'} le {formatDateFr(r.modifie_le)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {det.virements.length > 0 && (
+                  <div className="histo-bloc">
+                    <span className="histo-titre">Virements 🏦</span>
+                    {det.virements.map((v, i) => (
+                      <div key={i} className="histo-chrome">
+                        <span>{v.surnom}</span>
+                        <span>{formatEuros(v.montant)}</span>
+                        {v.modifie_le && (
+                          <span className="histo-modif">
+                            ✏️ corrigé par {noms[v.modifie_par] ?? '—'} le {formatDateFr(v.modifie_le)}
                           </span>
                         )}
                       </div>

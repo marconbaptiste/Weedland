@@ -660,7 +660,17 @@ export default function Chromes() {
                     >
                       Remboursement (−)
                     </button>
+                    <button
+                      type="button"
+                      className={type === 'virement' ? 'actif' : ''}
+                      onClick={() => setType('virement')}
+                    >
+                      Virement 🏦
+                    </button>
                   </div>
+                  {type === 'virement' && (
+                    <p className="periode-info">Achat réglé par virement — compté dans le CA du jour, sans créer de dette.</p>
+                  )}
                   <ChampMontant label="Montant" valeur={montant} onChange={setMontant} />
                   <label className="field">
                     <span>Date</span>
@@ -716,6 +726,7 @@ export default function Chromes() {
                                 >
                                   <option value="avance">Avance</option>
                                   <option value="remboursement">Remboursement</option>
+                                  <option value="virement">Virement</option>
                                 </select>
                               </label>
                               <ChampMontant
@@ -748,8 +759,10 @@ export default function Chromes() {
                             {formatDateFr(l.date)}
                             {l.created_at && <span className="chrome-heure"> · {formatHeure(l.created_at)}</span>}
                           </td>
-                          <td className={`droite ${l.type === 'avance' ? 'dette' : 'solde-ok'}`}>
-                            {l.type === 'avance' ? '+' : '−'} {formatEuros(l.montant)}
+                          <td className={`droite ${l.type === 'avance' ? 'dette' : l.type === 'remboursement' ? 'solde-ok' : ''}`}>
+                            {l.type === 'avance' ? '+ ' : l.type === 'remboursement' ? '− ' : ''}
+                            {formatEuros(l.montant)}
+                            {l.type === 'virement' && <span className="chrome-heure"> · 🏦 virement</span>}
                           </td>
                           <td className="actions-cellule">
                             {/* Registre partagé : tout employé du magasin peut ajuster un chrome. */}

@@ -4,6 +4,7 @@ import {
   somme,
   totalAvances,
   totalRemboursements,
+  totalVirements,
   soldeClient,
   statutSolde,
   caJour,
@@ -68,11 +69,44 @@ describe('CA du jour', () => {
   it('combine ventes, avances et remboursements', () => {
     expect(caJour({ ventesDirectes: 200, avances: 80, remboursements: 20 })).toBe(260);
   });
+
+  it('un virement (achat payé par virement) AUGMENTE le CA du jour', () => {
+    expect(caJour({ ventesDirectes: 200, virements: 45 })).toBe(245);
+    expect(caJour({ ventesDirectes: 200, avances: 80, remboursements: 20, virements: 45 })).toBe(305);
+  });
 });
 
-describe('encaissements (CB + espèces)', () => {
+describe('encaissements (CB + espèces + virements)', () => {
   it('additionne CB et espèces', () => {
     expect(encaissements({ cb: 120, especes: 80 })).toBe(200);
+  });
+
+  it('un virement entre en encaissements (argent réellement reçu)', () => {
+    expect(encaissements({ cb: 120, especes: 80, virements: 45 })).toBe(245);
+  });
+});
+
+describe('virements (achat payé par virement bancaire)', () => {
+  const lignes = [
+    { type: 'avance', montant: 50 },
+    { type: 'remboursement', montant: 20 },
+    { type: 'virement', montant: 45 },
+  ];
+
+  it('totalise les virements', () => {
+    expect(totalVirements(lignes)).toBe(45);
+  });
+
+  it('un virement N’AFFECTE PAS le solde du client (ce n’est pas une dette)', () => {
+    // solde = avances(50) − remboursements(20) = 30, le virement de 45 est ignoré
+    expect(soldeClient(lignes)).toBe(30);
+  });
+
+  it('entre à la fois dans le CA et dans les encaissements du jour', () => {
+    const ca = caJour({ ventesDirectes: 200, virements: 45 });
+    const enc = encaissements({ cb: 120, especes: 80, virements: 45 });
+    expect(ca).toBe(245);
+    expect(enc).toBe(245);
   });
 });
 
@@ -175,5 +209,20 @@ describe('resumeJour (vue d’ensemble temps réel)', () => {
     const r = resumeJour(caisse, chromes);
     expect(r.ca).toBe(220); // 200 + 50 - 30
     expect(r.interessement).toBe(11); // 220 × 5 %
+  });
+
+  it('intègre les virements au CA et aux encaissements', () => {
+    const caisse = { ventes_directes: 200, cb: 150, especes: 80, pourcentage_interessement: 5 };
+    const chromes = [
+      { type: 'avance', montant: 50 },
+      { type: 'remboursement', montant: 30 },
+      { type: 'virement', montant: 40 },
+    ];
+    const r = resumeJour(caisse, chromes);
+    expect(r.virements).toBe(40);
+    expect(r.ca).toBe(260); // 200 + 50 − 30 + 40
+    expect(r.encaissements).toBe(270); // 150 + 80 + 40
+    expect(r.reconciliation.coherent).toBe(true); // le virement s'annule des deux côtés
+    expect(r.interessement).toBe(13); // 260 × 5 %
   });
 });

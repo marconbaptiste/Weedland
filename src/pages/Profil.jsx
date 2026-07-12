@@ -32,13 +32,18 @@ export default function Profil() {
     const today = aujourdhuiISO();
     (async () => {
       const [{ data: cl }, { data: chr }] = await Promise.all([
-        supabase.from('v_ca_jour').select('encaissements').eq('employe_id', utilisateur.id).eq('date', today),
+        supabase.from('v_ca_jour').select('ventes_directes').eq('employe_id', utilisateur.id).eq('date', today),
         supabase.from('chromes').select('type, montant').eq('employe_id', utilisateur.id).eq('date', today),
       ]);
-      const enc = somme((cl ?? []).map((r) => r.encaissements));
+      // CA = ventes directes (CB+espèces de la clôture) + avances − remboursements
+      // + virements. On somme depuis `chromes` (pas depuis v_ca_jour.encaissements,
+      // qui inclut déjà les virements) pour éviter tout double comptage, et pour
+      // couvrir aussi les jours SANS clôture.
+      const vd = somme((cl ?? []).map((r) => r.ventes_directes));
       const av = somme((chr ?? []).filter((c) => c.type === 'avance').map((c) => c.montant));
       const rb = somme((chr ?? []).filter((c) => c.type === 'remboursement').map((c) => c.montant));
-      setStats({ caJour: somme([enc, av, -rb]) });
+      const vir = somme((chr ?? []).filter((c) => c.type === 'virement').map((c) => c.montant));
+      setStats({ caJour: somme([vd, av, vir, -rb]) });
     })();
   }, [utilisateur.id]);
 
@@ -136,6 +141,7 @@ export default function Profil() {
   const prenom = (profil?.nom ?? '').split(' ')[0];
   const avancesJour = chromesJour.filter((c) => c.type === 'avance');
   const remboursementsJour = chromesJour.filter((c) => c.type === 'remboursement');
+  const virementsJour = chromesJour.filter((c) => c.type === 'virement');
 
   return (
     <div className="page">
@@ -194,6 +200,20 @@ export default function Profil() {
                   <span className="chrome-heure"> · {r.users?.nom ?? '—'}</span>
                 </span>
                 <span className="solde-ok">− {formatEuros(r.montant)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {virementsJour.length > 0 && (
+          <div className="histo-bloc">
+            <span className="histo-titre">Virements 🏦</span>
+            {virementsJour.map((v, i) => (
+              <div key={`v${i}`} className="histo-chrome">
+                <span>
+                  {v.clients?.surnom ?? 'client'}
+                  <span className="chrome-heure"> · {v.users?.nom ?? '—'}</span>
+                </span>
+                <span>{formatEuros(v.montant)}</span>
               </div>
             ))}
           </div>
