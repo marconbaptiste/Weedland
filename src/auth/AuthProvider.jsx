@@ -112,9 +112,12 @@ export function AuthProvider({ children }) {
         fidelite: magasinInfo?.opt_fidelite ?? false,
       };
   const aujourdHui = new Date().toISOString().slice(0, 10);
+  // Un magasin `gratuit` (offert, ex. Weedland) n'est JAMAIS bloqué — sinon ses
+  // employés (non superadmin) voyaient « Abonnement expiré » à tort.
   const magasinBloque =
     !estSuperadmin &&
     !!magasinInfo &&
+    !magasinInfo.gratuit &&
     (magasinInfo.abonnement === 'suspendu' ||
       (magasinInfo.abonnement === 'essai' && magasinInfo.essai_fin && magasinInfo.essai_fin < aujourdHui));
 
