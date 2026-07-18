@@ -89,7 +89,7 @@ export function AuthProvider({ children }) {
     }
     const { data } = await supabase
       .from('magasins')
-      .select('abonnement, essai_fin, logo, gratuit, opt_planning, opt_stock, opt_fidelite')
+      .select('abonnement, essai_fin, logo, gratuit, stripe_subscription_id, opt_planning, opt_stock, opt_fidelite')
       .eq('id', profil.magasin_id)
       .single();
     setMagasinInfo(data ?? null);
@@ -111,15 +111,19 @@ export function AuthProvider({ children }) {
         stock: magasinInfo?.opt_stock ?? false,
         fidelite: magasinInfo?.opt_fidelite ?? false,
       };
-  const aujourdHui = new Date().toISOString().slice(0, 10);
-  // Un magasin `gratuit` (offert, ex. Weedland) n'est JAMAIS bloqué — sinon ses
-  // employés (non superadmin) voyaient « Abonnement expiré » à tort.
+  // Blocage d'abonnement : c'est STRIPE qui fait autorité. On ne bloque un
+  // magasin QUE s'il est réellement sur un abonnement Stripe suspendu (impayé /
+  // résiliation, statut poussé par le webhook). Ainsi :
+  //  - le superadmin n'est jamais bloqué ;
+  //  - un magasin `gratuit` (offert, ex. Weedland) n'est jamais bloqué ;
+  //  - les magasins sans abonnement Stripe (pas encore facturés, états `essai`/
+  //    `suspendu` hérités de l'ancien pilotage) ne sont PLUS bloqués à tort.
   const magasinBloque =
     !estSuperadmin &&
     !!magasinInfo &&
     !magasinInfo.gratuit &&
-    (magasinInfo.abonnement === 'suspendu' ||
-      (magasinInfo.abonnement === 'essai' && magasinInfo.essai_fin && magasinInfo.essai_fin < aujourdHui));
+    Boolean(magasinInfo.stripe_subscription_id) &&
+    magasinInfo.abonnement === 'suspendu';
 
   // Super-admin : bascule le magasin actif (met à jour son propre magasin_id).
   // Un rechargement garantit que toutes les pages relisent le bon magasin.
