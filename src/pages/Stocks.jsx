@@ -4,6 +4,10 @@ import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatNombre } from '../lib/format';
 import { somme } from '../lib/comptabilite';
 import ChampMontant from '../components/ChampMontant';
+import ImportFacture from '../components/ImportFacture';
+import ListeCourses from '../components/ListeCourses';
+import HistoriqueStock from '../components/HistoriqueStock';
+import { journaliserMouvement } from '../lib/mouvementsStock';
 
 const UNITES = ['g', 'kg', 'mg', 'ml', 'pièce'];
 const FORM_VIDE = {
@@ -30,6 +34,10 @@ export default function Stocks() {
   const [edition, setEdition] = useState(null); // id en cours d'édition
   const [editForm, setEditForm] = useState(FORM_VIDE);
   const [delta, setDelta] = useState({}); // id -> mouvement saisi (string)
+  const [importOuvert, setImportOuvert] = useState(false);
+  const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
+  const [tri, setTri] = useState('nom'); // 'nom' | 'quantite'
+  const [nouvelleCat, setNouvelleCat] = useState(false); // saisie d'une nouvelle catégorie à la création
 
   const charger = useCallback(async () => {
     const { data } = await supabase
@@ -48,16 +56,30 @@ export default function Stocks() {
     e.preventDefault();
     const nom = form.nom.trim();
     if (!nom) return;
-    const { error } = await supabase.from('stocks').insert({
-      categorie: form.categorie.trim(),
-      nom,
-      quantite: parseMontant(form.quantite),
-      unite: form.unite,
-      seuil_alerte: parseMontant(form.seuil_alerte),
-      prix_achat: parseMontant(form.prix_achat),
-      prix_vente: parseMontant(form.prix_vente),
-    });
+    const quantite = parseMontant(form.quantite);
+    const { data, error } = await supabase
+      .from('stocks')
+      .insert({
+        categorie: form.categorie.trim(),
+        nom,
+        quantite,
+        unite: form.unite,
+        seuil_alerte: parseMontant(form.seuil_alerte),
+        prix_achat: parseMontant(form.prix_achat),
+        prix_vente: parseMontant(form.prix_vente),
+      })
+      .select('id')
+      .single();
     if (!error) {
+      if (quantite > 0) {
+        await journaliserMouvement({
+          stock_id: data?.id ?? null,
+          produit: nom,
+          delta: quantite,
+          quantite_apres: quantite,
+          motif: 'creation',
+        });
+      }
       setForm(FORM_VIDE);
       setCreationOuverte(false);
       charger();
@@ -80,12 +102,14 @@ export default function Stocks() {
   async function enregistrerEdition(id) {
     const nom = editForm.nom.trim();
     if (!nom) return;
+    const ancien = produits.find((p) => p.id === id);
+    const nouvelleQte = parseMontant(editForm.quantite);
     const { error } = await supabase
       .from('stocks')
       .update({
         categorie: editForm.categorie.trim(),
         nom,
-        quantite: parseMontant(editForm.quantite),
+        quantite: nouvelleQte,
         unite: editForm.unite,
         seuil_alerte: parseMontant(editForm.seuil_alerte),
         prix_achat: parseMontant(editForm.prix_achat),
@@ -93,6 +117,16 @@ export default function Stocks() {
       })
       .eq('id', id);
     if (!error) {
+      const ecart = ancien ? arrondi(nouvelleQte - Number(ancien.quantite)) : 0;
+      if (ecart !== 0) {
+        await journaliserMouvement({
+          stock_id: id,
+          produit: nom,
+          delta: ecart,
+          quantite_apres: nouvelleQte,
+          motif: 'correction',
+        });
+      }
       setEdition(null);
       charger();
     }
@@ -100,7 +134,18 @@ export default function Stocks() {
 
   async function supprimer(id) {
     if (!window.confirm('Supprimer ce produit du stock ?')) return;
-    await supabase.from('stocks').delete().eq('id', id);
+    const produit = produits.find((p) => p.id === id);
+    const { error } = await supabase.from('stocks').delete().eq('id', id);
+    if (!error && produit && Number(produit.quantite) > 0) {
+      // Le produit part avec sa quantité : on trace la sortie correspondante.
+      await journaliserMouvement({
+        stock_id: null, // la ligne stock disparaît (on delete set null)
+        produit: produit.nom,
+        delta: -Number(produit.quantite),
+        quantite_apres: 0,
+        motif: 'suppression',
+      });
+    }
     charger();
   }
 
@@ -111,6 +156,17 @@ export default function Stocks() {
     const nouvelle = Math.max(0, arrondi(Number(p.quantite) + signe * d));
     const { error } = await supabase.from('stocks').update({ quantite: nouvelle }).eq('id', p.id);
     if (!error) {
+      // On trace la variation réelle (le stock ne descend jamais sous 0).
+      const ecart = arrondi(nouvelle - Number(p.quantite));
+      if (ecart !== 0) {
+        await journaliserMouvement({
+          stock_id: p.id,
+          produit: p.nom,
+          delta: ecart,
+          quantite_apres: nouvelle,
+          motif: signe > 0 ? 'entree' : 'sortie',
+        });
+      }
       setDelta((x) => ({ ...x, [p.id]: '' }));
       charger();
     }
@@ -123,17 +179,30 @@ export default function Stocks() {
   const valeurStock = somme(produits.map((p) => arrondi(Number(p.quantite) * Number(p.prix_achat))));
   const nbAlertes = produits.filter(enAlerte).length;
 
+  // Catégories réellement saisies (pour le sélecteur à la création/import).
+  const categoriesReelles = [...new Set(produits.map((p) => (p.categorie ?? '').trim()).filter(Boolean))].sort(
+    (a, b) => a.localeCompare(b),
+  );
+
   // Regroupement par catégorie pour l'affichage.
   const parCategorie = {};
   filtres.forEach((p) => {
     const cle = p.categorie?.trim() || 'Sans catégorie';
     (parCategorie[cle] ??= []).push(p);
   });
+  // Tri des produits DANS chaque catégorie : par nom (A→Z) ou par quantité (↓).
+  const comparer =
+    tri === 'quantite'
+      ? (a, b) => Number(b.quantite) - Number(a.quantite) || a.nom.localeCompare(b.nom)
+      : (a, b) => a.nom.localeCompare(b.nom);
+  Object.values(parCategorie).forEach((arr) => arr.sort(comparer));
   const categories = Object.keys(parCategorie).sort((a, b) => a.localeCompare(b));
 
   return (
     <div className="page">
       <h1>Stocks</h1>
+
+      <ListeCourses />
 
       <div className="cartes-kpi">
         <div className="kpi">
@@ -157,21 +226,62 @@ export default function Stocks() {
           value={recherche}
           onChange={(e) => setRecherche(e.target.value)}
         />
+        <div className="tri-ligne">
+          <span className="tri-label">Classer&nbsp;:</span>
+          <div className="bascule">
+            <button type="button" className={tri === 'nom' ? 'actif' : ''} onClick={() => setTri('nom')}>
+              Par nom
+            </button>
+            <button type="button" className={tri === 'quantite' ? 'actif' : ''} onClick={() => setTri('quantite')}>
+              Par quantité
+            </button>
+          </div>
+        </div>
         {creationOuverte ? (
           <form className="form-chrome" onSubmit={creer}>
             <label className="field">
               <span>Catégorie / type de produit</span>
-              <input
-                list="categories-stock"
-                value={form.categorie}
-                onChange={(e) => setForm((f) => ({ ...f, categorie: e.target.value }))}
-                placeholder="ex. Fleurs, Résines, Huiles…"
-              />
-              <datalist id="categories-stock">
-                {categories.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
+              {categoriesReelles.length > 0 && !nouvelleCat ? (
+                <select
+                  value={form.categorie}
+                  onChange={(e) => {
+                    if (e.target.value === '__nouvelle__') {
+                      setNouvelleCat(true);
+                      setForm((f) => ({ ...f, categorie: '' }));
+                    } else {
+                      setForm((f) => ({ ...f, categorie: e.target.value }));
+                    }
+                  }}
+                >
+                  <option value="" disabled>
+                    Choisir une catégorie…
+                  </option>
+                  {categoriesReelles.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                  <option value="__nouvelle__">＋ Nouvelle catégorie…</option>
+                </select>
+              ) : (
+                <input
+                  value={form.categorie}
+                  onChange={(e) => setForm((f) => ({ ...f, categorie: e.target.value }))}
+                  placeholder="ex. Fleurs, Résines, Huiles…"
+                />
+              )}
+              {categoriesReelles.length > 0 && nouvelleCat && (
+                <button
+                  type="button"
+                  className="btn btn-discret lien-retour-cat"
+                  onClick={() => {
+                    setNouvelleCat(false);
+                    setForm((f) => ({ ...f, categorie: '' }));
+                  }}
+                >
+                  ↩ Choisir une catégorie existante
+                </button>
+              )}
             </label>
             <label className="field">
               <span>Produit</span>
@@ -210,11 +320,36 @@ export default function Stocks() {
             </div>
           </form>
         ) : (
-          <button className="btn" onClick={() => setCreationOuverte(true)}>
-            + Ajouter un produit
-          </button>
+          <div className="form-inline">
+            <button
+              className="btn"
+              onClick={() => {
+                setNouvelleCat(false);
+                setForm(FORM_VIDE);
+                setCreationOuverte(true);
+              }}
+            >
+              + Ajouter un produit
+            </button>
+            <button type="button" className="btn" onClick={() => setImportOuvert(true)}>
+              📄 Importer depuis une facture
+            </button>
+            <button type="button" className="btn" onClick={() => setHistoriqueOuvert(true)}>
+              📋 Historique des mouvements
+            </button>
+          </div>
         )}
       </div>
+
+      {historiqueOuvert && <HistoriqueStock onClose={() => setHistoriqueOuvert(false)} />}
+
+      {importOuvert && (
+        <ImportFacture
+          categories={categoriesReelles}
+          onClose={() => setImportOuvert(false)}
+          onImported={() => charger()}
+        />
+      )}
 
       {categories.length === 0 && <p className="vide">Aucun produit en stock.</p>}
 

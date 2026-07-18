@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
-import { formatEuros, formatDateFr } from '../lib/format';
+import { formatEuros, formatDateFr, formatNombre } from '../lib/format';
 import { somme } from '../lib/comptabilite';
 import { cleEntete } from '../lib/csv';
-import { analyserFichiers, analyserChromes } from '../lib/importHistorique';
+import { analyserFichiers, analyserChromes, analyserStocks } from '../lib/importHistorique';
+import { journaliserMouvement } from '../lib/mouvementsStock';
+
+const UNITES = ['g', 'kg', 'mg', 'ml', 'pièce'];
 
 // Outil admin — Import de l'historique.
 // - Tableur : dépose les CSV exportés (caisse/charges/fournisseurs), dispatch auto.
 // - Chromes : un CSV détaillé de dettes clients (rattaché par surnom, sans doublon).
 export default function Import() {
-  const { utilisateur } = useAuth();
+  const { utilisateur, magasinId } = useAuth();
   const [mode, setMode] = useState('tableur');
   const [employes, setEmployes] = useState([]);
   const [employeId, setEmployeId] = useState(utilisateur.id);
@@ -19,10 +22,18 @@ export default function Import() {
   const [remplacer, setRemplacer] = useState(false);
   const [statut, setStatut] = useState('');
   const [enCours, setEnCours] = useState(false);
+  // Import stocks (CSV catégorie / produit / quantité)
+  const [stocks, setStocks] = useState(null);
+  const [catForcee, setCatForcee] = useState('');
+  const [uniteDefaut, setUniteDefaut] = useState('g');
+  const [ajouterQte, setAjouterQte] = useState(true);
 
   useEffect(() => {
-    supabase.from('users').select('id, nom').order('nom').then(({ data }) => setEmployes(data ?? []));
-  }, []);
+    if (!magasinId) return;
+    // Cloisonné au magasin actif (évite d'affecter un import à un employé d'un
+    // autre magasin quand c'est un superadmin qui importe).
+    supabase.from('users').select('id, nom').eq('magasin_id', magasinId).order('nom').then(({ data }) => setEmployes(data ?? []));
+  }, [magasinId]);
 
   // ----- Tableur (caisse / charges / fournisseurs) -----
   async function choisirFichiers(e) {
@@ -99,6 +110,79 @@ export default function Import() {
     setChromes(null);
   }
 
+  // ----- Stocks (catégorie / produit / quantité) -----
+  async function choisirStocks(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setStatut('');
+    setStocks(analyserStocks(await file.text()));
+  }
+
+  async function importerStocks() {
+    if (!stocks || stocks.length === 0) return;
+    setEnCours(true);
+    setStatut('');
+    // Rapproche par nom (insensible casse/accents) : réappro si existant, sinon création.
+    const { data: existants } = await supabase.from('stocks').select('id, nom, quantite');
+    const map = new Map((existants ?? []).map((s) => [cleEntete(s.nom), s]));
+    const cat = catForcee.trim();
+    const aInserer = [];
+    const aMaj = [];
+    for (const l of stocks) {
+      const ex = map.get(cleEntete(l.nom));
+      if (ex) {
+        const q = ajouterQte ? Number(ex.quantite) + l.quantite : l.quantite;
+        aMaj.push({ id: ex.id, nom: ex.nom, quantite: q, delta: q - Number(ex.quantite) });
+      } else {
+        aInserer.push({
+          categorie: cat || l.categorie || null,
+          nom: l.nom,
+          quantite: l.quantite,
+          unite: uniteDefaut,
+          seuil_alerte: 0,
+          prix_achat: 0,
+          prix_vente: 0,
+        });
+      }
+    }
+    const erreurs = [];
+    if (aInserer.length) {
+      const { data: crees, error } = await supabase.from('stocks').insert(aInserer).select('id, nom, quantite');
+      if (error) erreurs.push(error.message);
+      // Trace chaque nouveau produit importé (mouvement d'entrée, motif import).
+      for (const c of crees ?? []) {
+        if (Number(c.quantite) > 0) {
+          await journaliserMouvement({
+            stock_id: c.id,
+            produit: c.nom,
+            delta: Number(c.quantite),
+            quantite_apres: Number(c.quantite),
+            motif: 'import',
+          });
+        }
+      }
+    }
+    for (const u of aMaj) {
+      const { error } = await supabase.from('stocks').update({ quantite: u.quantite }).eq('id', u.id);
+      if (error) { erreurs.push(error.message); break; }
+      // Trace la variation apportée par l'import (delta = ce qui a été ajouté).
+      if (u.delta) {
+        await journaliserMouvement({
+          stock_id: u.id,
+          produit: u.nom,
+          delta: u.delta,
+          quantite_apres: u.quantite,
+          motif: 'import',
+        });
+      }
+    }
+    setEnCours(false);
+    if (erreurs.length) { setStatut(`Erreur — ${erreurs.join(' · ')}`); return; }
+    setStatut(`Import stocks : ${aInserer.length} nouveau(x) produit(s), ${aMaj.length} réapprovisionné(s).`);
+    setStocks(null);
+  }
+
   const totalCaisse = resultat ? somme(resultat.caisse.map((c) => c.ventes_directes)) : 0;
   const totalCharges = resultat ? somme(resultat.charges.map((c) => c.montant)) : 0;
   const totalFourn = resultat ? somme(resultat.fournisseurs.map((c) => c.montant)) : 0;
@@ -114,6 +198,7 @@ export default function Import() {
       <div className="bascule">
         <button className={mode === 'tableur' ? 'actif' : ''} onClick={() => setMode('tableur')}>Tableur (caisse/charges/fournisseurs)</button>
         <button className={mode === 'chromes' ? 'actif' : ''} onClick={() => setMode('chromes')}>Dettes clients</button>
+        <button className={mode === 'stocks' ? 'actif' : ''} onClick={() => setMode('stocks')}>Stocks</button>
       </div>
 
       {mode === 'tableur' ? (
@@ -149,7 +234,7 @@ export default function Import() {
             </>
           )}
         </>
-      ) : (
+      ) : mode === 'chromes' ? (
         <>
           <div className="card">
             <p className="statut">
@@ -192,6 +277,70 @@ export default function Import() {
               </div>
               <button className="btn btn-primary" onClick={importerChromes} disabled={enCours}>
                 {enCours ? 'Import…' : `Importer ${chromes.length} ligne(s)`}
+              </button>
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="card">
+            <p className="statut">
+              Dépose un <strong>CSV de stocks</strong> — colonnes reconnues : <strong>catégorie</strong>,{' '}
+              <strong>produit</strong>, <strong>quantité</strong> (peu importe l'ordre / la casse).
+              Produit déjà présent = réapprovisionné ; sinon créé.
+            </p>
+            <div className="form-inline">
+              <label className="field" style={{ flex: 1 }}>
+                <span>Catégorie à forcer (facultatif — sinon celle du fichier)</span>
+                <input
+                  value={catForcee}
+                  onChange={(e) => setCatForcee(e.target.value)}
+                  placeholder="ex. Fleurs"
+                />
+              </label>
+              <label className="field">
+                <span>Unité (nouveaux produits)</span>
+                <select value={uniteDefaut} onChange={(e) => setUniteDefaut(e.target.value)}>
+                  {UNITES.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className="case-partage">
+              <input type="checkbox" checked={ajouterQte} onChange={(e) => setAjouterQte(e.target.checked)} />
+              <span>Ajouter aux quantités existantes (réappro). Décoché = remplace la quantité.</span>
+            </label>
+            <label className="btn btn-primary">
+              Choisir le fichier CSV…
+              <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={choisirStocks} />
+            </label>
+          </div>
+
+          {stocks && (
+            <>
+              <div className="cartes-kpi">
+                <div className="kpi"><span className="kpi-label">Lignes</span><span className="kpi-valeur">{stocks.length}</span></div>
+                <div className="kpi"><span className="kpi-label">Quantité totale</span><span className="kpi-valeur">{formatNombre(somme(stocks.map((s) => s.quantite)))}</span></div>
+              </div>
+              <div className="card">
+                <h2>Aperçu</h2>
+                <table className="tableau">
+                  <thead><tr><th>Catégorie</th><th>Produit</th><th className="droite">Quantité</th></tr></thead>
+                  <tbody>
+                    {stocks.slice(0, 12).map((s, i) => (
+                      <tr key={i}>
+                        <td>{catForcee.trim() || s.categorie || '—'}</td>
+                        <td>{s.nom}</td>
+                        <td className="droite">{formatNombre(s.quantite)} {uniteDefaut}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {stocks.length > 12 && <p className="statut">… et {stocks.length - 12} autre(s) ligne(s).</p>}
+              </div>
+              <button className="btn btn-primary" onClick={importerStocks} disabled={enCours}>
+                {enCours ? 'Import…' : `Importer ${stocks.length} produit(s)`}
               </button>
             </>
           )}

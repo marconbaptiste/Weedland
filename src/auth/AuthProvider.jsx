@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext(null);
@@ -20,6 +20,7 @@ export function AuthProvider({ children }) {
   const [profilPret, setProfilPret] = useState(false);
   const [magasins, setMagasins] = useState([]); // liste (super-admin uniquement)
   const [magasinInfo, setMagasinInfo] = useState(null); // abonnement du magasin courant
+  const [magasinLogo, setMagasinLogo] = useState(null); // chemin du logo (bucket public)
 
   // Suivi de la session Supabase (persistée ~30 j et rafraîchie automatiquement).
   useEffect(() => {
@@ -76,27 +77,53 @@ export function AuthProvider({ children }) {
       .then(({ data }) => setMagasins(data ?? []));
   }, [profil?.role]);
 
-  // Abonnement / période d'essai du magasin de l'utilisateur (pour le blocage).
-  useEffect(() => {
+  // Abonnement / options / période d'essai du magasin courant. Extrait en
+  // callback pour pouvoir le rappeler à la volée (ex. après un changement
+  // d'option, afin que la nav et l'accès aux modules se mettent à jour sans
+  // rechargement manuel de l'app).
+  const rechargerMagasin = useCallback(async () => {
     if (!profil?.magasin_id) {
       setMagasinInfo(null);
+      setMagasinLogo(null);
       return;
     }
-    supabase
+    const { data } = await supabase
       .from('magasins')
-      .select('abonnement, essai_fin')
+      .select('abonnement, essai_fin, logo, gratuit, stripe_subscription_id, opt_planning, opt_stock, opt_fidelite')
       .eq('id', profil.magasin_id)
-      .single()
-      .then(({ data }) => setMagasinInfo(data ?? null));
+      .single();
+    setMagasinInfo(data ?? null);
+    setMagasinLogo(data?.logo ?? null);
   }, [profil?.magasin_id]);
 
+  useEffect(() => {
+    rechargerMagasin();
+  }, [rechargerMagasin]);
+
   const estSuperadmin = profil?.role === 'superadmin';
-  const aujourdHui = new Date().toISOString().slice(0, 10);
+  // Options d'abonnement du magasin (paywall des modules). Le superadmin
+  // (exploitant) n'est jamais bridé ; un magasin `gratuit` (ex. le magasin
+  // originel Weedland) a toujours toutes les options, sans facturation.
+  const options = estSuperadmin || magasinInfo?.gratuit
+    ? { planning: true, stock: true, fidelite: true }
+    : {
+        planning: magasinInfo?.opt_planning ?? false,
+        stock: magasinInfo?.opt_stock ?? false,
+        fidelite: magasinInfo?.opt_fidelite ?? false,
+      };
+  // Blocage d'abonnement : c'est STRIPE qui fait autorité. On ne bloque un
+  // magasin QUE s'il est réellement sur un abonnement Stripe suspendu (impayé /
+  // résiliation, statut poussé par le webhook). Ainsi :
+  //  - le superadmin n'est jamais bloqué ;
+  //  - un magasin `gratuit` (offert, ex. Weedland) n'est jamais bloqué ;
+  //  - les magasins sans abonnement Stripe (pas encore facturés, états `essai`/
+  //    `suspendu` hérités de l'ancien pilotage) ne sont PLUS bloqués à tort.
   const magasinBloque =
     !estSuperadmin &&
     !!magasinInfo &&
-    (magasinInfo.abonnement === 'suspendu' ||
-      (magasinInfo.abonnement === 'essai' && magasinInfo.essai_fin && magasinInfo.essai_fin < aujourdHui));
+    !magasinInfo.gratuit &&
+    Boolean(magasinInfo.stripe_subscription_id) &&
+    magasinInfo.abonnement === 'suspendu';
 
   // Super-admin : bascule le magasin actif (met à jour son propre magasin_id).
   // Un rechargement garantit que toutes les pages relisent le bon magasin.
@@ -115,6 +142,10 @@ export function AuthProvider({ children }) {
     magasins,
     magasinId: profil?.magasin_id ?? null,
     magasinInfo,
+    magasinLogo,
+    setMagasinLogo,
+    rechargerMagasin,
+    options,
     magasinBloque,
     changerMagasin,
     chargement,
@@ -125,7 +156,10 @@ export function AuthProvider({ children }) {
         provider: 'google',
         options: { redirectTo: window.location.origin },
       }),
-    deconnexion: () => supabase.auth.signOut(),
+    deconnexion: () => {
+      sessionStorage.removeItem('pilote:entre');
+      return supabase.auth.signOut();
+    },
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

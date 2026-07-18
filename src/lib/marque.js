@@ -1,6 +1,6 @@
 // Nom de marque du produit, centralisé (landing + pages légales).
 // Change-le ici pour renommer le produit partout sur les pages publiques.
-export const NOM = 'Weedland';
+export const NOM = 'Kanabiz';
 
 // Coordonnées légales — À COMPLÉTER par l'exploitant.
 export const EDITEUR = {

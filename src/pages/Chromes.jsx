@@ -3,20 +3,33 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatDateFr } from '../lib/format';
 import { aujourdhuiISO } from '../lib/dates';
-import { soldeClient, statutSolde } from '../lib/comptabilite';
+import { soldeClient, statutSolde, somme } from '../lib/comptabilite';
 import ChampMontant from '../components/ChampMontant';
 import ModaleQR from '../components/ModaleQR';
 import ModaleQRInscription from '../components/ModaleQRInscription';
+
+// Libellés des actions du journal des chromes.
+const LIB_ACTION = { creation: 'Créé', modification: 'Modifié', suppression: 'Supprimé' };
+
+// Heure locale « HH:mm » d'un horodatage (affichée à côté de la date d'un chrome).
+const formatHeure = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ''
+    : new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(d);
+};
 
 // Module 2 — Chromes (avances / crédits clients).
 // RGPD : les clients sont identifiés par un SURNOM uniquement, jamais par leur
 // nom/prénom réel. La description est interne (visible seulement du personnel).
 export default function Chromes() {
-  const { utilisateur, estAdmin, magasinId } = useAuth();
+  const { utilisateur, estAdmin, magasinId, options } = useAuth();
   const [recherche, setRecherche] = useState('');
   const [clients, setClients] = useState([]);
   const [clientSel, setClientSel] = useState(null);
   const [lignes, setLignes] = useState([]);
+  const [histoChrome, setHistoChrome] = useState([]); // journal des modifs de chromes du client
   const [promos, setPromos] = useState([]);
   const [clientsAvecPromo, setClientsAvecPromo] = useState(new Set());
   const [nouvellePromo, setNouvellePromo] = useState({ description: '', date: aujourdhuiISO() });
@@ -34,13 +47,19 @@ export default function Chromes() {
   const [nouveau, setNouveau] = useState({ surnom: '', description: '', telephone: '' });
   const [creationOuverte, setCreationOuverte] = useState(false);
 
+  // Fenêtre client scindée en 3 onglets-boutons : Fiche / Chromes / Note.
+  const [ongletClient, setOngletClient] = useState('fiche'); // 'fiche' | 'chromes' | 'note'
+  const [note, setNote] = useState('');
+  const [noteMsg, setNoteMsg] = useState('');
+
   const [type, setType] = useState('avance');
   const [montant, setMontant] = useState('');
   const [date, setDate] = useState(aujourdhuiISO());
 
-  // Édition en ligne d'une ligne de chrome (admin ou auteur).
+  // Édition en ligne d'une ligne de chrome (partagée : tout membre du magasin).
   const [editChrome, setEditChrome] = useState(null); // id
-  const [editChromeForm, setEditChromeForm] = useState({ type: 'avance', montant: '', date: '' });
+  const [editChromeForm, setEditChromeForm] = useState({ type: 'avance', montant: '', date: '', employe_id: '' });
+  const [employes, setEmployes] = useState([]); // employés du magasin (réaffectation)
 
   const chargerClients = useCallback(async () => {
     const [{ data }, { data: pr }] = await Promise.all([
@@ -73,6 +92,12 @@ export default function Chromes() {
       });
   }, [magasinId]);
 
+  // Employés du magasin : pour réaffecter un chrome lors d'une correction
+  // (ex. chrome saisi par le mauvais employé / mauvaise date).
+  useEffect(() => {
+    supabase.rpc('collegues').then(({ data }) => setEmployes(data ?? []));
+  }, [magasinId]);
+
   const chargerFidelite = useCallback(async (clientId) => {
     const { data } = await supabase
       .from('clients')
@@ -86,10 +111,13 @@ export default function Chromes() {
     async (client) => {
       setClientSel(client);
       setMsgClient('');
-      const [{ data: chr }, { data: pr }] = await Promise.all([
+      setOngletClient('fiche');
+      setNote(client.description ?? '');
+      setNoteMsg('');
+      const [{ data: chr }, { data: pr }, { data: evt }] = await Promise.all([
         supabase
           .from('chromes')
-          .select('id, type, montant, date, employe_id, users(nom)')
+          .select('id, type, montant, date, created_at, employe_id, users(nom)')
           .eq('client_id', client.client_id)
           .order('date', { ascending: false })
           .order('created_at', { ascending: false }),
@@ -99,9 +127,16 @@ export default function Chromes() {
           .eq('client_id', client.client_id)
           .order('date', { ascending: false })
           .order('created_at', { ascending: false }),
+        supabase
+          .from('chrome_evenements')
+          .select('id, action, type, montant, date_chrome, created_at, auteur:employe_id(nom)')
+          .eq('client_id', client.client_id)
+          .order('created_at', { ascending: false })
+          .limit(50),
       ]);
       setLignes(chr ?? []);
       setPromos(pr ?? []);
+      setHistoChrome(evt ?? []);
       chargerFidelite(client.client_id);
     },
     [chargerFidelite],
@@ -158,12 +193,24 @@ export default function Chromes() {
     }
   }
 
+  // Édition partagée de la fiche (surnom / téléphone / note) via la fonction
+  // SECURITY DEFINER `client_maj` : tout membre du magasin peut corriger une
+  // fiche, sans pouvoir toucher aux colonnes sensibles (fidélité, magasin…).
+  async function majFiche({ surnom, telephone, description }) {
+    return supabase.rpc('client_maj', {
+      p_client: clientSel.client_id,
+      p_surnom: surnom,
+      p_telephone: telephone,
+      p_note: description,
+    });
+  }
+
   async function renommerClient() {
     const surnom = window.prompt('Nouveau surnom du client :', clientSel.surnom);
     if (surnom == null) return;
     const s = surnom.trim();
     if (!s) return;
-    const { error } = await supabase.from('clients').update({ surnom: s }).eq('id', clientSel.client_id);
+    const { error } = await majFiche({ surnom: s, telephone: clientSel.telephone, description: clientSel.description });
     if (error) {
       setMsgClient(`Renommage impossible : ${error.message}`);
       return;
@@ -180,10 +227,7 @@ export default function Chromes() {
     );
     if (saisie == null) return;
     const telephone = saisie.trim() || null;
-    const { error } = await supabase
-      .from('clients')
-      .update({ telephone })
-      .eq('id', clientSel.client_id);
+    const { error } = await majFiche({ surnom: clientSel.surnom, telephone, description: clientSel.description });
     if (error) {
       setMsgClient(`Modification impossible : ${error.message}`);
       return;
@@ -191,6 +235,57 @@ export default function Chromes() {
     setClientSel((c) => ({ ...c, telephone }));
     setMsgClient('Téléphone mis à jour ✅');
     chargerClients();
+  }
+
+  // Note interne (= description du client) — éditable par tout membre du magasin
+  // via `client_maj` (fonction SECURITY DEFINER, colonnes limitées).
+  async function enregistrerNote() {
+    const valeur = note.trim() || null;
+    const { error } = await majFiche({
+      surnom: clientSel.surnom,
+      telephone: clientSel.telephone,
+      description: valeur,
+    });
+    if (error) {
+      setNoteMsg(`Enregistrement impossible : ${error.message}`);
+      return;
+    }
+    setClientSel((c) => ({ ...c, description: valeur }));
+    setNoteMsg('Note enregistrée ✅');
+    chargerClients();
+  }
+
+  // Notification push individuelle (ex. objet oublié) → carte du client.
+  async function notifierClient() {
+    const saisie = window.prompt('Message à envoyer sur la carte de ce client :', '');
+    if (saisie == null) return;
+    const texte = saisie.trim();
+    if (!texte) return;
+    const { data, error } = await supabase.functions.invoke('envoyer-push', {
+      body: {
+        magasinId,
+        clientId: clientSel.client_id,
+        titre: 'Message du magasin',
+        corps: texte,
+        url: `/carte/${clientSel.client_id}`,
+      },
+    });
+    if (error || data?.error) {
+      let detail = data?.error || error?.message || '';
+      try {
+        const c = await error?.context?.json?.();
+        if (c?.error) detail = c.error;
+      } catch {
+        /* corps illisible */
+      }
+      setMsgClient(`Notification impossible : ${detail}`);
+      return;
+    }
+    setMsgClient(
+      data.envoyes > 0
+        ? `🔔 Notification envoyée (${data.envoyes}).`
+        : "Ce client n'a pas activé les notifications sur sa carte.",
+    );
   }
 
   async function supprimerClient() {
@@ -218,7 +313,12 @@ export default function Chromes() {
 
   function commencerEditChrome(l) {
     setEditChrome(l.id);
-    setEditChromeForm({ type: l.type, montant: String(l.montant), date: l.date });
+    setEditChromeForm({
+      type: l.type,
+      montant: String(l.montant),
+      date: l.date,
+      employe_id: l.employe_id,
+    });
   }
 
   async function enregistrerEditChrome(id) {
@@ -226,7 +326,12 @@ export default function Chromes() {
     if (valeur <= 0) return;
     const { error } = await supabase
       .from('chromes')
-      .update({ type: editChromeForm.type, montant: valeur, date: editChromeForm.date })
+      .update({
+        type: editChromeForm.type,
+        montant: valeur,
+        date: editChromeForm.date,
+        employe_id: editChromeForm.employe_id,
+      })
       .eq('id', id);
     if (!error) {
       setEditChrome(null);
@@ -338,6 +443,11 @@ export default function Chromes() {
     (c.surnom ?? '').toLowerCase().includes(recherche.toLowerCase()),
   );
   const solde = clientSel ? soldeClient(lignes) : 0;
+  // Clients qui doivent (dette en cours) : solde > 0, du plus gros au plus petit.
+  const debiteurs = clients
+    .filter((c) => Number(c.solde) > 0)
+    .sort((a, b) => Number(b.solde) - Number(a.solde));
+  const totalDette = somme(debiteurs.map((c) => c.solde));
 
   return (
     <div className="page page-chromes">
@@ -430,12 +540,41 @@ export default function Chromes() {
               <button className="btn" onClick={() => setCreationOuverte(true)}>
                 + Nouvelle fiche client
               </button>
-              <button type="button" className="btn" onClick={() => setQrInscription(true)}>
-                📲 QR d’inscription
-              </button>
+              {options.fidelite && (
+                <button type="button" className="btn" onClick={() => setQrInscription(true)}>
+                  📲 QR d’inscription
+                </button>
+              )}
             </div>
           )}
         </div>
+
+      <div className="card">
+        <h2>Clients qui doivent</h2>
+        {debiteurs.length === 0 ? (
+          <p className="vide">Aucune dette en cours 🎉</p>
+        ) : (
+          <>
+            <ul className="liste-clients">
+              {debiteurs.map((c) => (
+                <li key={c.client_id}>
+                  <button className="ligne-client" onClick={() => ouvrirClient(c)}>
+                    <span>
+                      {clientsAvecPromo.has(c.client_id) && <span title="Promo / faveur">★ </span>}
+                      {c.surnom}
+                    </span>
+                    <span className="dette">{formatEuros(c.solde)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="recap-ligne">
+              <span>Total dû ({debiteurs.length} client{debiteurs.length > 1 ? 's' : ''})</span>
+              <strong className="dette">{formatEuros(totalDette)}</strong>
+            </div>
+          </>
+        )}
+      </div>
 
       {clientSel && (
         <div className="aide-fond" role="dialog" aria-modal="true" aria-label="Fiche client" onClick={fermerClient}>
@@ -451,15 +590,26 @@ export default function Chromes() {
                   {statutSolde(solde)} · {formatEuros(solde)}
                 </span>
               </div>
-              {clientSel.telephone && (
+              {/* 3 onglets-boutons : Fiche / Chromes / Note */}
+              <div className="bascule">
+                <button type="button" className={ongletClient === 'fiche' ? 'actif' : ''} onClick={() => setOngletClient('fiche')}>
+                  Fiche
+                </button>
+                <button type="button" className={ongletClient === 'chromes' ? 'actif' : ''} onClick={() => setOngletClient('chromes')}>
+                  Chromes
+                </button>
+                <button type="button" className={ongletClient === 'note' ? 'actif' : ''} onClick={() => setOngletClient('note')}>
+                  Note
+                </button>
+              </div>
+              {msgClient && <p className="statut">{msgClient}</p>}
+
+              {ongletClient === 'fiche' && clientSel.telephone && (
                 <p className="telephone-client">
                   📞 <a href={`tel:${clientSel.telephone.replace(/\s/g, '')}`}>{clientSel.telephone}</a>
                 </p>
               )}
-              {clientSel.description && (
-                <p className="description-client">{clientSel.description}</p>
-              )}
-              {estAdmin && (
+              {ongletClient === 'fiche' && (
                 <div className="form-inline">
                   <button type="button" className="btn" onClick={renommerClient}>
                     Renommer
@@ -467,13 +617,212 @@ export default function Chromes() {
                   <button type="button" className="btn" onClick={modifierTelephone}>
                     {clientSel.telephone ? 'Modifier le téléphone' : 'Ajouter un téléphone'}
                   </button>
-                  <button type="button" className="btn btn-discret" onClick={supprimerClient}>
-                    Supprimer la fiche
-                  </button>
+                  {options.fidelite && (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setQrModal({ clientId: clientSel.client_id, surnom: clientSel.surnom })}
+                    >
+                      🎫 QR carte
+                    </button>
+                  )}
+                  {estAdmin && (
+                    <button type="button" className="btn btn-discret" onClick={notifierClient}>
+                      🔔 Notifier
+                    </button>
+                  )}
+                  {estAdmin && (
+                    <button type="button" className="btn btn-discret" onClick={supprimerClient}>
+                      Supprimer la fiche
+                    </button>
+                  )}
                 </div>
               )}
-              {msgClient && <p className="statut">{msgClient}</p>}
 
+              {ongletClient === 'chromes' && (
+              <div className="section-promos">
+                <div className="entete-client">
+                  <h3>💸 Chromes — avances / remboursements</h3>
+                </div>
+                <form className="form-chrome" onSubmit={ajouterLigne}>
+                  <div className="bascule">
+                    <button
+                      type="button"
+                      className={type === 'avance' ? 'actif' : ''}
+                      onClick={() => setType('avance')}
+                    >
+                      Avance (+)
+                    </button>
+                    <button
+                      type="button"
+                      className={type === 'remboursement' ? 'actif' : ''}
+                      onClick={() => setType('remboursement')}
+                    >
+                      Remboursement (−)
+                    </button>
+                    <button
+                      type="button"
+                      className={type === 'autre' ? 'actif' : ''}
+                      onClick={() => setType('autre')}
+                    >
+                      Autre
+                    </button>
+                  </div>
+                  {type === 'autre' && (
+                    <p className="periode-info">Encaissement « autre » (virement, chèque…) — compté dans le CA du jour, sans créer de dette.</p>
+                  )}
+                  <ChampMontant label="Montant" valeur={montant} onChange={setMontant} />
+                  <label className="field">
+                    <span>Date</span>
+                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                  </label>
+                  <button className="btn btn-primary" type="submit">
+                    Enregistrer la ligne
+                  </button>
+                </form>
+
+                <table className="tableau">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th className="droite">Montant</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lignes.map((l) =>
+                      editChrome === l.id ? (
+                        <tr key={l.id}>
+                          <td colSpan={3}>
+                            <div className="bloc-form">
+                              <label className="field">
+                                <span>Date</span>
+                                <input
+                                  type="date"
+                                  value={editChromeForm.date}
+                                  onChange={(e) => setEditChromeForm((f) => ({ ...f, date: e.target.value }))}
+                                />
+                              </label>
+                              <label className="field">
+                                <span>Employé</span>
+                                <select
+                                  value={editChromeForm.employe_id ?? ''}
+                                  onChange={(e) =>
+                                    setEditChromeForm((f) => ({ ...f, employe_id: e.target.value }))
+                                  }
+                                >
+                                  {employes.map((emp) => (
+                                    <option key={emp.id} value={emp.id}>
+                                      {emp.nom}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="field">
+                                <span>Type</span>
+                                <select
+                                  value={editChromeForm.type}
+                                  onChange={(e) => setEditChromeForm((f) => ({ ...f, type: e.target.value }))}
+                                >
+                                  <option value="avance">Avance</option>
+                                  <option value="remboursement">Remboursement</option>
+                                  <option value="autre">Autre</option>
+                                </select>
+                              </label>
+                              <ChampMontant
+                                label="Montant"
+                                valeur={editChromeForm.montant}
+                                onChange={(v) => setEditChromeForm((f) => ({ ...f, montant: v }))}
+                              />
+                              <div className="form-inline">
+                                <button
+                                  type="button"
+                                  className="btn btn-primary"
+                                  onClick={() => enregistrerEditChrome(l.id)}
+                                >
+                                  Enregistrer
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn"
+                                  onClick={() => setEditChrome(null)}
+                                >
+                                  Annuler
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={l.id}>
+                          <td>
+                            {formatDateFr(l.date)}
+                            {l.created_at && <span className="chrome-heure"> · {formatHeure(l.created_at)}</span>}
+                          </td>
+                          <td className={`droite ${l.type === 'avance' ? 'dette' : l.type === 'remboursement' ? 'solde-ok' : ''}`}>
+                            {l.type === 'avance' ? '+ ' : l.type === 'remboursement' ? '− ' : ''}
+                            {formatEuros(l.montant)}
+                            {l.type === 'autre' && <span className="chrome-heure"> · autre</span>}
+                          </td>
+                          <td className="actions-cellule">
+                            {/* Registre partagé : tout employé du magasin peut ajuster un chrome. */}
+                            <button
+                              type="button"
+                              className="btn btn-discret"
+                              onClick={() => commencerEditChrome(l)}
+                            >
+                              Modifier
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-discret"
+                              onClick={() => supprimerLigne(l.id)}
+                              aria-label="Supprimer la ligne"
+                            >
+                              ✕
+                            </button>
+                          </td>
+                        </tr>
+                      ),
+                    )}
+                    {lignes.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="vide">
+                          Aucune ligne.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+
+                <div className="chrome-histo">
+                  <h4>🕓 Historique des modifications</h4>
+                  {histoChrome.length === 0 ? (
+                    <p className="vide">Aucune modification enregistrée.</p>
+                  ) : (
+                    <ul className="chrome-histo-liste">
+                      {histoChrome.map((e) => (
+                        <li key={e.id}>
+                          <span className="chrome-histo-quand">
+                            {formatDateFr(e.created_at)} · {formatHeure(e.created_at)}
+                          </span>
+                          <span className={`chrome-histo-action action-${e.action}`}>
+                            {LIB_ACTION[e.action] ?? e.action}
+                          </span>
+                          <span className="chrome-histo-montant">
+                            {e.type === 'avance' ? '+' : e.type === 'remboursement' ? '−' : ''}
+                            {e.montant != null ? formatEuros(e.montant) : ''}
+                          </span>
+                          <span className="chrome-histo-qui">{e.auteur?.nom ?? '—'}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+              )}
+
+              {ongletClient === 'fiche' && options.fidelite && (
               <div className="section-promos">
                 <div className="entete-client">
                   <h3>🎟️ Carte de fidélité</h3>
@@ -523,7 +872,9 @@ export default function Chromes() {
                   <p className="statut">{fidelite.recompenses} récompense(s) déjà utilisée(s).</p>
                 )}
               </div>
+              )}
 
+              {ongletClient === 'fiche' && (
               <div className="section-promos">
                 <div className="entete-client">
                   <h3>★ Promos / traitements de faveur</h3>
@@ -619,132 +970,30 @@ export default function Chromes() {
                   {promos.length === 0 && <li className="vide">Aucune promo enregistrée.</li>}
                 </ul>
               </div>
+              )}
 
-              <form className="form-chrome" onSubmit={ajouterLigne}>
-                <div className="bascule">
-                  <button
-                    type="button"
-                    className={type === 'avance' ? 'actif' : ''}
-                    onClick={() => setType('avance')}
-                  >
-                    Avance (+)
-                  </button>
-                  <button
-                    type="button"
-                    className={type === 'remboursement' ? 'actif' : ''}
-                    onClick={() => setType('remboursement')}
-                  >
-                    Remboursement (−)
-                  </button>
+              {ongletClient === 'note' && (
+                <div className="section-promos">
+                  <div className="entete-client">
+                    <h3>📝 Note interne</h3>
+                  </div>
+                  <p className="statut">
+                    Repère interne pour le personnel (jamais de nom réel).
+                  </p>
+                  <textarea
+                    rows={5}
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Signe distinctif, préférences, rappel…"
+                  />
+                  <div className="form-inline">
+                    <button type="button" className="btn btn-primary" onClick={enregistrerNote}>
+                      Enregistrer la note
+                    </button>
+                  </div>
+                  {noteMsg && <p className="statut">{noteMsg}</p>}
                 </div>
-                <ChampMontant label="Montant" valeur={montant} onChange={setMontant} />
-                <label className="field">
-                  <span>Date</span>
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                </label>
-                <button className="btn btn-primary" type="submit">
-                  Enregistrer la ligne
-                </button>
-              </form>
-
-              <table className="tableau">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Type</th>
-                    <th className="droite">Montant</th>
-                    <th>Employé</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lignes.map((l) =>
-                    editChrome === l.id ? (
-                      <tr key={l.id}>
-                        <td>
-                          <input
-                            type="date"
-                            value={editChromeForm.date}
-                            onChange={(e) => setEditChromeForm((f) => ({ ...f, date: e.target.value }))}
-                          />
-                        </td>
-                        <td>
-                          <select
-                            value={editChromeForm.type}
-                            onChange={(e) => setEditChromeForm((f) => ({ ...f, type: e.target.value }))}
-                          >
-                            <option value="avance">Avance</option>
-                            <option value="remboursement">Remboursement</option>
-                          </select>
-                        </td>
-                        <td className="droite">
-                          <input
-                            className="champ-pourcentage"
-                            type="text"
-                            inputMode="decimal"
-                            value={editChromeForm.montant}
-                            onChange={(e) => setEditChromeForm((f) => ({ ...f, montant: e.target.value }))}
-                          />
-                        </td>
-                        <td>{l.users?.nom ?? '—'}</td>
-                        <td className="actions-cellule">
-                          <button
-                            type="button"
-                            className="btn btn-discret"
-                            onClick={() => enregistrerEditChrome(l.id)}
-                          >
-                            Enregistrer
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-discret"
-                            onClick={() => setEditChrome(null)}
-                          >
-                            Annuler
-                          </button>
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr key={l.id}>
-                        <td>{formatDateFr(l.date)}</td>
-                        <td>{l.type === 'avance' ? 'Avance' : 'Remboursement'}</td>
-                        <td className={`droite ${l.type === 'avance' ? 'dette' : 'solde-ok'}`}>
-                          {l.type === 'avance' ? '+' : '−'} {formatEuros(l.montant)}
-                        </td>
-                        <td>{l.users?.nom ?? '—'}</td>
-                        <td className="actions-cellule">
-                          {(estAdmin || l.employe_id === utilisateur.id) && (
-                            <>
-                              <button
-                                type="button"
-                                className="btn btn-discret"
-                                onClick={() => commencerEditChrome(l)}
-                              >
-                                Modifier
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-discret"
-                                onClick={() => supprimerLigne(l.id)}
-                                aria-label="Supprimer la ligne"
-                              >
-                                ✕
-                              </button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    ),
-                  )}
-                  {lignes.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="vide">
-                        Aucune ligne.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+              )}
           </div>
         </div>
       )}

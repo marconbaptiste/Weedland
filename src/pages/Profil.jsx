@@ -1,50 +1,147 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { formatEuros } from '../lib/format';
-import { aujourdhuiISO, intervallePeriode } from '../lib/dates';
+import { aujourdhuiISO, intervallePeriode, intervalleAnnee } from '../lib/dates';
 import { somme } from '../lib/comptabilite';
 import GuideDemarrage from '../components/GuideDemarrage';
 import CalculatriceMonnaie from '../components/CalculatriceMonnaie';
 import ScannerFidelite from '../components/ScannerFidelite';
+import ListeCourses from '../components/ListeCourses';
+import CalendrierLecture from '../components/CalendrierLecture';
 
-// Accueil après connexion : profil + CA (jour/semaine) + chromes détaillés du
-// jour + raccourcis.
+// Accueil après connexion : profil + CA (jour/semaine) + une rangée de
+// raccourcis en bulles (scanner fidélité, liste de courses, rendu monnaie). La
+// bulle « courses » porte une pastille de notification. Le détail des chromes du
+// jour vit désormais sur la page Clients.
 export default function Profil() {
-  const { utilisateur, profil, estAdmin } = useAuth();
-  const [stats, setStats] = useState({ caJour: 0, caSemaine: 0 });
-  const [chromesJour, setChromesJour] = useState([]);
-  const [outil, setOutil] = useState(null); // 'monnaie' | 'scanner' | null
+  const { utilisateur, profil, estAdmin, options } = useAuth();
+  const aInteressement = (profil?.pourcentage_interessement ?? 0) > 0;
+  const [stats, setStats] = useState({ caJour: 0 });
+  const [statsPerso, setStatsPerso] = useState({ intMois: 0, intAnnee: 0 });
+  const [chromesJour, setChromesJour] = useState([]); // chromes du jour du magasin (tout le monde)
+  const [outil, setOutil] = useState(null); // 'monnaie' | 'scanner' | 'courses' | null
+  const [nbCourses, setNbCourses] = useState(0);
+  const [coursesNouveau, setCoursesNouveau] = useState(false);
+  const vusRef = useRef(null); // nb d'articles « déjà vus » (référence notif)
+  const coursesOuvertRef = useRef(false);
 
+  // CA du jour de l'employé connecté (encaissements + avances − remboursements).
   useEffect(() => {
     const today = aujourdhuiISO();
-    const [deb, fin] = intervallePeriode('semaine');
     (async () => {
       const [{ data: cl }, { data: chr }] = await Promise.all([
-        supabase.from('v_ca_jour').select('date, encaissements').eq('employe_id', utilisateur.id).gte('date', deb).lte('date', fin),
-        supabase.from('chromes').select('date, type, montant, clients(surnom)').eq('employe_id', utilisateur.id).gte('date', deb).lte('date', fin),
+        supabase.from('v_ca_jour').select('ventes_directes').eq('employe_id', utilisateur.id).eq('date', today),
+        supabase.from('chromes').select('type, montant').eq('employe_id', utilisateur.id).eq('date', today),
       ]);
-      const enc = (d) => somme((cl ?? []).filter((r) => d(r.date)).map((r) => r.encaissements));
-      const av = (d) => somme((chr ?? []).filter((c) => c.type === 'avance' && d(c.date)).map((c) => c.montant));
-      const rb = (d) => somme((chr ?? []).filter((c) => c.type === 'remboursement' && d(c.date)).map((c) => c.montant));
-      const jour = (x) => x === today;
-      const tout = () => true;
-      setStats({
-        caJour: somme([enc(jour), av(jour), -rb(jour)]),
-        caSemaine: somme([enc(tout), av(tout), -rb(tout)]),
-      });
-      setChromesJour(
-        (chr ?? [])
-          .filter((c) => c.date === today)
-          .map((c) => ({ type: c.type, montant: c.montant, surnom: c.clients?.surnom ?? 'client' })),
-      );
+      // CA = ventes directes (CB+espèces de la clôture) + avances − remboursements
+      // + autres. On somme depuis `chromes` (pas depuis v_ca_jour.encaissements,
+      // qui inclut déjà les autres) pour éviter tout double comptage, et pour
+      // couvrir aussi les jours SANS clôture.
+      const vd = somme((cl ?? []).map((r) => r.ventes_directes));
+      const av = somme((chr ?? []).filter((c) => c.type === 'avance').map((c) => c.montant));
+      const rb = somme((chr ?? []).filter((c) => c.type === 'remboursement').map((c) => c.montant));
+      const vir = somme((chr ?? []).filter((c) => c.type === 'autre').map((c) => c.montant));
+      setStats({ caJour: somme([vd, av, vir, -rb]) });
     })();
   }, [utilisateur.id]);
 
+  // Intéressement du mois et de l'année (affiché uniquement si l'employé a un taux).
+  useEffect(() => {
+    if (!aInteressement) return;
+    (async () => {
+      const [aDeb, aFin] = intervalleAnnee();
+      const [mDeb, mFin] = intervallePeriode('mois');
+      const { data } = await supabase
+        .from('v_interessement_employe')
+        .select('date, interessement')
+        .eq('employe_id', utilisateur.id)
+        .gte('date', aDeb)
+        .lte('date', aFin);
+      const lignes = data ?? [];
+      const dansMois = (d) => d >= mDeb && d <= mFin;
+      setStatsPerso({
+        intMois: somme(lignes.filter((l) => dansMois(l.date)).map((l) => l.interessement)),
+        intAnnee: somme(lignes.map((l) => l.interessement)),
+      });
+    })();
+  }, [utilisateur.id, aInteressement]);
+
+  // Chromes du jour de TOUT le magasin (registre partagé) — visible par tous,
+  // employés inclus. Rechargé au retour sur l'onglet/la page.
+  useEffect(() => {
+    const recharger = () => {
+      if (document.hidden) return;
+      supabase
+        .from('chromes')
+        .select('type, montant, created_at, clients(surnom), users(nom)')
+        .eq('date', aujourdhuiISO())
+        .order('created_at', { ascending: false })
+        .then(({ data }) => setChromesJour(data ?? []));
+    };
+    recharger();
+    document.addEventListener('visibilitychange', recharger);
+    window.addEventListener('focus', recharger);
+    return () => {
+      document.removeEventListener('visibilitychange', recharger);
+      window.removeEventListener('focus', recharger);
+    };
+  }, []);
+
+  // Compteur de la liste de courses + notification quand un collègue ajoute.
+  const chargerCourses = useCallback(async () => {
+    const { count } = await supabase
+      .from('liste_courses')
+      .select('id', { count: 'exact', head: true })
+      .eq('fait', false);
+    const n = count ?? 0;
+    setNbCourses(n);
+    if (vusRef.current === null) {
+      vusRef.current = n;
+    } else if (n > vusRef.current && !coursesOuvertRef.current) {
+      setCoursesNouveau(true);
+    } else if (n < vusRef.current) {
+      vusRef.current = n;
+    }
+  }, []);
+
+  useEffect(() => {
+    chargerCourses();
+    const surVisible = () => {
+      if (!document.hidden) chargerCourses();
+    };
+    document.addEventListener('visibilitychange', surVisible);
+    window.addEventListener('focus', chargerCourses);
+    const it = setInterval(() => {
+      if (!document.hidden) chargerCourses();
+    }, 20000);
+    return () => {
+      document.removeEventListener('visibilitychange', surVisible);
+      window.removeEventListener('focus', chargerCourses);
+      clearInterval(it);
+    };
+  }, [chargerCourses]);
+
+  function ouvrirCourses() {
+    setOutil('courses');
+    coursesOuvertRef.current = true;
+    vusRef.current = nbCourses;
+    setCoursesNouveau(false);
+  }
+
+  function fermerOutil() {
+    if (outil === 'courses') {
+      coursesOuvertRef.current = false;
+      chargerCourses();
+    }
+    setOutil(null);
+  }
+
   const prenom = (profil?.nom ?? '').split(' ')[0];
-  const avances = chromesJour.filter((c) => c.type === 'avance');
-  const remboursements = chromesJour.filter((c) => c.type === 'remboursement');
+  const avancesJour = chromesJour.filter((c) => c.type === 'avance');
+  const remboursementsJour = chromesJour.filter((c) => c.type === 'remboursement');
+  const autresJour = chromesJour.filter((c) => c.type === 'autre');
 
   return (
     <div className="page">
@@ -55,62 +152,114 @@ export default function Profil() {
           <span className="kpi-label">CA du jour</span>
           <span className="kpi-valeur">{formatEuros(stats.caJour)}</span>
         </div>
-        <div className="kpi">
-          <span className="kpi-label">CA de la semaine</span>
-          <span className="kpi-valeur">{formatEuros(stats.caSemaine)}</span>
-        </div>
       </div>
+
+      {aInteressement && (
+        <div className="card">
+          <div className="histo-tete">
+            <strong>{profil?.nom}</strong>
+            <span className="badge badge-solde">{estAdmin ? 'Admin' : 'Employé'}</span>
+          </div>
+          <div className="cartes-kpi">
+            <div className="kpi">
+              <span className="kpi-label">Intéressement du mois</span>
+              <span className="kpi-valeur">{formatEuros(statsPerso.intMois)}</span>
+            </div>
+            <div className="kpi">
+              <span className="kpi-label">Intéressement de l’année</span>
+              <span className="kpi-valeur">{formatEuros(statsPerso.intAnnee)}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <h2>Chromes du jour</h2>
         {chromesJour.length === 0 && <p className="vide">Aucun chrome aujourd’hui.</p>}
-        {avances.length > 0 && (
+        {avancesJour.length > 0 && (
           <div className="histo-bloc">
             <span className="histo-titre">Avances</span>
-            {avances.map((a, i) => (
+            {avancesJour.map((a, i) => (
               <div key={`a${i}`} className="histo-chrome">
-                <span>{a.surnom}</span>
+                <span>
+                  {a.clients?.surnom ?? 'client'}
+                  <span className="chrome-heure"> · {a.users?.nom ?? '—'}</span>
+                </span>
                 <span className="dette">+ {formatEuros(a.montant)}</span>
               </div>
             ))}
           </div>
         )}
-        {remboursements.length > 0 && (
+        {remboursementsJour.length > 0 && (
           <div className="histo-bloc">
             <span className="histo-titre">Remboursements</span>
-            {remboursements.map((r, i) => (
+            {remboursementsJour.map((r, i) => (
               <div key={`r${i}`} className="histo-chrome">
-                <span>{r.surnom}</span>
+                <span>
+                  {r.clients?.surnom ?? 'client'}
+                  <span className="chrome-heure"> · {r.users?.nom ?? '—'}</span>
+                </span>
                 <span className="solde-ok">− {formatEuros(r.montant)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {autresJour.length > 0 && (
+          <div className="histo-bloc">
+            <span className="histo-titre">Autres</span>
+            {autresJour.map((v, i) => (
+              <div key={`v${i}`} className="histo-chrome">
+                <span>
+                  {v.clients?.surnom ?? 'client'}
+                  <span className="chrome-heure"> · {v.users?.nom ?? '—'}</span>
+                </span>
+                <span>{formatEuros(v.montant)}</span>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      <div className="card">
-        <h2>Raccourcis</h2>
-        <div className="form-inline">
-          <button type="button" className="btn btn-primary" onClick={() => setOutil('monnaie')}>
-            💶 Rendu de monnaie
+      <div className="bulles-accueil">
+        {options.fidelite && (
+          <button type="button" className="bulle-raccourci" onClick={() => setOutil('scanner')}>
+            <span className="bulle-rond">🎟️</span>
+            <span className="bulle-label">Scanner fidélité</span>
           </button>
-          <button type="button" className="btn btn-primary" onClick={() => setOutil('scanner')}>
-            🎟️ Scanner fidélité
+        )}
+        {options.stock && (
+          <button type="button" className="bulle-raccourci" onClick={ouvrirCourses}>
+            <span className="bulle-rond">
+              🛒
+              {nbCourses > 0 && (
+                <span className={`fab-badge ${coursesNouveau ? 'nouveau' : ''}`}>{nbCourses}</span>
+              )}
+            </span>
+            <span className="bulle-label">Liste de courses</span>
           </button>
-          <Link to="/caisse" className="btn">
-            🧾 Clôture de caisse
+        )}
+        <button type="button" className="bulle-raccourci" onClick={() => setOutil('monnaie')}>
+          <span className="bulle-rond">💶</span>
+          <span className="bulle-label">Rendu de monnaie</span>
+        </button>
+        {estAdmin && (
+          <Link to="/journal" className="bulle-raccourci">
+            <span className="bulle-rond">🧾</span>
+            <span className="bulle-label">Journal</span>
           </Link>
-        </div>
+        )}
       </div>
+
+      {options.planning && <CalendrierLecture />}
 
       <GuideDemarrage />
 
       {outil === 'monnaie' && (
-        <div className="aide-fond" role="dialog" aria-modal="true" onClick={() => setOutil(null)}>
+        <div className="aide-fond" role="dialog" aria-modal="true" onClick={fermerOutil}>
           <div className="aide-modale" onClick={(e) => e.stopPropagation()}>
             <div className="aide-tete">
               <h2>💶 Rendu de monnaie</h2>
-              <button type="button" className="btn btn-discret" onClick={() => setOutil(null)}>
+              <button type="button" className="btn btn-discret" onClick={fermerOutil}>
                 Fermer
               </button>
             </div>
@@ -118,10 +267,23 @@ export default function Profil() {
           </div>
         </div>
       )}
-      {outil === 'scanner' && <ScannerFidelite onClose={() => setOutil(null)} />}
+      {outil === 'courses' && (
+        <div className="aide-fond" role="dialog" aria-modal="true" aria-label="Liste de courses" onClick={fermerOutil}>
+          <div className="aide-modale" onClick={(e) => e.stopPropagation()}>
+            <div className="aide-tete">
+              <h2>🛒 Liste de courses</h2>
+              <button type="button" className="btn btn-discret" onClick={fermerOutil}>
+                Fermer
+              </button>
+            </div>
+            <ListeCourses embarque onMaj={chargerCourses} />
+          </div>
+        </div>
+      )}
+      {outil === 'scanner' && <ScannerFidelite onClose={fermerOutil} />}
 
       {estAdmin && (
-        <p className="periode-info">Tu es administrateur — retrouve la vue consolidée dans le Dashboard.</p>
+        <p className="periode-info">Tu es administrateur — retrouve la vue consolidée dans Comptabilité (menu Gestion).</p>
       )}
     </div>
   );

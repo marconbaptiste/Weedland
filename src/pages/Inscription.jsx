@@ -25,7 +25,7 @@ export default function Inscription() {
     e.preventDefault();
     setErreur('');
     setEnvoi(true);
-    const { data, error } = await supabase.functions.invoke('hyper-api', {
+    const { data, error } = await supabase.functions.invoke('creer-employe', {
       body: {
         action: 'inscription',
         ...form,

@@ -7,7 +7,7 @@ import { parseMontant } from '../lib/format';
 // La création de compte passe par l'Edge Function `creer-employe` (clé
 // service_role côté serveur). Le changement de rôle se fait directement (RLS).
 export default function Comptes() {
-  const { utilisateur, profil } = useAuth();
+  const { utilisateur, profil, magasinId } = useAuth();
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState({
     nom: '',
@@ -23,13 +23,21 @@ export default function Comptes() {
   const [nouvelEmail, setNouvelEmail] = useState('');
 
   const charger = useCallback(async () => {
+    if (!magasinId) return;
+    // Cloisonnement explicite au magasin actif : la RLS de `users` autorise un
+    // superadmin à lire TOUS les magasins (pour le pilotage) — sans ce filtre,
+    // la gestion des comptes d'un magasin afficherait les employés des autres.
     const [{ data }, { data: aut }] = await Promise.all([
-      supabase.from('users').select('id, nom, role, pourcentage_interessement').order('nom'),
-      supabase.from('comptes_autorises').select('email, role').order('email'),
+      supabase
+        .from('users')
+        .select('id, nom, role, pourcentage_interessement')
+        .eq('magasin_id', magasinId)
+        .order('nom'),
+      supabase.from('comptes_autorises').select('email, role').eq('magasin_id', magasinId).order('email'),
     ]);
     setUsers(data ?? []);
     setAutorises(aut ?? []);
-  }, []);
+  }, [magasinId]);
 
   useEffect(() => {
     charger();
@@ -48,7 +56,7 @@ export default function Comptes() {
 
   async function retirerEmail(email) {
     if (!window.confirm(`Retirer ${email} des comptes autorisés ?`)) return;
-    await supabase.from('comptes_autorises').delete().eq('email', email);
+    await supabase.from('comptes_autorises').delete().eq('email', email).eq('magasin_id', magasinId);
     charger();
   }
 
@@ -90,7 +98,7 @@ export default function Comptes() {
     const motDePasse = window.prompt(`Nouveau mot de passe pour ${nom} (min. 6 caractères) :`);
     if (!motDePasse) return;
     setStatut('');
-    const { data, error } = await supabase.functions.invoke('hyper-api', {
+    const { data, error } = await supabase.functions.invoke('creer-employe', {
       body: { action: 'reset', userId: id, motDePasse },
     });
     if (error) {
@@ -126,9 +134,7 @@ export default function Comptes() {
       },
       { onConflict: 'email' },
     );
-    // NB : le slug de l'Edge Function déployée est « hyper-api » (le nom affiché
-    // « creer-employe » n'est qu'une étiquette ; le slug ne peut pas changer).
-    const { data, error } = await supabase.functions.invoke('hyper-api', { body: form });
+    const { data, error } = await supabase.functions.invoke('creer-employe', { body: form });
     setEnvoi(false);
     if (error) {
       let message = 'Erreur lors de la création (la fonction creer-employe est-elle déployée ?).';

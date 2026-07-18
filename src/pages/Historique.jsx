@@ -10,7 +10,7 @@ import ChampMontant from '../components/ChampMontant';
 //   fiches lisibles, avec le détail des chromes par client.
 // - Employé : son propre historique (clôtures + journées partagées).
 export default function Historique() {
-  const { utilisateur, estAdmin } = useAuth();
+  const { utilisateur, estAdmin, magasinId } = useAuth();
 
   // ---------- Vue employé (personnelle) ----------
   const [perso, setPerso] = useState([]);
@@ -42,10 +42,10 @@ export default function Historique() {
         .gte('date', debut)
         .lte('date', fin)
         .order('date', { ascending: false }),
-      supabase.from('users').select('id, nom'),
+      supabase.from('users').select('id, nom').eq('magasin_id', magasinId),
       supabase
         .from('chromes')
-        .select('date, employe_id, type, montant, clients(surnom)')
+        .select('date, employe_id, type, montant, modifie_le, modifie_par, clients(surnom)')
         .gte('date', debut)
         .lte('date', fin),
     ]);
@@ -54,12 +54,18 @@ export default function Historique() {
     const map = {};
     (chr.data ?? []).forEach((c) => {
       const k = `${c.employe_id}|${c.date}`;
-      if (!map[k]) map[k] = { avances: [], remboursements: [] };
-      const cible = c.type === 'avance' ? map[k].avances : map[k].remboursements;
-      cible.push({ surnom: c.clients?.surnom ?? 'client', montant: c.montant });
+      if (!map[k]) map[k] = { avances: [], remboursements: [], autres: [] };
+      const cible =
+        c.type === 'avance' ? map[k].avances : c.type === 'autre' ? map[k].autres : map[k].remboursements;
+      cible.push({
+        surnom: c.clients?.surnom ?? 'client',
+        montant: c.montant,
+        modifie_le: c.modifie_le,
+        modifie_par: c.modifie_par,
+      });
     });
     setChromes(map);
-  }, [mois]);
+  }, [mois, magasinId]);
 
   useEffect(() => {
     if (estAdmin) chargerAdmin();
@@ -164,7 +170,7 @@ export default function Historique() {
         employe_id,
         date,
         closure: closures.find((c) => `${c.employe_id}|${c.date}` === cle) ?? null,
-        det: chromes[cle] || { avances: [], remboursements: [] },
+        det: chromes[cle] || { avances: [], remboursements: [], autres: [] },
       };
     })
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
@@ -237,6 +243,11 @@ export default function Historique() {
                       <div key={i} className="histo-chrome">
                         <span>{a.surnom}</span>
                         <span className="dette">+ {formatEuros(a.montant)}</span>
+                        {a.modifie_le && (
+                          <span className="histo-modif">
+                            ✏️ corrigé par {noms[a.modifie_par] ?? '—'} le {formatDateFr(a.modifie_le)}
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -249,6 +260,28 @@ export default function Historique() {
                       <div key={i} className="histo-chrome">
                         <span>{r.surnom}</span>
                         <span className="solde-ok">− {formatEuros(r.montant)}</span>
+                        {r.modifie_le && (
+                          <span className="histo-modif">
+                            ✏️ corrigé par {noms[r.modifie_par] ?? '—'} le {formatDateFr(r.modifie_le)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {det.autres.length > 0 && (
+                  <div className="histo-bloc">
+                    <span className="histo-titre">Autres</span>
+                    {det.autres.map((v, i) => (
+                      <div key={i} className="histo-chrome">
+                        <span>{v.surnom}</span>
+                        <span>{formatEuros(v.montant)}</span>
+                        {v.modifie_le && (
+                          <span className="histo-modif">
+                            ✏️ corrigé par {noms[v.modifie_par] ?? '—'} le {formatDateFr(v.modifie_le)}
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
