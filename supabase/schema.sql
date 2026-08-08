@@ -46,6 +46,10 @@ create table if not exists public.caisse_jour (
   ventes_directes numeric(10, 2) not null default 0 check (ventes_directes >= 0),
   cb              numeric(10, 2) not null default 0 check (cb >= 0),
   especes         numeric(10, 2) not null default 0 check (especes >= 0),
+  -- Encaissements ni CB ni espèces (virement bancaire, etc.), montant global du
+  -- jour. Comptent dans le CA : ventes_directes = cb + especes + virements.
+  -- (L'intégration à v_ca_jour vit dans la migration 2026-08-08-virements-caisse.sql.)
+  virements       numeric(10, 2) not null default 0 check (virements >= 0),
   fond_caisse     numeric(10, 2) not null default 0 check (fond_caisse >= 0),
   -- Heures travaillées et taux d'intéressement appliqué ce jour-là (pré-rempli
   -- depuis la fiche employé mais ajustable, notamment pour les journées partagées).

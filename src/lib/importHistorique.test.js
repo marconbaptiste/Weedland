@@ -27,6 +27,20 @@ describe('classifier', () => {
   });
 });
 
+const REVENUS_VIR = `Date;CA;CB;Moro;Vir
+5 juillet 2026;2 802 €;1 901 €;595 €;39 €
+6 juillet 2026;2 656 €;1 498 €;975 €;
+Revenus totaux;5 458 €;3 399 €;1 570 €;39 €`;
+
+describe('parseCaisse — colonne Virements', () => {
+  it('lit la colonne « Vir » quand elle existe, sinon 0', () => {
+    const r = analyserFichiers([{ nom: 'Juillet 2026-Revenus.csv', texte: REVENUS_VIR }]);
+    expect(r.caisse[0]).toEqual({ date: '2026-07-05', ventes_directes: 2802, cb: 1901, especes: 595, virements: 39 });
+    // cellule Vir vide -> 0
+    expect(r.caisse[1]).toEqual({ date: '2026-07-06', ventes_directes: 2656, cb: 1498, especes: 975, virements: 0 });
+  });
+});
+
 describe('analyserFichiers', () => {
   it('dispatche caisse / charges / fournisseurs et ignore le reste', () => {
     const r = analyserFichiers([
@@ -38,7 +52,7 @@ describe('analyserFichiers', () => {
 
     // Caisse : 2 jours valides (le total est ignoré)
     expect(r.caisse).toHaveLength(2);
-    expect(r.caisse[0]).toEqual({ date: '2026-03-01', ventes_directes: 1895, cb: 1185, especes: 610 });
+    expect(r.caisse[0]).toEqual({ date: '2026-03-01', ventes_directes: 1895, cb: 1185, especes: 610, virements: 0 });
 
     // Charges : « Total énergie » gardé, « Dépenses totales » exclu, mois du nom de fichier
     expect(r.charges).toHaveLength(2);

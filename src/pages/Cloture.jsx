@@ -15,6 +15,7 @@ export default function Cloture() {
   const [form, setForm] = useState({
     cb: '',
     especes: '',
+    virements: '',
     fond_caisse: '',
     heures_travaillees: '',
     commentaire: '',
@@ -81,6 +82,7 @@ export default function Cloture() {
       setForm({
         cb: String(caisse.cb),
         especes: String(caisse.especes),
+        virements: caisse.virements ? String(caisse.virements) : '',
         fond_caisse: String(caisse.fond_caisse),
         heures_travaillees: String(caisse.heures_travaillees ?? ''),
         commentaire: caisse.commentaire ?? '',
@@ -100,6 +102,7 @@ export default function Cloture() {
       setForm({
         cb: '',
         especes: '',
+        virements: '',
         fond_caisse: '',
         heures_travaillees: '',
         commentaire: '',
@@ -164,16 +167,18 @@ export default function Cloture() {
     );
   }
 
-  // Calculs temps réel. CA du jour = CB + espèces + avances − remboursements.
-  // (« ventes directes » = encaissé sur place = CB + espèces.)
+  // Calculs temps réel. CA du jour = CB + espèces + virements + avances − remboursements.
+  // (« ventes directes » = encaissé sur place = CB + espèces + virements.)
   const cbNum = parseMontant(form.cb);
   const especesNum = parseMontant(form.especes);
+  const virementsNum = parseMontant(form.virements);
   // Le taux d'intéressement vient du compte (Comptes), jamais saisi par clôture.
   const resume = resumeJour(
     {
-      ventes_directes: cbNum + especesNum,
+      ventes_directes: cbNum + especesNum + virementsNum,
       cb: cbNum,
       especes: especesNum,
+      virements: virementsNum,
       pourcentage_interessement: tauxParDefaut,
       nb_partageurs: diviseur,
     },
@@ -200,9 +205,11 @@ export default function Cloture() {
         {
           employe_id: utilisateur.id,
           date,
-          ventes_directes: parseMontant(form.cb) + parseMontant(form.especes),
+          ventes_directes:
+            parseMontant(form.cb) + parseMontant(form.especes) + parseMontant(form.virements),
           cb: parseMontant(form.cb),
           especes: parseMontant(form.especes),
+          virements: parseMontant(form.virements),
           fond_caisse: parseMontant(form.fond_caisse),
           heures_travaillees: parseMontant(form.heures_travaillees),
           pourcentage_interessement: tauxParDefaut,
@@ -258,6 +265,7 @@ export default function Cloture() {
     setForm({
       cb: '',
       especes: '',
+      virements: '',
       fond_caisse: '',
       heures_travaillees: '',
       commentaire: '',
@@ -279,6 +287,11 @@ export default function Cloture() {
           <form className="card" onSubmit={enregistrer}>
         <ChampMontant label="Encaissements CB" valeur={form.cb} onChange={maj('cb')} autoFocus />
         <ChampMontant label="Espèces (Moro)" valeur={form.especes} onChange={maj('especes')} />
+        <ChampMontant
+          label="Virements / autres"
+          valeur={form.virements}
+          onChange={maj('virements')}
+        />
         <ChampMontant label="Fond de caisse" valeur={form.fond_caisse} onChange={maj('fond_caisse')} />
         <label className="field">
           <span>Heures travaillées</span>
@@ -371,6 +384,12 @@ export default function Cloture() {
             <strong>{formatEuros(resume.autres)}</strong>
           </div>
         )}
+        {virementsNum > 0 && (
+          <div className="recap-ligne">
+            <span>Virements / autres</span>
+            <strong>{formatEuros(virementsNum)}</strong>
+          </div>
+        )}
         <hr />
         <div className="recap-paire">
           <div className="recap-bloc">
@@ -382,7 +401,7 @@ export default function Cloture() {
             <span className="recap-valeur">{formatEuros(resume.encaissements)}</span>
           </div>
         </div>
-        <p className="statut">CA = CB + espèces + avances − remboursements + autres.</p>
+        <p className="statut">CA = CB + espèces + virements + avances − remboursements + autres.</p>
         <hr />
         <div className="recap-ligne">
           <span>

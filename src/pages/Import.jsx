@@ -52,7 +52,7 @@ export default function Import() {
     const erreurs = [];
     if (resultat.caisse.length) {
       const rows = resultat.caisse.map((c) => ({
-        employe_id: employeId, date: c.date, ventes_directes: c.ventes_directes, cb: c.cb, especes: c.especes,
+        employe_id: employeId, date: c.date, ventes_directes: c.ventes_directes, cb: c.cb, especes: c.especes, virements: c.virements ?? 0,
       }));
       const { error } = await supabase.from('caisse_jour').upsert(rows, { onConflict: 'employe_id,date' });
       if (error) erreurs.push(`Caisse : ${error.message}`);
