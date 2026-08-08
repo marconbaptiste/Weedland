@@ -286,7 +286,7 @@ export default function Cloture() {
         <div className="col">
           <form className="card" onSubmit={enregistrer}>
         <ChampMontant label="Encaissements CB" valeur={form.cb} onChange={maj('cb')} autoFocus />
-        <ChampMontant label="Espèces (Moro)" valeur={form.especes} onChange={maj('especes')} />
+        <ChampMontant label="Espèces" valeur={form.especes} onChange={maj('especes')} />
         <ChampMontant
           label="Virements / autres"
           valeur={form.virements}
@@ -371,16 +371,16 @@ export default function Cloture() {
       <div className="card recap">
         <h2>Récapitulatif du jour</h2>
         <div className="recap-ligne">
-          <span>Avances (chromes)</span>
+          <span>Avances</span>
           <strong>{formatEuros(resume.avances)}</strong>
         </div>
         <div className="recap-ligne">
-          <span>Remboursements (chromes)</span>
+          <span>Remboursements</span>
           <strong>{formatEuros(resume.remboursements)}</strong>
         </div>
         {resume.autres > 0 && (
           <div className="recap-ligne">
-            <span>Autres (chromes)</span>
+            <span>Autres encaissements</span>
             <strong>{formatEuros(resume.autres)}</strong>
           </div>
         )}

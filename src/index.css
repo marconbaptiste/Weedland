@@ -1840,6 +1840,19 @@ textarea,
   }
 }
 
+/* Tableaux denses (Stocks, équipe) : conteneur défilant dédié — défilement
+   horizontal propre à TOUTE largeur (grands mobiles et tablettes inclus), sans
+   dépendre du point de rupture ci-dessus. Le tableau reste un vrai <table>. */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table-scroll > .tableau {
+  display: table;
+  min-width: 100%;
+  white-space: nowrap;
+}
+
 /* Journal : au contraire on veut que TOUT tienne dans la largeur (pas de
    défilement horizontal) — colonnes à largeurs fixes + retour à la ligne. */
 .journal-tableau {

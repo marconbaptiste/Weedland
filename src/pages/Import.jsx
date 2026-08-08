@@ -82,6 +82,14 @@ export default function Import() {
 
   async function importerChromes() {
     if (!chromes || chromes.length === 0) return;
+    if (
+      remplacer &&
+      !window.confirm(
+        'ATTENTION : « Repartir de zéro » va SUPPRIMER TOUS les chromes (avances/dettes) existants avant l\'import. Cette action est irréversible. Continuer ?',
+      )
+    ) {
+      return;
+    }
     setEnCours(true);
     setStatut('');
 
