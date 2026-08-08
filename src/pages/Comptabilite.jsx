@@ -149,6 +149,7 @@ export default function Comptabilite() {
     await supabase.from(table).update({ libelle: it.libelle || '', montant: parseMontant(it.montant) }).eq('id', id);
   }
   async function supprimer(table, id) {
+    if (!window.confirm('Supprimer cette ligne ? Cette action est irréversible.')) return;
     await supabase.from(table).delete().eq('id', id);
     setteur[table]((prev) => prev.filter((x) => x.id !== id));
   }
@@ -502,6 +503,7 @@ export default function Comptabilite() {
           <div className="kpi"><span className="kpi-label">Heures</span><span className="kpi-valeur">{formatNombre(totalHeures)} h</span></div>
           <div className="kpi"><span className="kpi-label">Paiements employés</span><span className="kpi-valeur">{formatEuros(totalPaiements)}</span></div>
         </div>
+        <div className="table-scroll">
         <table className="tableau">
           <thead>
             <tr>
@@ -535,6 +537,7 @@ export default function Comptabilite() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       <div className="card recap">

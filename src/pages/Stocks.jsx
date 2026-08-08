@@ -356,6 +356,7 @@ export default function Stocks() {
       {categories.map((cat) => (
         <div key={cat} className="card">
           <h2>{cat}</h2>
+          <div className="table-scroll">
           <table className="tableau">
             <thead>
               <tr>
@@ -481,6 +482,7 @@ export default function Stocks() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       ))}
     </div>

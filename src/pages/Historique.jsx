@@ -213,7 +213,7 @@ export default function Historique() {
                   </select>
                 </label>
                 <ChampMontant label="Encaissements CB" valeur={editForm.cb} onChange={majEdit('cb')} />
-                <ChampMontant label="Espèces (Moro)" valeur={editForm.especes} onChange={majEdit('especes')} />
+                <ChampMontant label="Espèces" valeur={editForm.especes} onChange={majEdit('especes')} />
                 <ChampMontant label="Fond de caisse" valeur={editForm.fond_caisse} onChange={majEdit('fond_caisse')} />
                 <div className="form-inline">
                   <button className="btn btn-primary" onClick={() => enregistrerEdition(c.caisse_id)}>Enregistrer</button>
@@ -229,7 +229,7 @@ export default function Historique() {
                   <div className="histo-grille">
                     <span>CA</span><strong>{formatEuros(c.ca_jour)}</strong>
                     <span>CB</span><span>{formatEuros(c.cb)}</span>
-                    <span>Espèces (Moro)</span><span>{formatEuros(c.especes)}</span>
+                    <span>Espèces</span><span>{formatEuros(c.especes)}</span>
                     <span>Fond de caisse</span><span>{formatEuros(c.fond_caisse)}</span>
                   </div>
                 ) : (
