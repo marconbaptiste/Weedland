@@ -84,6 +84,12 @@ describe('encaissements (CB + espèces + autres)', () => {
   it('un virement entre en encaissements (argent réellement reçu)', () => {
     expect(encaissements({ cb: 120, especes: 80, autres: 45 })).toBe(245);
   });
+
+  it('les virements de clôture s’ajoutent aussi (canal global du jour)', () => {
+    expect(encaissements({ cb: 120, especes: 80, virements: 50 })).toBe(250);
+    // virements (clôture) et autres (chrome) cumulables
+    expect(encaissements({ cb: 120, especes: 80, virements: 50, autres: 45 })).toBe(295);
+  });
 });
 
 describe('autres (achat payé par virement bancaire)', () => {
@@ -201,6 +207,14 @@ describe('resumeJour (vue d’ensemble temps réel)', () => {
     expect(r.encaissements).toBe(100);
     expect(r.reconciliation.coherent).toBe(true);
     expect(r.interessement).toBe(0);
+  });
+
+  it('intègre les virements de clôture (CB + espèces + virements = ventes directes)', () => {
+    // Journée avec virement : CA = 1795 CB+esp + 100 virement = 1895 ; caisse cohérente.
+    const r = resumeJour({ ventes_directes: 1895, cb: 1185, especes: 610, virements: 100 }, []);
+    expect(r.ca).toBe(1895);
+    expect(r.encaissements).toBe(1895); // 1185 + 610 + 100
+    expect(r.reconciliation.coherent).toBe(true);
   });
 
   it('calcule l’intéressement sur le CA du jour', () => {

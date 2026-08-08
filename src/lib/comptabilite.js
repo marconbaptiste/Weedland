@@ -5,9 +5,15 @@
 //
 // Règles métier :
 //   CA du jour      = ventes_directes + Σ avances − Σ remboursements + Σ autres
-//   Encaissements   = CB + espèces + autres  (argent réellement entré)
+//   Encaissements   = CB + espèces + virements + autres  (argent réellement entré)
 //   Solde client    = Σ avances − Σ remboursements  ('autre' exclu)
-//   Réconciliation  = (CB + espèces) doit égaler (ventes_directes + remboursements du jour)
+//   Réconciliation  = (CB + espèces + virements) doit égaler (ventes_directes + remboursements du jour)
+//
+// Deux canaux « ni CB ni espèces » coexistent : les « virements » de la CLÔTURE
+// (colonne caisse_jour.virements, montant global du jour, non rattaché à un
+// client — par convention ventes_directes = CB + espèces + virements) et les
+// « autres » chromes (achat réglé par virement/chèque, rattaché à un client, cf.
+// type 'autre'). Les deux ajoutent au CA et aux encaissements de la même façon.
 //
 // Pourquoi CA ≠ Encaissements : une AVANCE (chrome) compte dans le CA mais
 // n'entre PAS en caisse (crédit accordé au client). Un REMBOURSEMENT entre en
@@ -81,9 +87,9 @@ export function caJour({ ventesDirectes = 0, avances = 0, remboursements = 0, au
   );
 }
 
-/** Encaissements du jour = CB + espèces + autres (argent réellement entré). */
-export function encaissements({ cb = 0, especes = 0, autres = 0 }) {
-  return enEuros(enCentimes(cb) + enCentimes(especes) + enCentimes(autres));
+/** Encaissements du jour = CB + espèces + virements + autres (argent réellement entré). */
+export function encaissements({ cb = 0, especes = 0, virements = 0, autres = 0 }) {
+  return enEuros(enCentimes(cb) + enCentimes(especes) + enCentimes(virements) + enCentimes(autres));
 }
 
 /**
@@ -105,8 +111,8 @@ export function interessement(ca, pourcentage, nbPersonnes = 1) {
  * (ventes_directes + remboursements du jour).
  * @returns {{reel:number, attendu:number, ecart:number, coherent:boolean}}
  */
-export function reconciliation({ cb = 0, especes = 0, ventesDirectes = 0, remboursements = 0, autres = 0 }) {
-  const reelC = enCentimes(cb) + enCentimes(especes) + enCentimes(autres);
+export function reconciliation({ cb = 0, especes = 0, virements = 0, ventesDirectes = 0, remboursements = 0, autres = 0 }) {
+  const reelC = enCentimes(cb) + enCentimes(especes) + enCentimes(virements) + enCentimes(autres);
   const attenduC = enCentimes(ventesDirectes) + enCentimes(remboursements) + enCentimes(autres);
   const ecartC = reelC - attenduC;
   return {
@@ -120,7 +126,7 @@ export function reconciliation({ cb = 0, especes = 0, ventesDirectes = 0, rembou
 /**
  * Résumé complet d'une journée à partir d'une clôture de caisse et des lignes
  * de chromes du jour. Pratique pour l'affichage temps réel du module Caisse.
- * @param {{ventes_directes:number, cb:number, especes:number, pourcentage_interessement?:number, nb_partageurs?:number}} caisse
+ * @param {{ventes_directes:number, cb:number, especes:number, virements?:number, pourcentage_interessement?:number, nb_partageurs?:number}} caisse
  * @param {Array<{type:string, montant:number}>} lignesChromes
  */
 export function resumeJour(caisse, lignesChromes = []) {
@@ -130,14 +136,15 @@ export function resumeJour(caisse, lignesChromes = []) {
   const ventesDirectes = Number(caisse.ventes_directes) || 0;
   const cb = Number(caisse.cb) || 0;
   const especes = Number(caisse.especes) || 0;
+  const virements = Number(caisse.virements) || 0;
   const ca = caJour({ ventesDirectes, avances, remboursements, autres });
   return {
     avances,
     remboursements,
     autres,
     ca,
-    encaissements: encaissements({ cb, especes, autres }),
-    reconciliation: reconciliation({ cb, especes, ventesDirectes, remboursements, autres }),
+    encaissements: encaissements({ cb, especes, virements, autres }),
+    reconciliation: reconciliation({ cb, especes, virements, ventesDirectes, remboursements, autres }),
     interessement: interessement(ca, caisse.pourcentage_interessement, caisse.nb_partageurs),
   };
 }
