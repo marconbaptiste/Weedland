@@ -2241,3 +2241,70 @@ html, body { overflow-x: clip; max-width: 100%; }
   }
   .nav.ouvert .nav-lien.actif { background: var(--bordure-forte); }
 }
+
+/* ===== Barre d'onglets mobile (Lot 2) — pouce, toujours visible =====
+   Sur ordinateur : masquée (la nav du haut suffit). Sur mobile : fixée en bas. */
+.tabbar { display: none; }
+.plus-overlay { display: none; }
+@media (max-width: 720px) {
+  .tabbar {
+    display: flex;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 40;
+    background: var(--fond);
+    background: color-mix(in srgb, var(--fond) 92%, transparent);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--bordure);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tabbar-item {
+    flex: 1 1 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px;
+    min-height: 54px;
+    padding: 7px 2px 5px;
+    color: var(--texte-doux);
+    text-decoration: none;
+    font-size: 0.68rem;
+    background: none; border: none; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tabbar-item svg { width: 24px; height: 24px; flex: none; }
+  .tabbar-item .tab-label { font-weight: 500; letter-spacing: 0.01em; }
+  .tabbar-item.actif { color: var(--accent); }
+
+  .plus-overlay {
+    display: flex;
+    position: fixed; inset: 0; z-index: 90;
+    background: rgba(0, 0, 0, 0.5);
+    align-items: flex-end;
+    animation: plus-fade 0.15s ease;
+  }
+  .plus-sheet {
+    width: 100%;
+    background: var(--fond);
+    border-top: 1px solid var(--bordure);
+    border-top-left-radius: 18px; border-top-right-radius: 18px;
+    padding: 0.4rem 0.8rem calc(1rem + env(safe-area-inset-bottom));
+    animation: plus-up 0.2s ease;
+  }
+  .plus-grip { width: 40px; height: 4px; border-radius: 2px; background: var(--bordure-forte); margin: 0.5rem auto 0.2rem; }
+  .plus-title {
+    text-align: center; color: var(--texte-doux); font-size: 0.72rem;
+    padding: 0.3rem 0 0.5rem; text-transform: uppercase; letter-spacing: 0.12em;
+  }
+  .plus-sheet a {
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 1rem 0.7rem; min-height: 44px;
+    color: var(--texte); text-decoration: none;
+    border-radius: 12px; font-size: 1.05rem;
+  }
+  .plus-sheet a.actif { background: var(--bordure-forte); }
+}
+@keyframes plus-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes plus-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .plus-overlay, .plus-sheet { animation: none; }
+}
