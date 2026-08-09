@@ -146,11 +146,13 @@ export default function Chromes() {
 
   // Fidélité — actions (fonctions SECURITY DEFINER côté base).
   async function ajouterTampon() {
-    await supabase.rpc('fidelite_ajouter', { p_client: clientSel.client_id });
+    const { error } = await supabase.rpc('fidelite_ajouter', { p_client: clientSel.client_id });
+    setMsgClient(error ? `Erreur : ${error.message}` : '+1 étoile ⭐');
     chargerFidelite(clientSel.client_id);
   }
   async function retirerTampon() {
-    await supabase.rpc('fidelite_retirer', { p_client: clientSel.client_id });
+    const { error } = await supabase.rpc('fidelite_retirer', { p_client: clientSel.client_id });
+    if (error) setMsgClient(`Erreur : ${error.message}`);
     chargerFidelite(clientSel.client_id);
   }
   async function utiliserRecompense() {
@@ -325,7 +327,12 @@ export default function Chromes() {
 
   async function supprimerLigne(id) {
     if (!window.confirm('Supprimer cette ligne ?')) return;
-    await supabase.from('chromes').delete().eq('id', id);
+    const { error } = await supabase.from('chromes').delete().eq('id', id);
+    if (error) {
+      setMsgClient(`Suppression impossible : ${error.message}`);
+      return;
+    }
+    setMsgClient('Ligne supprimée ✅');
     await ouvrirClient(clientSel);
     await chargerClients();
   }
@@ -369,11 +376,14 @@ export default function Chromes() {
       date: nouvellePromo.date,
       employe_id: utilisateur.id,
     });
-    if (!error) {
-      setNouvellePromo({ description: '', date: aujourdhuiISO() });
-      await ouvrirClient(clientSel);
-      await chargerClients();
+    if (error) {
+      setMsgClient(`Enregistrement impossible : ${error.message}`);
+      return;
     }
+    setNouvellePromo({ description: '', date: aujourdhuiISO() });
+    setMsgClient('Faveur enregistrée ✅');
+    await ouvrirClient(clientSel);
+    await chargerClients();
   }
 
   // Ajout rapide d'une faveur via un raccourci configuré.
@@ -385,10 +395,13 @@ export default function Chromes() {
       date: aujourdhuiISO(),
       employe_id: utilisateur.id,
     });
-    if (!error) {
-      await ouvrirClient(clientSel);
-      await chargerClients();
+    if (error) {
+      setMsgClient(`Ajout impossible : ${error.message}`);
+      return;
     }
+    setMsgClient('Faveur ajoutée ✅');
+    await ouvrirClient(clientSel);
+    await chargerClients();
   }
 
   async function configurerFaveurs() {
@@ -445,11 +458,14 @@ export default function Chromes() {
       date,
       employe_id: utilisateur.id,
     });
-    if (!error) {
-      setMontant('');
-      await ouvrirClient(clientSel);
-      await chargerClients();
+    if (error) {
+      setMsgClient(`Enregistrement impossible : ${error.message}`);
+      return;
     }
+    setMontant('');
+    setMsgClient('Enregistré ✅');
+    await ouvrirClient(clientSel);
+    await chargerClients();
   }
 
   function fermerClient() {

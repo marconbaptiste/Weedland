@@ -28,6 +28,7 @@ const arrondi = (n) => Math.round(n * 100) / 100;
 export default function Stocks() {
   const { estAdmin } = useAuth();
   const [produits, setProduits] = useState([]);
+  const [statut, setStatut] = useState('');
   const [recherche, setRecherche] = useState('');
   const [creationOuverte, setCreationOuverte] = useState(false);
   const [form, setForm] = useState(FORM_VIDE);
@@ -70,20 +71,23 @@ export default function Stocks() {
       })
       .select('id')
       .single();
-    if (!error) {
-      if (quantite > 0) {
-        await journaliserMouvement({
-          stock_id: data?.id ?? null,
-          produit: nom,
-          delta: quantite,
-          quantite_apres: quantite,
-          motif: 'creation',
-        });
-      }
-      setForm(FORM_VIDE);
-      setCreationOuverte(false);
-      charger();
+    if (error) {
+      setStatut(`Ajout impossible : ${error.message}`);
+      return;
     }
+    if (quantite > 0) {
+      await journaliserMouvement({
+        stock_id: data?.id ?? null,
+        produit: nom,
+        delta: quantite,
+        quantite_apres: quantite,
+        motif: 'creation',
+      });
+    }
+    setForm(FORM_VIDE);
+    setCreationOuverte(false);
+    setStatut(`« ${nom} » ajouté ✅`);
+    charger();
   }
 
   function commencerEdition(p) {
@@ -116,27 +120,34 @@ export default function Stocks() {
         prix_vente: parseMontant(editForm.prix_vente),
       })
       .eq('id', id);
-    if (!error) {
-      const ecart = ancien ? arrondi(nouvelleQte - Number(ancien.quantite)) : 0;
-      if (ecart !== 0) {
-        await journaliserMouvement({
-          stock_id: id,
-          produit: nom,
-          delta: ecart,
-          quantite_apres: nouvelleQte,
-          motif: 'correction',
-        });
-      }
-      setEdition(null);
-      charger();
+    if (error) {
+      setStatut(`Modification impossible : ${error.message}`);
+      return;
     }
+    const ecart = ancien ? arrondi(nouvelleQte - Number(ancien.quantite)) : 0;
+    if (ecart !== 0) {
+      await journaliserMouvement({
+        stock_id: id,
+        produit: nom,
+        delta: ecart,
+        quantite_apres: nouvelleQte,
+        motif: 'correction',
+      });
+    }
+    setEdition(null);
+    setStatut(`« ${nom} » modifié ✅`);
+    charger();
   }
 
   async function supprimer(id) {
     if (!window.confirm('Supprimer ce produit du stock ?')) return;
     const produit = produits.find((p) => p.id === id);
     const { error } = await supabase.from('stocks').delete().eq('id', id);
-    if (!error && produit && Number(produit.quantite) > 0) {
+    if (error) {
+      setStatut(`Suppression impossible : ${error.message}`);
+      return;
+    }
+    if (produit && Number(produit.quantite) > 0) {
       // Le produit part avec sa quantité : on trace la sortie correspondante.
       await journaliserMouvement({
         stock_id: null, // la ligne stock disparaît (on delete set null)
@@ -146,6 +157,7 @@ export default function Stocks() {
         motif: 'suppression',
       });
     }
+    setStatut('Produit supprimé.');
     charger();
   }
 
@@ -155,21 +167,24 @@ export default function Stocks() {
     if (d <= 0) return;
     const nouvelle = Math.max(0, arrondi(Number(p.quantite) + signe * d));
     const { error } = await supabase.from('stocks').update({ quantite: nouvelle }).eq('id', p.id);
-    if (!error) {
-      // On trace la variation réelle (le stock ne descend jamais sous 0).
-      const ecart = arrondi(nouvelle - Number(p.quantite));
-      if (ecart !== 0) {
-        await journaliserMouvement({
-          stock_id: p.id,
-          produit: p.nom,
-          delta: ecart,
-          quantite_apres: nouvelle,
-          motif: signe > 0 ? 'entree' : 'sortie',
-        });
-      }
-      setDelta((x) => ({ ...x, [p.id]: '' }));
-      charger();
+    if (error) {
+      setStatut(`Mouvement impossible : ${error.message}`);
+      return;
     }
+    // On trace la variation réelle (le stock ne descend jamais sous 0).
+    const ecart = arrondi(nouvelle - Number(p.quantite));
+    if (ecart !== 0) {
+      await journaliserMouvement({
+        stock_id: p.id,
+        produit: p.nom,
+        delta: ecart,
+        quantite_apres: nouvelle,
+        motif: signe > 0 ? 'entree' : 'sortie',
+      });
+    }
+    setDelta((x) => ({ ...x, [p.id]: '' }));
+    setStatut(`${p.nom} : ${formatNombre(nouvelle)} ${p.unite} en stock`);
+    charger();
   }
 
   const filtres = produits.filter((p) =>
@@ -339,6 +354,7 @@ export default function Stocks() {
             </button>
           </div>
         )}
+        {statut && <p className="statut">{statut}</p>}
       </div>
 
       {historiqueOuvert && <HistoriqueStock onClose={() => setHistoriqueOuvert(false)} />}
@@ -351,7 +367,23 @@ export default function Stocks() {
         />
       )}
 
-      {categories.length === 0 && <p className="vide">Aucun produit en stock.</p>}
+      {categories.length === 0 && (
+        <div className="card etat-vide">
+          <p className="vide">Aucun produit en stock.</p>
+          {!creationOuverte && (
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                setNouvelleCat(false);
+                setForm(FORM_VIDE);
+                setCreationOuverte(true);
+              }}
+            >
+              + Ajouter un premier produit
+            </button>
+          )}
+        </div>
+      )}
 
       {categories.map((cat) => (
         <div key={cat} className="card">
