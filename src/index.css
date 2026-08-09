@@ -2308,3 +2308,12 @@ html, body { overflow-x: clip; max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   .plus-overlay, .plus-sheet { animation: none; }
 }
+
+/* ===== Cibles tactiles confortables sur mobile (≥44px) — Lot 3 ===== */
+@media (max-width: 720px) {
+  .btn,
+  .btn-discret { min-height: 44px; }
+  .actions-cellule .btn-discret { min-height: 44px; }
+  .mouvement .btn-discret { min-width: 44px; min-height: 44px; }
+  .btn-icone { min-width: 40px; min-height: 40px; }
+}
