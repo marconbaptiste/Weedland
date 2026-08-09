@@ -78,9 +78,9 @@ export default function Layout() {
             {logoUrl ? (
               <img className="logo-magasin" src={logoUrl} alt={magasinNom || 'Logo du magasin'} />
             ) : magasinNom ? (
-              <FeuilleKanabiz taille={26} />
+              <FeuilleKanabiz taille={38} />
             ) : (
-              <Logo />
+              <Logo taille={32} />
             )}
             {magasinNom && <span className="entete-nom-magasin">{magasinNom}</span>}
           </div>

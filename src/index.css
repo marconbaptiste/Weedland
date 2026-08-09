@@ -1516,8 +1516,8 @@ details > summary {
 }
 /* Logo personnalisé du magasin. */
 .logo-magasin {
-  height: 34px;
-  max-width: 160px;
+  height: 48px;
+  max-width: 220px;
   object-fit: contain;
   display: block;
 }
@@ -2315,7 +2315,7 @@ html, body { overflow-x: clip; max-width: 100%; }
 /* En-tête : marque du magasin (logo + nom), marque blanche. */
 .entete-marque { display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
 .entete-nom-magasin {
-  font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em;
+  font-weight: 700; font-size: 1.2rem; letter-spacing: -0.01em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
