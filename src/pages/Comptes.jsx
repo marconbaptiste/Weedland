@@ -2,12 +2,14 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant } from '../lib/format';
+import { useInvite } from '../components/ModalePrompt';
 
 // Module — Gestion des comptes (réservé admin).
 // La création de compte passe par l'Edge Function `creer-employe` (clé
 // service_role côté serveur). Le changement de rôle se fait directement (RLS).
 export default function Comptes() {
   const { utilisateur, profil, magasinId } = useAuth();
+  const { invite, elementInvite } = useInvite();
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState({
     nom: '',
@@ -95,7 +97,11 @@ export default function Comptes() {
   }
 
   async function reinitialiserMdp(id, nom) {
-    const motDePasse = window.prompt(`Nouveau mot de passe pour ${nom} (min. 6 caractères) :`);
+    const motDePasse = await invite({
+      titre: 'Réinitialiser le mot de passe',
+      label: `Nouveau mot de passe pour ${nom} (min. 6 caractères)`,
+      type: 'password',
+    });
     if (!motDePasse) return;
     setStatut('');
     const { data, error } = await supabase.functions.invoke('creer-employe', {
@@ -330,6 +336,7 @@ export default function Comptes() {
           </tbody>
         </table>
       </div>
+      {elementInvite}
     </div>
   );
 }

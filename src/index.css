@@ -2309,6 +2309,9 @@ html, body { overflow-x: clip; max-width: 100%; }
   .plus-overlay, .plus-sheet { animation: none; }
 }
 
+/* Modale de saisie (prompt/alert intégrés) — un peu plus étroite que la fiche client. */
+.modale-invite { max-width: 460px; }
+
 /* ===== Cibles tactiles confortables sur mobile (≥44px) — Lot 3 ===== */
 @media (max-width: 720px) {
   .btn,

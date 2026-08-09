@@ -5,6 +5,7 @@ import { parseMontant, formatEuros, formatDateFr } from '../lib/format';
 import { aujourdhuiISO } from '../lib/dates';
 import { soldeClient, statutSolde, somme } from '../lib/comptabilite';
 import ChampMontant from '../components/ChampMontant';
+import { useInvite } from '../components/ModalePrompt';
 import ModaleQR from '../components/ModaleQR';
 import ModaleQRInscription from '../components/ModaleQRInscription';
 
@@ -25,6 +26,7 @@ const formatHeure = (iso) => {
 // nom/prénom réel. La description est interne (visible seulement du personnel).
 export default function Chromes() {
   const { utilisateur, estAdmin, magasinId, options } = useAuth();
+  const { invite, elementInvite } = useInvite();
   const [recherche, setRecherche] = useState('');
   const [clients, setClients] = useState([]);
   const [clientSel, setClientSel] = useState(null);
@@ -157,7 +159,13 @@ export default function Chromes() {
     chargerFidelite(clientSel.client_id);
   }
   async function changerPalier() {
-    const v = window.prompt('Nombre de tampons pour une récompense :', String(palier));
+    const v = await invite({
+      titre: 'Récompense fidélité',
+      label: 'Nombre de tampons pour une récompense',
+      type: 'number',
+      valeurInitiale: String(palier),
+    });
+    if (v == null) return;
     const n = parseInt(v, 10);
     if (!n || n < 1) return;
     const { error } = await supabase.rpc('fidelite_palier', { p_palier: n });
@@ -206,7 +214,11 @@ export default function Chromes() {
   }
 
   async function renommerClient() {
-    const surnom = window.prompt('Nouveau surnom du client :', clientSel.surnom);
+    const surnom = await invite({
+      titre: 'Renommer le client',
+      label: 'Nouveau surnom',
+      valeurInitiale: clientSel.surnom,
+    });
     if (surnom == null) return;
     const s = surnom.trim();
     if (!s) return;
@@ -221,10 +233,12 @@ export default function Chromes() {
   }
 
   async function modifierTelephone() {
-    const saisie = window.prompt(
-      'Numéro de téléphone du client (laisser vide pour effacer) :',
-      clientSel.telephone ?? '',
-    );
+    const saisie = await invite({
+      titre: 'Téléphone du client',
+      label: 'Numéro (laisser vide pour effacer)',
+      type: 'tel',
+      valeurInitiale: clientSel.telephone ?? '',
+    });
     if (saisie == null) return;
     const telephone = saisie.trim() || null;
     const { error } = await majFiche({ surnom: clientSel.surnom, telephone, description: clientSel.description });
@@ -257,7 +271,12 @@ export default function Chromes() {
 
   // Notification push individuelle (ex. objet oublié) → carte du client.
   async function notifierClient() {
-    const saisie = window.prompt('Message à envoyer sur la carte de ce client :', '');
+    const saisie = await invite({
+      titre: 'Notifier le client',
+      label: 'Message à envoyer sur sa carte',
+      type: 'textarea',
+      valeurInitiale: '',
+    });
     if (saisie == null) return;
     const texte = saisie.trim();
     if (!texte) return;
@@ -373,10 +392,11 @@ export default function Chromes() {
   }
 
   async function configurerFaveurs() {
-    const v = window.prompt(
-      'Raccourcis de faveurs (séparés par des virgules) :',
-      faveurs.join(', '),
-    );
+    const v = await invite({
+      titre: 'Raccourcis de faveurs',
+      label: 'Libellés séparés par des virgules',
+      valeurInitiale: faveurs.join(', '),
+    });
     if (v == null) return;
     const liste = v.split(',').map((s) => s.trim()).filter(Boolean);
     const { error } = await supabase.rpc('faveurs_set', { p_libelles: liste });
@@ -997,6 +1017,7 @@ export default function Chromes() {
           </div>
         </div>
       )}
+      {elementInvite}
     </div>
   );
 }

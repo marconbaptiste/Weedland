@@ -173,7 +173,7 @@ export default function Comptabilite() {
       .from('justificatifs')
       .upload(chemin, blob, { upsert: true, contentType: blob.type || 'image/jpeg' });
     if (up) {
-      window.alert(`Échec de l'envoi : ${up.message}`);
+      setStatutOcr(`Échec de l'envoi : ${up.message}`);
       return;
     }
     await supabase.from(table).update({ justificatif: chemin }).eq('id', id);
@@ -201,7 +201,7 @@ export default function Comptabilite() {
   async function voirJustificatif(chemin) {
     const { data, error } = await supabase.storage.from('justificatifs').createSignedUrl(chemin, 120);
     if (error || !data?.signedUrl) {
-      window.alert("Impossible d'ouvrir le justificatif.");
+      setStatutOcr("Impossible d'ouvrir le justificatif.");
       return;
     }
     window.open(data.signedUrl, '_blank');
