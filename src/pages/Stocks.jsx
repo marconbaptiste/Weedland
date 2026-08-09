@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { Fragment, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatNombre } from '../lib/format';
@@ -369,74 +369,9 @@ export default function Stocks() {
               </tr>
             </thead>
             <tbody>
-              {parCategorie[cat].map((p) =>
-                edition === p.id ? (
-                  <tr key={p.id}>
-                    <td>
-                      <input
-                        className="champ-nom"
-                        value={editForm.nom}
-                        onChange={(e) => setEditForm((f) => ({ ...f, nom: e.target.value }))}
-                      />
-                      <input
-                        className="champ-nom"
-                        value={editForm.categorie}
-                        placeholder="catégorie"
-                        onChange={(e) => setEditForm((f) => ({ ...f, categorie: e.target.value }))}
-                      />
-                    </td>
-                    <td className="droite">
-                      <input
-                        className="champ-pourcentage"
-                        inputMode="decimal"
-                        value={editForm.quantite}
-                        onChange={(e) => setEditForm((f) => ({ ...f, quantite: e.target.value }))}
-                      />
-                      <select value={editForm.unite} onChange={(e) => setEditForm((f) => ({ ...f, unite: e.target.value }))}>
-                        {UNITES.map((u) => (
-                          <option key={u} value={u}>
-                            {u}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        className="champ-pourcentage"
-                        inputMode="decimal"
-                        placeholder="seuil"
-                        value={editForm.seuil_alerte}
-                        onChange={(e) => setEditForm((f) => ({ ...f, seuil_alerte: e.target.value }))}
-                      />
-                    </td>
-                    <td className="droite">
-                      <input
-                        className="champ-pourcentage"
-                        inputMode="decimal"
-                        value={editForm.prix_vente}
-                        onChange={(e) => setEditForm((f) => ({ ...f, prix_vente: e.target.value }))}
-                      />
-                    </td>
-                    <td className="droite">
-                      <input
-                        className="champ-pourcentage"
-                        inputMode="decimal"
-                        placeholder="achat"
-                        value={editForm.prix_achat}
-                        onChange={(e) => setEditForm((f) => ({ ...f, prix_achat: e.target.value }))}
-                      />
-                    </td>
-                    <td className="actions-cellule">
-                      <button type="button" className="btn btn-discret" onClick={() => enregistrerEdition(p.id)}>
-                        Enregistrer
-                      </button>
-                      <button type="button" className="btn btn-discret" onClick={() => setEdition(null)}>
-                        Annuler
-                      </button>
-                    </td>
-                  </tr>
-                ) : (
-                  <tr key={p.id}>
+              {parCategorie[cat].map((p) => (
+                <Fragment key={p.id}>
+                  <tr>
                     <td>
                       {p.nom}
                       {Number(p.quantite) === 0 ? (
@@ -478,13 +413,72 @@ export default function Stocks() {
                       )}
                     </td>
                   </tr>
-                ),
-              )}
+                </Fragment>
+              ))}
             </tbody>
           </table>
           </div>
         </div>
       ))}
+
+      {edition && (
+        <div
+          className="aide-fond"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Modifier le produit"
+          onClick={() => setEdition(null)}
+        >
+          <div className="modale-client" onClick={(e) => e.stopPropagation()}>
+            <div className="modale-client-tete">
+              <strong>Modifier le produit</strong>
+              <button type="button" className="btn btn-discret" onClick={() => setEdition(null)}>
+                Fermer
+              </button>
+            </div>
+            <div className="form-chrome">
+              <label className="field">
+                <span>Produit</span>
+                <input value={editForm.nom} onChange={(e) => setEditForm((f) => ({ ...f, nom: e.target.value }))} />
+              </label>
+              <label className="field">
+                <span>Catégorie</span>
+                <input
+                  value={editForm.categorie}
+                  placeholder="ex. Fleurs, Résines…"
+                  onChange={(e) => setEditForm((f) => ({ ...f, categorie: e.target.value }))}
+                />
+              </label>
+              <div className="form-inline">
+                <ChampMontant label="Quantité" valeur={editForm.quantite} onChange={(v) => setEditForm((f) => ({ ...f, quantite: v }))} />
+                <label className="field">
+                  <span>Unité</span>
+                  <select value={editForm.unite} onChange={(e) => setEditForm((f) => ({ ...f, unite: e.target.value }))}>
+                    {UNITES.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <ChampMontant label="Seuil d’alerte" valeur={editForm.seuil_alerte} onChange={(v) => setEditForm((f) => ({ ...f, seuil_alerte: v }))} />
+              <div className="form-inline">
+                <ChampMontant label="Prix d’achat (unité)" valeur={editForm.prix_achat} onChange={(v) => setEditForm((f) => ({ ...f, prix_achat: v }))} />
+                <ChampMontant label="Prix de vente (unité)" valeur={editForm.prix_vente} onChange={(v) => setEditForm((f) => ({ ...f, prix_vente: v }))} />
+              </div>
+              <div className="form-inline">
+                <button className="btn btn-primary" type="button" onClick={() => enregistrerEdition(edition)}>
+                  Enregistrer
+                </button>
+                <button className="btn" type="button" onClick={() => setEdition(null)}>
+                  Annuler
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
