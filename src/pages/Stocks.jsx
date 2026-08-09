@@ -23,11 +23,77 @@ const FORM_VIDE = {
 // Arrondi à 2 décimales (évite les erreurs de virgule flottante sur les quantités).
 const arrondi = (n) => Math.round(n * 100) / 100;
 
+// Rattache une saisie à une catégorie existante si elle ne diffère que par la
+// casse ou les espaces — évite les doublons (« Fleurs » vs « fleurs » vs « Fleurs  »).
+function canoniserCategorie(saisie, categories) {
+  const t = (saisie ?? '').trim().replace(/\s+/g, ' ');
+  if (!t) return '';
+  const existante = categories.find((c) => c.toLowerCase() === t.toLowerCase());
+  return existante || t;
+}
+
+// Sélecteur de catégorie : on choisit dans les catégories existantes (pour ne
+// pas recréer un doublon à cause d'une faute de frappe) ou on en crée une.
+function ChampCategorie({ valeur, onChange, categories, label = 'Catégorie', autoFocus }) {
+  const [nouvelle, setNouvelle] = useState(false);
+  const afficherListe = categories.length > 0 && !nouvelle;
+  return (
+    <label className="field">
+      <span>{label}</span>
+      {afficherListe ? (
+        <select
+          value={categories.includes(valeur) ? valeur : ''}
+          onChange={(e) => {
+            if (e.target.value === '__nouvelle__') {
+              setNouvelle(true);
+              onChange('');
+            } else {
+              onChange(e.target.value);
+            }
+          }}
+        >
+          <option value="" disabled>
+            Choisir une catégorie…
+          </option>
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+          <option value="__nouvelle__">＋ Nouvelle catégorie…</option>
+        </select>
+      ) : (
+        <>
+          <input
+            autoFocus={autoFocus}
+            value={valeur}
+            placeholder="ex. Fleurs, Résines, Huiles…"
+            onChange={(e) => onChange(e.target.value)}
+          />
+          {categories.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-discret lien-retour-cat"
+              onClick={() => {
+                setNouvelle(false);
+                onChange('');
+              }}
+            >
+              ↩ Choisir une catégorie existante
+            </button>
+          )}
+        </>
+      )}
+    </label>
+  );
+}
+
 // Module — Gestion des stocks (registre partagé : tout employé consulte et
 // ajuste ; seul l'admin supprime un produit).
 export default function Stocks() {
   const { estAdmin } = useAuth();
   const [produits, setProduits] = useState([]);
+  const [statut, setStatut] = useState('');
   const [recherche, setRecherche] = useState('');
   const [creationOuverte, setCreationOuverte] = useState(false);
   const [form, setForm] = useState(FORM_VIDE);
@@ -37,7 +103,6 @@ export default function Stocks() {
   const [importOuvert, setImportOuvert] = useState(false);
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
   const [tri, setTri] = useState('nom'); // 'nom' | 'quantite'
-  const [nouvelleCat, setNouvelleCat] = useState(false); // saisie d'une nouvelle catégorie à la création
 
   const charger = useCallback(async () => {
     const { data } = await supabase
@@ -60,7 +125,7 @@ export default function Stocks() {
     const { data, error } = await supabase
       .from('stocks')
       .insert({
-        categorie: form.categorie.trim(),
+        categorie: canoniserCategorie(form.categorie, categoriesReelles),
         nom,
         quantite,
         unite: form.unite,
@@ -70,20 +135,23 @@ export default function Stocks() {
       })
       .select('id')
       .single();
-    if (!error) {
-      if (quantite > 0) {
-        await journaliserMouvement({
-          stock_id: data?.id ?? null,
-          produit: nom,
-          delta: quantite,
-          quantite_apres: quantite,
-          motif: 'creation',
-        });
-      }
-      setForm(FORM_VIDE);
-      setCreationOuverte(false);
-      charger();
+    if (error) {
+      setStatut(`Ajout impossible : ${error.message}`);
+      return;
     }
+    if (quantite > 0) {
+      await journaliserMouvement({
+        stock_id: data?.id ?? null,
+        produit: nom,
+        delta: quantite,
+        quantite_apres: quantite,
+        motif: 'creation',
+      });
+    }
+    setForm(FORM_VIDE);
+    setCreationOuverte(false);
+    setStatut(`« ${nom} » ajouté ✅`);
+    charger();
   }
 
   function commencerEdition(p) {
@@ -107,7 +175,7 @@ export default function Stocks() {
     const { error } = await supabase
       .from('stocks')
       .update({
-        categorie: editForm.categorie.trim(),
+        categorie: canoniserCategorie(editForm.categorie, categoriesReelles),
         nom,
         quantite: nouvelleQte,
         unite: editForm.unite,
@@ -116,27 +184,34 @@ export default function Stocks() {
         prix_vente: parseMontant(editForm.prix_vente),
       })
       .eq('id', id);
-    if (!error) {
-      const ecart = ancien ? arrondi(nouvelleQte - Number(ancien.quantite)) : 0;
-      if (ecart !== 0) {
-        await journaliserMouvement({
-          stock_id: id,
-          produit: nom,
-          delta: ecart,
-          quantite_apres: nouvelleQte,
-          motif: 'correction',
-        });
-      }
-      setEdition(null);
-      charger();
+    if (error) {
+      setStatut(`Modification impossible : ${error.message}`);
+      return;
     }
+    const ecart = ancien ? arrondi(nouvelleQte - Number(ancien.quantite)) : 0;
+    if (ecart !== 0) {
+      await journaliserMouvement({
+        stock_id: id,
+        produit: nom,
+        delta: ecart,
+        quantite_apres: nouvelleQte,
+        motif: 'correction',
+      });
+    }
+    setEdition(null);
+    setStatut(`« ${nom} » modifié ✅`);
+    charger();
   }
 
   async function supprimer(id) {
     if (!window.confirm('Supprimer ce produit du stock ?')) return;
     const produit = produits.find((p) => p.id === id);
     const { error } = await supabase.from('stocks').delete().eq('id', id);
-    if (!error && produit && Number(produit.quantite) > 0) {
+    if (error) {
+      setStatut(`Suppression impossible : ${error.message}`);
+      return;
+    }
+    if (produit && Number(produit.quantite) > 0) {
       // Le produit part avec sa quantité : on trace la sortie correspondante.
       await journaliserMouvement({
         stock_id: null, // la ligne stock disparaît (on delete set null)
@@ -146,6 +221,7 @@ export default function Stocks() {
         motif: 'suppression',
       });
     }
+    setStatut('Produit supprimé.');
     charger();
   }
 
@@ -155,21 +231,24 @@ export default function Stocks() {
     if (d <= 0) return;
     const nouvelle = Math.max(0, arrondi(Number(p.quantite) + signe * d));
     const { error } = await supabase.from('stocks').update({ quantite: nouvelle }).eq('id', p.id);
-    if (!error) {
-      // On trace la variation réelle (le stock ne descend jamais sous 0).
-      const ecart = arrondi(nouvelle - Number(p.quantite));
-      if (ecart !== 0) {
-        await journaliserMouvement({
-          stock_id: p.id,
-          produit: p.nom,
-          delta: ecart,
-          quantite_apres: nouvelle,
-          motif: signe > 0 ? 'entree' : 'sortie',
-        });
-      }
-      setDelta((x) => ({ ...x, [p.id]: '' }));
-      charger();
+    if (error) {
+      setStatut(`Mouvement impossible : ${error.message}`);
+      return;
     }
+    // On trace la variation réelle (le stock ne descend jamais sous 0).
+    const ecart = arrondi(nouvelle - Number(p.quantite));
+    if (ecart !== 0) {
+      await journaliserMouvement({
+        stock_id: p.id,
+        produit: p.nom,
+        delta: ecart,
+        quantite_apres: nouvelle,
+        motif: signe > 0 ? 'entree' : 'sortie',
+      });
+    }
+    setDelta((x) => ({ ...x, [p.id]: '' }));
+    setStatut(`${p.nom} : ${formatNombre(nouvelle)} ${p.unite} en stock`);
+    charger();
   }
 
   const filtres = produits.filter((p) =>
@@ -239,50 +318,12 @@ export default function Stocks() {
         </div>
         {creationOuverte ? (
           <form className="form-chrome" onSubmit={creer}>
-            <label className="field">
-              <span>Catégorie / type de produit</span>
-              {categoriesReelles.length > 0 && !nouvelleCat ? (
-                <select
-                  value={form.categorie}
-                  onChange={(e) => {
-                    if (e.target.value === '__nouvelle__') {
-                      setNouvelleCat(true);
-                      setForm((f) => ({ ...f, categorie: '' }));
-                    } else {
-                      setForm((f) => ({ ...f, categorie: e.target.value }));
-                    }
-                  }}
-                >
-                  <option value="" disabled>
-                    Choisir une catégorie…
-                  </option>
-                  {categoriesReelles.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                  <option value="__nouvelle__">＋ Nouvelle catégorie…</option>
-                </select>
-              ) : (
-                <input
-                  value={form.categorie}
-                  onChange={(e) => setForm((f) => ({ ...f, categorie: e.target.value }))}
-                  placeholder="ex. Fleurs, Résines, Huiles…"
-                />
-              )}
-              {categoriesReelles.length > 0 && nouvelleCat && (
-                <button
-                  type="button"
-                  className="btn btn-discret lien-retour-cat"
-                  onClick={() => {
-                    setNouvelleCat(false);
-                    setForm((f) => ({ ...f, categorie: '' }));
-                  }}
-                >
-                  ↩ Choisir une catégorie existante
-                </button>
-              )}
-            </label>
+            <ChampCategorie
+              label="Catégorie / type de produit"
+              valeur={form.categorie}
+              onChange={(v) => setForm((f) => ({ ...f, categorie: v }))}
+              categories={categoriesReelles}
+            />
             <label className="field">
               <span>Produit</span>
               <input
@@ -324,7 +365,6 @@ export default function Stocks() {
             <button
               className="btn"
               onClick={() => {
-                setNouvelleCat(false);
                 setForm(FORM_VIDE);
                 setCreationOuverte(true);
               }}
@@ -339,6 +379,7 @@ export default function Stocks() {
             </button>
           </div>
         )}
+        {statut && <p className="statut">{statut}</p>}
       </div>
 
       {historiqueOuvert && <HistoriqueStock onClose={() => setHistoriqueOuvert(false)} />}
@@ -351,7 +392,22 @@ export default function Stocks() {
         />
       )}
 
-      {categories.length === 0 && <p className="vide">Aucun produit en stock.</p>}
+      {categories.length === 0 && (
+        <div className="card etat-vide">
+          <p className="vide">Aucun produit en stock.</p>
+          {!creationOuverte && (
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                setForm(FORM_VIDE);
+                setCreationOuverte(true);
+              }}
+            >
+              + Ajouter un premier produit
+            </button>
+          )}
+        </div>
+      )}
 
       {categories.map((cat) => (
         <div key={cat} className="card">
@@ -441,14 +497,12 @@ export default function Stocks() {
                 <span>Produit</span>
                 <input value={editForm.nom} onChange={(e) => setEditForm((f) => ({ ...f, nom: e.target.value }))} />
               </label>
-              <label className="field">
-                <span>Catégorie</span>
-                <input
-                  value={editForm.categorie}
-                  placeholder="ex. Fleurs, Résines…"
-                  onChange={(e) => setEditForm((f) => ({ ...f, categorie: e.target.value }))}
-                />
-              </label>
+              <ChampCategorie
+                key={edition}
+                valeur={editForm.categorie}
+                onChange={(v) => setEditForm((f) => ({ ...f, categorie: v }))}
+                categories={categoriesReelles}
+              />
               <div className="form-inline">
                 <ChampMontant label="Quantité" valeur={editForm.quantite} onChange={(v) => setEditForm((f) => ({ ...f, quantite: v }))} />
                 <label className="field">

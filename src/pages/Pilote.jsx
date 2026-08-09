@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { formatDateFr } from '../lib/format';
 import Messagerie from '../components/Messagerie';
 import Logo from '../components/Logo';
+import { useInvite } from '../components/ModalePrompt';
 
 // Mode pilote (super-admin) — panneau d'accueil : on choisit un magasin à
 // piloter. Chaque carte porte un indicateur de messages (cliquable pour
@@ -13,6 +14,7 @@ const LIBELLE_ABO = { essai: 'Essai', actif: 'Actif', suspendu: 'Suspendu' };
 
 export default function Pilote() {
   const { utilisateur, magasinId, deconnexion } = useAuth();
+  const { invite, elementInvite } = useInvite();
   const [magasins, setMagasins] = useState([]);
   const [nonLus, setNonLus] = useState({}); // magasin_id -> nb messages non lus
   const [fil, setFil] = useState(null); // { id, nom } magasin de la messagerie ouverte
@@ -89,7 +91,11 @@ export default function Pilote() {
 
   // Lier un magasin à un client Stripe existant (cus_…).
   async function lierStripe(m) {
-    const id = window.prompt('ID client Stripe du magasin (cus_…) :', '');
+    const id = await invite({
+      titre: 'Lier un client Stripe',
+      label: 'ID client Stripe (cus_…)',
+      valeurInitiale: '',
+    });
     if (id == null) return;
     await supabase.from('magasins').update({ stripe_customer_id: id.trim() || null }).eq('id', m.id);
     charger();
@@ -187,6 +193,7 @@ export default function Pilote() {
           </div>
         </div>
       )}
+      {elementInvite}
     </div>
   );
 }
