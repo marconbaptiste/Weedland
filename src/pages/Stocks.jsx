@@ -23,6 +23,71 @@ const FORM_VIDE = {
 // Arrondi à 2 décimales (évite les erreurs de virgule flottante sur les quantités).
 const arrondi = (n) => Math.round(n * 100) / 100;
 
+// Rattache une saisie à une catégorie existante si elle ne diffère que par la
+// casse ou les espaces — évite les doublons (« Fleurs » vs « fleurs » vs « Fleurs  »).
+function canoniserCategorie(saisie, categories) {
+  const t = (saisie ?? '').trim().replace(/\s+/g, ' ');
+  if (!t) return '';
+  const existante = categories.find((c) => c.toLowerCase() === t.toLowerCase());
+  return existante || t;
+}
+
+// Sélecteur de catégorie : on choisit dans les catégories existantes (pour ne
+// pas recréer un doublon à cause d'une faute de frappe) ou on en crée une.
+function ChampCategorie({ valeur, onChange, categories, label = 'Catégorie', autoFocus }) {
+  const [nouvelle, setNouvelle] = useState(false);
+  const afficherListe = categories.length > 0 && !nouvelle;
+  return (
+    <label className="field">
+      <span>{label}</span>
+      {afficherListe ? (
+        <select
+          value={categories.includes(valeur) ? valeur : ''}
+          onChange={(e) => {
+            if (e.target.value === '__nouvelle__') {
+              setNouvelle(true);
+              onChange('');
+            } else {
+              onChange(e.target.value);
+            }
+          }}
+        >
+          <option value="" disabled>
+            Choisir une catégorie…
+          </option>
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+          <option value="__nouvelle__">＋ Nouvelle catégorie…</option>
+        </select>
+      ) : (
+        <>
+          <input
+            autoFocus={autoFocus}
+            value={valeur}
+            placeholder="ex. Fleurs, Résines, Huiles…"
+            onChange={(e) => onChange(e.target.value)}
+          />
+          {categories.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-discret lien-retour-cat"
+              onClick={() => {
+                setNouvelle(false);
+                onChange('');
+              }}
+            >
+              ↩ Choisir une catégorie existante
+            </button>
+          )}
+        </>
+      )}
+    </label>
+  );
+}
+
 // Module — Gestion des stocks (registre partagé : tout employé consulte et
 // ajuste ; seul l'admin supprime un produit).
 export default function Stocks() {
@@ -38,7 +103,6 @@ export default function Stocks() {
   const [importOuvert, setImportOuvert] = useState(false);
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
   const [tri, setTri] = useState('nom'); // 'nom' | 'quantite'
-  const [nouvelleCat, setNouvelleCat] = useState(false); // saisie d'une nouvelle catégorie à la création
 
   const charger = useCallback(async () => {
     const { data } = await supabase
@@ -61,7 +125,7 @@ export default function Stocks() {
     const { data, error } = await supabase
       .from('stocks')
       .insert({
-        categorie: form.categorie.trim(),
+        categorie: canoniserCategorie(form.categorie, categoriesReelles),
         nom,
         quantite,
         unite: form.unite,
@@ -111,7 +175,7 @@ export default function Stocks() {
     const { error } = await supabase
       .from('stocks')
       .update({
-        categorie: editForm.categorie.trim(),
+        categorie: canoniserCategorie(editForm.categorie, categoriesReelles),
         nom,
         quantite: nouvelleQte,
         unite: editForm.unite,
@@ -254,50 +318,12 @@ export default function Stocks() {
         </div>
         {creationOuverte ? (
           <form className="form-chrome" onSubmit={creer}>
-            <label className="field">
-              <span>Catégorie / type de produit</span>
-              {categoriesReelles.length > 0 && !nouvelleCat ? (
-                <select
-                  value={form.categorie}
-                  onChange={(e) => {
-                    if (e.target.value === '__nouvelle__') {
-                      setNouvelleCat(true);
-                      setForm((f) => ({ ...f, categorie: '' }));
-                    } else {
-                      setForm((f) => ({ ...f, categorie: e.target.value }));
-                    }
-                  }}
-                >
-                  <option value="" disabled>
-                    Choisir une catégorie…
-                  </option>
-                  {categoriesReelles.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                  <option value="__nouvelle__">＋ Nouvelle catégorie…</option>
-                </select>
-              ) : (
-                <input
-                  value={form.categorie}
-                  onChange={(e) => setForm((f) => ({ ...f, categorie: e.target.value }))}
-                  placeholder="ex. Fleurs, Résines, Huiles…"
-                />
-              )}
-              {categoriesReelles.length > 0 && nouvelleCat && (
-                <button
-                  type="button"
-                  className="btn btn-discret lien-retour-cat"
-                  onClick={() => {
-                    setNouvelleCat(false);
-                    setForm((f) => ({ ...f, categorie: '' }));
-                  }}
-                >
-                  ↩ Choisir une catégorie existante
-                </button>
-              )}
-            </label>
+            <ChampCategorie
+              label="Catégorie / type de produit"
+              valeur={form.categorie}
+              onChange={(v) => setForm((f) => ({ ...f, categorie: v }))}
+              categories={categoriesReelles}
+            />
             <label className="field">
               <span>Produit</span>
               <input
@@ -339,7 +365,6 @@ export default function Stocks() {
             <button
               className="btn"
               onClick={() => {
-                setNouvelleCat(false);
                 setForm(FORM_VIDE);
                 setCreationOuverte(true);
               }}
@@ -374,7 +399,6 @@ export default function Stocks() {
             <button
               className="btn btn-primary"
               onClick={() => {
-                setNouvelleCat(false);
                 setForm(FORM_VIDE);
                 setCreationOuverte(true);
               }}
@@ -473,14 +497,12 @@ export default function Stocks() {
                 <span>Produit</span>
                 <input value={editForm.nom} onChange={(e) => setEditForm((f) => ({ ...f, nom: e.target.value }))} />
               </label>
-              <label className="field">
-                <span>Catégorie</span>
-                <input
-                  value={editForm.categorie}
-                  placeholder="ex. Fleurs, Résines…"
-                  onChange={(e) => setEditForm((f) => ({ ...f, categorie: e.target.value }))}
-                />
-              </label>
+              <ChampCategorie
+                key={edition}
+                valeur={editForm.categorie}
+                onChange={(v) => setEditForm((f) => ({ ...f, categorie: v }))}
+                categories={categoriesReelles}
+              />
               <div className="form-inline">
                 <ChampMontant label="Quantité" valeur={editForm.quantite} onChange={(v) => setEditForm((f) => ({ ...f, quantite: v }))} />
                 <label className="field">
