@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import Aide from './Aide';
-import Logo from './Logo';
+import Logo, { FeuilleKanabiz } from './Logo';
 import { urlLogo } from '../lib/logo';
+import { appliquerMarqueMagasin } from '../lib/marqueMagasin';
 
 const lienActif = ({ isActive }) => (isActive ? 'nav-lien actif' : 'nav-lien');
 const tabActif = ({ isActive }) => (isActive ? 'tabbar-item actif' : 'tabbar-item');
@@ -41,11 +42,19 @@ const IconePlus = () => (
 );
 
 export default function Layout() {
-  const { profil, estAdmin, estSuperadmin, magasins, magasinId, magasinLogo, options, changerMagasin, deconnexion } =
+  const { profil, estAdmin, estSuperadmin, magasins, magasinId, magasinNom, magasinLogo, options, changerMagasin, deconnexion } =
     useAuth();
   const logoUrl = urlLogo(magasinLogo);
   const [plus, setPlus] = useState(false); // panneau « Plus » (mobile)
   const fermerPlus = () => setPlus(false);
+
+  // Marque blanche : dès qu'un magasin est actif, l'onglet, le raccourci écran
+  // d'accueil et le manifeste PWA prennent SON nom et SON logo (au lieu de
+  // « Kanabiz »). Restauré en quittant l'app (déconnexion / page publique).
+  useEffect(() => {
+    if (!magasinNom) return undefined;
+    return appliquerMarqueMagasin({ nom: magasinNom, logoUrl });
+  }, [magasinNom, logoUrl]);
 
   // Destinations principales (barre d'onglets + nav ordinateur).
   const principales = [
@@ -65,11 +74,16 @@ export default function Layout() {
     <div className="app">
       <header className="entete">
         <div className="entete-haut">
-          {logoUrl ? (
-            <img className="logo-magasin" src={logoUrl} alt="Logo du magasin" />
-          ) : (
-            <Logo />
-          )}
+          <div className="entete-marque">
+            {logoUrl ? (
+              <img className="logo-magasin" src={logoUrl} alt={magasinNom || 'Logo du magasin'} />
+            ) : magasinNom ? (
+              <FeuilleKanabiz taille={26} />
+            ) : (
+              <Logo />
+            )}
+            {magasinNom && <span className="entete-nom-magasin">{magasinNom}</span>}
+          </div>
           <div className="entete-droite">
             {estSuperadmin && magasins.length > 0 && (
               <select
