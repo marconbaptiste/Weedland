@@ -27,6 +27,7 @@ export default function Cloture() {
   const [partageurs, setPartageurs] = useState([]);
   const [statut, setStatut] = useState('');
   const [enregistrement, setEnregistrement] = useState(false);
+  const [partageOuvert, setPartageOuvert] = useState(false); // section « Journée partagée » repliée par défaut
   // CA « tel que déclaré » d'une clôture existante (avant toute modification).
   const [ventesDeclarees, setVentesDeclarees] = useState(null);
   const [modifie, setModifie] = useState(false);
@@ -327,43 +328,58 @@ export default function Cloture() {
       </form>
 
       <div className="card">
-        <h2>Journée partagée</h2>
-        <p className="statut">
-          Cochez les collègues présents <strong>en même temps</strong> que vous. L’intéressement
-          sera réparti à parts égales (CA ÷ nombre de personnes). Une seule personne saisit la
-          clôture ; les autres ne créent pas la leur ce jour-là.
-        </p>
-        <ul className="liste-partage">
-          {collegues.map((c) => {
-            const sel = partageurs.find((p) => p.employe_id === c.id);
-            return (
-              <li key={c.id} className="ligne-partage">
-                <label className="case-partage">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(sel)}
-                    onChange={() => basculerCollegue(c.id)}
-                  />
-                  <span>
-                    {c.nom}
-                    <span className="promo-qui"> · {c.pourcentage_interessement ?? 0} %</span>
-                  </span>
-                </label>
-                {sel && (
-                  <input
-                    className="champ-pourcentage"
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="heures"
-                    value={sel.heures}
-                    onChange={(e) => majHeuresPartage(c.id, e.target.value)}
-                  />
-                )}
-              </li>
-            );
-          })}
-          {collegues.length === 0 && <li className="vide">Aucun autre employé.</li>}
-        </ul>
+        <button
+          type="button"
+          className="courses-tete"
+          onClick={() => setPartageOuvert((o) => !o)}
+          aria-expanded={partageOuvert || partageurs.length > 0}
+        >
+          <h2>
+            👥 Journée partagée
+            {partageurs.length > 0 && <span className="badge badge-solde tag-partage">{partageurs.length}</span>}
+          </h2>
+          <span className="chevron">{partageOuvert || partageurs.length > 0 ? '▾' : '▸'}</span>
+        </button>
+        {(partageOuvert || partageurs.length > 0) && (
+          <>
+            <p className="statut">
+              Cochez les collègues présents <strong>en même temps</strong> que vous. L’intéressement
+              sera réparti à parts égales (CA ÷ nombre de personnes). Une seule personne saisit la
+              clôture ; les autres ne créent pas la leur ce jour-là.
+            </p>
+            <ul className="liste-partage">
+              {collegues.map((c) => {
+                const sel = partageurs.find((p) => p.employe_id === c.id);
+                return (
+                  <li key={c.id} className="ligne-partage">
+                    <label className="case-partage">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(sel)}
+                        onChange={() => basculerCollegue(c.id)}
+                      />
+                      <span>
+                        {c.nom}
+                        <span className="promo-qui"> · {c.pourcentage_interessement ?? 0} %</span>
+                      </span>
+                    </label>
+                    {sel && (
+                      <input
+                        className="champ-pourcentage"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="heures"
+                        value={sel.heures}
+                        onChange={(e) => majHeuresPartage(c.id, e.target.value)}
+                      />
+                    )}
+                  </li>
+                );
+              })}
+              {collegues.length === 0 && <li className="vide">Aucun autre employé.</li>}
+            </ul>
+          </>
+        )}
       </div>
         </div>
 

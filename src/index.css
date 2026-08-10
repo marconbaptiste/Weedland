@@ -1057,6 +1057,10 @@ hr {
   color: var(--texte-doux);
   font-size: 0.9rem;
 }
+.chevron {
+  color: var(--texte-doux);
+  font-size: 0.9rem;
+}
 /* Liste de courses (to-do d'achats, page Stocks) */
 .courses-tete {
   display: flex;
