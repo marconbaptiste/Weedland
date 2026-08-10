@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatNombre } from '../lib/format';
@@ -247,6 +247,9 @@ export default function Stocks() {
       });
     }
     setDelta((x) => ({ ...x, [p.id]: '' }));
+    // Si la fiche du produit est ouverte, on synchronise le champ Quantité pour
+    // qu'un « Enregistrer » ne réécrive pas l'ancienne valeur par-dessus.
+    setEditForm((f) => (edition === p.id ? { ...f, quantite: String(nouvelle) } : f));
     setStatut(`${p.nom} : ${formatNombre(nouvelle)} ${p.unite} en stock`);
     charger();
   }
@@ -412,86 +415,75 @@ export default function Stocks() {
       {categories.map((cat) => (
         <div key={cat} className="card">
           <h2>{cat}</h2>
-          <div className="table-scroll">
-          <table className="tableau">
-            <thead>
-              <tr>
-                <th>Produit</th>
-                <th className="droite">Quantité</th>
-                <th>Mouvement</th>
-                <th className="droite">Prix vente</th>
-                <th className="droite">Valeur</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {parCategorie[cat].map((p) => (
-                <Fragment key={p.id}>
-                  <tr>
-                    <td>
-                      {p.nom}
-                      {Number(p.quantite) === 0 ? (
-                        <span className="badge badge-dette tag-partage">Rupture</span>
-                      ) : enAlerte(p) ? (
-                        <span className="badge badge-dette tag-partage">Stock bas</span>
-                      ) : null}
-                    </td>
-                    <td className={`droite ${enAlerte(p) ? 'dette' : ''}`}>
-                      {formatNombre(p.quantite)} {p.unite}
-                    </td>
-                    <td>
-                      <div className="mouvement">
-                        <input
-                          className="champ-mini"
-                          inputMode="decimal"
-                          placeholder="0"
-                          value={delta[p.id] ?? ''}
-                          onChange={(e) => setDelta((x) => ({ ...x, [p.id]: e.target.value }))}
-                        />
-                        <button type="button" className="btn btn-discret" onClick={() => mouvement(p, 1)} aria-label="Entrée de stock">
-                          +
-                        </button>
-                        <button type="button" className="btn btn-discret" onClick={() => mouvement(p, -1)} aria-label="Sortie de stock">
-                          −
-                        </button>
-                      </div>
-                    </td>
-                    <td className="droite">{formatEuros(p.prix_vente)}</td>
-                    <td className="droite">{formatEuros(arrondi(Number(p.quantite) * Number(p.prix_achat)))}</td>
-                    <td className="actions-cellule">
-                      <button type="button" className="btn btn-discret" onClick={() => commencerEdition(p)}>
-                        Modifier
-                      </button>
-                      {estAdmin && (
-                        <button type="button" className="btn btn-discret" onClick={() => supprimer(p.id)} aria-label="Supprimer le produit">
-                          ✕
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
-          </div>
+          {/* Liste compacte, pensée mobile : nom + quantité + bouton « Gérer »
+              qui ouvre la fiche produit (mouvements, édition, suppression). */}
+          <ul className="liste-produits">
+            {parCategorie[cat].map((p) => (
+              <li key={p.id} className="ligne-produit">
+                <div className="ligne-produit-nom">
+                  <span>{p.nom}</span>
+                  {Number(p.quantite) === 0 ? (
+                    <span className="badge badge-dette tag-partage">Rupture</span>
+                  ) : enAlerte(p) ? (
+                    <span className="badge badge-dette tag-partage">Stock bas</span>
+                  ) : null}
+                </div>
+                <span className={`ligne-produit-qte ${enAlerte(p) ? 'dette' : ''}`}>
+                  {formatNombre(p.quantite)} {p.unite}
+                </span>
+                <button type="button" className="btn btn-discret ligne-produit-gerer" onClick={() => commencerEdition(p)}>
+                  Gérer
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       ))}
 
-      {edition && (
+      {edition && (() => {
+        const p = produits.find((x) => x.id === edition);
+        if (!p) return null;
+        return (
         <div
           className="aide-fond"
           role="dialog"
           aria-modal="true"
-          aria-label="Modifier le produit"
+          aria-label="Fiche produit"
           onClick={() => setEdition(null)}
         >
           <div className="modale-client" onClick={(e) => e.stopPropagation()}>
             <div className="modale-client-tete">
-              <strong>Modifier le produit</strong>
+              <strong>{p.nom}</strong>
               <button type="button" className="btn btn-discret" onClick={() => setEdition(null)}>
                 Fermer
               </button>
             </div>
+
+            {/* Mouvement rapide : entrée / sortie de stock sans tout ré-éditer. */}
+            <div className="fiche-mouvement">
+              <div className="fiche-mouvement-tete">
+                <span className="fiche-mouvement-titre">Mouvement rapide</span>
+                <span className={`fiche-mouvement-stock ${enAlerte(p) ? 'dette' : ''}`}>
+                  {formatNombre(p.quantite)} {p.unite} en stock
+                </span>
+              </div>
+              <div className="mouvement">
+                <input
+                  className="champ-mini"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={delta[p.id] ?? ''}
+                  onChange={(e) => setDelta((x) => ({ ...x, [p.id]: e.target.value }))}
+                />
+                <button type="button" className="btn btn-discret" onClick={() => mouvement(p, 1)}>
+                  + Entrée
+                </button>
+                <button type="button" className="btn btn-discret" onClick={() => mouvement(p, -1)}>
+                  − Sortie
+                </button>
+              </div>
+            </div>
+
             <div className="form-chrome">
               <label className="field">
                 <span>Produit</span>
@@ -529,10 +521,20 @@ export default function Stocks() {
                   Annuler
                 </button>
               </div>
+              {estAdmin && (
+                <button
+                  className="btn btn-discret fiche-supprimer"
+                  type="button"
+                  onClick={() => supprimer(edition)}
+                >
+                  🗑 Supprimer ce produit
+                </button>
+              )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
