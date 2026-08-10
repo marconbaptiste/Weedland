@@ -9,6 +9,7 @@ import { JOURS_SEMAINE, horairesMagasinDefaut } from '../lib/horaires';
 export default function InfosMagasin() {
   const { magasinId } = useAuth();
   const [adresse, setAdresse] = useState('');
+  const [telephone, setTelephone] = useState('');
   const [horaires, setHoraires] = useState(horairesMagasinDefaut());
   const [msg, setMsg] = useState('');
   const [enCours, setEnCours] = useState(false);
@@ -17,12 +18,13 @@ export default function InfosMagasin() {
     if (!magasinId) return;
     supabase
       .from('magasins')
-      .select('adresse, horaires')
+      .select('adresse, telephone, horaires')
       .eq('id', magasinId)
       .single()
       .then(({ data }) => {
         if (!data) return;
         setAdresse(data.adresse ?? '');
+        setTelephone(data.telephone ?? '');
         setHoraires({ ...horairesMagasinDefaut(), ...(data.horaires ?? {}) });
       });
   }, [magasinId]);
@@ -36,6 +38,7 @@ export default function InfosMagasin() {
     setMsg('');
     const { error } = await supabase.rpc('magasin_infos_set', {
       p_adresse: adresse.trim() || null,
+      p_telephone: telephone.trim() || null,
       p_horaires: horaires,
     });
     setEnCours(false);
@@ -56,6 +59,16 @@ export default function InfosMagasin() {
           value={adresse}
           onChange={(e) => setAdresse(e.target.value)}
           placeholder="N°, rue, code postal, ville"
+        />
+      </label>
+      <label className="field">
+        <span>Numéro du magasin</span>
+        <input
+          type="tel"
+          inputMode="tel"
+          value={telephone}
+          onChange={(e) => setTelephone(e.target.value)}
+          placeholder="ex. 01 23 45 67 89"
         />
       </label>
       <div className="horaires-grille">

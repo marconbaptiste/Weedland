@@ -400,6 +400,11 @@ export default function Carte() {
                 <span className="carte-adresse-cta">🗺️ Ouvrir dans Plans / Google Maps</span>
               </a>
             )}
+            {infosMag.telephone && (
+              <a className="carte-tel-lien" href={`tel:${infosMag.telephone.replace(/\s+/g, '')}`}>
+                📞 {infosMag.telephone}
+              </a>
+            )}
             {infosMag.horaires && (
               <ul className="carte-horaires">
                 {JOURS_SEMAINE.map(({ cle, long }) => {
