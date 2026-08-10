@@ -647,6 +647,41 @@ hr {
   margin: 1rem 0;
   text-align: left;
 }
+/* Carte de fidélité — bloc coordonnées & horaires du magasin. */
+.carte-infos {
+  margin: 1rem 0 0;
+  text-align: left;
+  border-top: 1px solid var(--bordure);
+  padding-top: 0.9rem;
+}
+.carte-infos h2 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+.carte-adresse {
+  margin: 0 0 0.6rem;
+  color: var(--texte-doux);
+  white-space: pre-line;
+}
+.carte-horaires {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.carte-horaires li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--bordure);
+  font-size: 0.92rem;
+}
+.carte-horaires li:last-child {
+  border-bottom: none;
+}
+.carte-horaires .vide {
+  color: var(--texte-doux);
+}
 .promos-carte h2 {
   font-size: 1rem;
   margin: 0 0 0.5rem;
