@@ -80,8 +80,8 @@ export default function GuideDemarrage() {
       </ul>
       {!estAdmin && (
         <p className="statut">
-          Astuce : retrouve tes ventes passées dans <strong>Historique</strong> et l’inventaire dans{' '}
-          <strong>Stocks</strong>.
+          Astuce : retrouve tes ventes passées dans <strong>Caisse → Historique</strong> (en bas de
+          la page) et l’inventaire dans l’onglet <strong>Stocks</strong>.
         </p>
       )}
     </div>

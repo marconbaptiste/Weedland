@@ -638,7 +638,7 @@ export default function Chromes() {
                   Fiche
                 </button>
                 <button type="button" className={ongletClient === 'chromes' ? 'actif' : ''} onClick={() => setOngletClient('chromes')}>
-                  Chromes
+                  Avances / Dettes
                 </button>
                 <button type="button" className={ongletClient === 'note' ? 'actif' : ''} onClick={() => setOngletClient('note')}>
                   Note

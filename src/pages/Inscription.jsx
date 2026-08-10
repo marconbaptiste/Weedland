@@ -103,6 +103,9 @@ export default function Inscription() {
             spellCheck={false}
             required
           />
+          <small className="champ-aide">
+            Pas de code ? Demande-le à la personne qui t’a proposé l’application (l’exploitant).
+          </small>
         </label>
         <label className="field">
           <span>Nom du magasin</span>

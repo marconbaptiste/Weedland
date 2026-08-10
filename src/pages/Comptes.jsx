@@ -73,6 +73,7 @@ export default function Comptes() {
 
   async function changerRole(id, role) {
     await supabase.from('users').update({ role }).eq('id', id);
+    setStatut('Enregistré ✅');
     charger();
   }
 
@@ -87,6 +88,7 @@ export default function Comptes() {
   async function enregistrerPourcentage(id, valeur) {
     const taux = parseMontant(valeur);
     await supabase.from('users').update({ pourcentage_interessement: taux }).eq('id', id);
+    setStatut('Enregistré ✅');
     charger();
   }
 
@@ -102,6 +104,7 @@ export default function Comptes() {
       return;
     }
     await supabase.from('users').update({ nom }).eq('id', id);
+    setStatut('Enregistré ✅');
     charger();
   }
 
@@ -235,9 +238,11 @@ export default function Comptes() {
           <div className="card">
             <h2>Autoriser un email (connexion Google)</h2>
             <p className="statut">
-              Autorise un email à se connecter <strong>sans créer de compte tout de suite</strong> :
-              la personne se connecte via Google et son profil se crée automatiquement. Les comptes
-              créés ci-dessus autorisent déjà leur email — leur accès se retire depuis leur fiche.
+              Deux façons d’ajouter quelqu’un : <strong>« + Nouveau compte »</strong> (tu lui crées
+              un identifiant + mot de passe) ou, si la personne préfère se connecter{' '}
+              <strong>avec Google</strong>, autorise simplement son email ici — son profil se créera
+              tout seul à sa première connexion. Les comptes déjà créés autorisent leur email
+              automatiquement.
             </p>
             <form className="form-inline" onSubmit={autoriserEmail}>
               <input
@@ -307,6 +312,10 @@ export default function Comptes() {
                   onChange={(e) => setForm((f) => ({ ...f, motDePasse: e.target.value }))}
                   required
                 />
+                <small className="champ-aide">
+                  6 caractères minimum. Il reste visible pour que tu puisses le communiquer à
+                  l’employé.
+                </small>
               </label>
               <label className="field">
                 <span>Rôle</span>

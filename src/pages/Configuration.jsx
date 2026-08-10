@@ -205,6 +205,7 @@ function EtapeEquipe({ magasinId, profil, moiId }) {
               onChange={(e) => setForm((f) => ({ ...f, motDePasse: e.target.value }))}
               required
             />
+            <small className="champ-aide">6 caractères min. — à communiquer à l’employé.</small>
           </label>
           <div className="form-inline">
             <label className="field">
