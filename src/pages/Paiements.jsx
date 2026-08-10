@@ -157,7 +157,7 @@ export default function Paiements() {
 
       <div className="card">
         <h2>Paiements du mois</h2>
-        <table className="tableau">
+        <table className="tableau tableau-cartes">
           <thead>
             <tr>
               <th>Date</th>
@@ -171,14 +171,14 @@ export default function Paiements() {
             {paiements.map((p) =>
               edition === p.id ? (
                 <tr key={p.id}>
-                  <td>
+                  <td data-label="Date">
                     <input
                       type="date"
                       value={editForm.date}
                       onChange={(e) => setEditForm((f) => ({ ...f, date: e.target.value }))}
                     />
                   </td>
-                  <td>
+                  <td data-label="Employé">
                     <select
                       value={editForm.employe_id}
                       onChange={(e) => setEditForm((f) => ({ ...f, employe_id: e.target.value }))}
@@ -190,14 +190,14 @@ export default function Paiements() {
                       ))}
                     </select>
                   </td>
-                  <td>
+                  <td data-label="Motif">
                     <input
                       className="champ-nom"
                       value={editForm.motif}
                       onChange={(e) => setEditForm((f) => ({ ...f, motif: e.target.value }))}
                     />
                   </td>
-                  <td className="droite">
+                  <td className="droite" data-label="Montant">
                     <input
                       className="champ-pourcentage"
                       type="text"
@@ -217,10 +217,10 @@ export default function Paiements() {
                 </tr>
               ) : (
                 <tr key={p.id}>
-                  <td>{formatDateFr(p.date)}</td>
-                  <td>{p.users?.nom ?? '—'}</td>
-                  <td>{p.motif ?? '—'}</td>
-                  <td className="droite">{formatEuros(p.montant)}</td>
+                  <td data-label="Date">{formatDateFr(p.date)}</td>
+                  <td data-label="Employé">{p.users?.nom ?? '—'}</td>
+                  <td data-label="Motif">{p.motif ?? '—'}</td>
+                  <td className="droite" data-label="Montant">{formatEuros(p.montant)}</td>
                   <td className="actions-cellule">
                     <button type="button" className="btn btn-discret" onClick={() => commencerEdition(p)}>
                       Modifier

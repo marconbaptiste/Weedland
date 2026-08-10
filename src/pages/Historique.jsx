@@ -98,7 +98,7 @@ export default function Historique() {
       <div className="page">
         <h1>Mon historique</h1>
         <div className="card">
-          <table className="tableau">
+          <table className="tableau tableau-cartes">
             <thead>
               <tr>
                 <th>Date</th>
@@ -115,14 +115,14 @@ export default function Historique() {
                 return (
                   <Fragment key={l.caisse_id}>
                     <tr>
-                      <td>
+                      <td data-label="Date">
                         {formatDateFr(l.date)}
                         {!l.est_proprietaire && <span className="badge badge-solde tag-partage">partagée</span>}
                       </td>
-                      <td className="droite">{l.est_proprietaire ? formatEuros(l.ca_jour) : '—'}</td>
-                      <td className="droite">{l.est_proprietaire ? formatEuros(l.encaissements) : '—'}</td>
-                      <td className="droite">{formatNombre(l.heures_travaillees)}</td>
-                      <td className="droite">{formatEuros(l.interessement)}</td>
+                      <td className="droite" data-label="CA">{l.est_proprietaire ? formatEuros(l.ca_jour) : '—'}</td>
+                      <td className="droite" data-label="Encaissements">{l.est_proprietaire ? formatEuros(l.encaissements) : '—'}</td>
+                      <td className="droite" data-label="Heures">{formatNombre(l.heures_travaillees)}</td>
+                      <td className="droite" data-label="Intéress.">{formatEuros(l.interessement)}</td>
                     </tr>
                     {aChromes && (
                       <tr className="histo-chromes-ligne">
