@@ -845,6 +845,78 @@ hr {
   text-align: right;
   padding: 0.4rem 0.4rem;
 }
+/* Liste produits compacte (mobile-first) : nom + quantité + « Gérer ». */
+.liste-produits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ligne-produit {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.2rem;
+  border-bottom: 1px solid var(--bordure);
+}
+.ligne-produit:last-child {
+  border-bottom: none;
+}
+.ligne-produit-nom {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.ligne-produit-qte {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--texte-doux);
+  white-space: nowrap;
+}
+.ligne-produit-qte.dette {
+  color: var(--rouge);
+}
+.ligne-produit-gerer {
+  flex: 0 0 auto;
+}
+/* Fiche produit (modale) : bloc mouvement rapide en tête. */
+.fiche-mouvement {
+  background: var(--fond-input);
+  border: 1px solid var(--bordure);
+  border-radius: 12px;
+  padding: 0.7rem 0.8rem;
+  margin-bottom: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.fiche-mouvement-tete {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.fiche-mouvement-titre {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.fiche-mouvement-stock {
+  color: var(--texte-doux);
+  font-variant-numeric: tabular-nums;
+}
+.fiche-mouvement .mouvement .btn {
+  min-width: auto;
+  white-space: nowrap;
+}
+.fiche-supprimer {
+  align-self: flex-start;
+  margin-top: 0.4rem;
+  color: #ff9d9d;
+}
 /* Liste de courses (to-do d'achats, page Stocks) */
 .courses-tete {
   display: flex;
