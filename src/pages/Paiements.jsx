@@ -17,6 +17,7 @@ export default function Paiements() {
     motif: '',
     date: aujourdhuiISO(),
   });
+  const [ajoutOuvert, setAjoutOuvert] = useState(false); // modale « Nouveau paiement »
   // Édition en ligne d'un paiement existant (admin).
   const [edition, setEdition] = useState(null); // id en cours d'édition
   const [editForm, setEditForm] = useState({ employe_id: '', montant: '', motif: '', date: '' });
@@ -54,6 +55,7 @@ export default function Paiements() {
     });
     if (!error) {
       setForm((f) => ({ ...f, montant: '', motif: '' }));
+      setAjoutOuvert(false);
       charger();
     }
   }
@@ -101,47 +103,77 @@ export default function Paiements() {
 
   return (
     <div className="page">
-      <h1>Paiements employés</h1>
-
-      <form className="card" onSubmit={ajouter}>
-        <label className="field">
-          <span>Employé</span>
-          <select
-            value={form.employe_id}
-            onChange={(e) => setForm((f) => ({ ...f, employe_id: e.target.value }))}
-          >
-            <option value="">— Choisir —</option>
-            {employes.map((emp) => (
-              <option key={emp.id} value={emp.id}>
-                {emp.nom}
-              </option>
-            ))}
-          </select>
-        </label>
-        <ChampMontant
-          label="Montant"
-          valeur={form.montant}
-          onChange={(v) => setForm((f) => ({ ...f, montant: v }))}
-        />
-        <label className="field">
-          <span>Motif</span>
-          <input
-            value={form.motif}
-            onChange={(e) => setForm((f) => ({ ...f, motif: e.target.value }))}
-          />
-        </label>
-        <label className="field">
-          <span>Date</span>
-          <input
-            type="date"
-            value={form.date}
-            onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-          />
-        </label>
-        <button className="btn btn-primary" type="submit">
-          Enregistrer le paiement
+      <div className="entete-client">
+        <h1>Paiements employés</h1>
+        <button
+          type="button"
+          className="btn btn-primary btn-compact"
+          onClick={() => {
+            setForm({ employe_id: '', montant: '', motif: '', date: aujourdhuiISO() });
+            setAjoutOuvert(true);
+          }}
+        >
+          + Nouveau paiement
         </button>
-      </form>
+      </div>
+
+      {ajoutOuvert && (
+        <div
+          className="aide-fond"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Nouveau paiement"
+          onClick={() => setAjoutOuvert(false)}
+        >
+          <form className="modale-client" onClick={(e) => e.stopPropagation()} onSubmit={ajouter}>
+            <div className="modale-client-tete">
+              <strong>Nouveau paiement</strong>
+              <button type="button" className="btn btn-discret" onClick={() => setAjoutOuvert(false)}>
+                Fermer
+              </button>
+            </div>
+            <div className="form-chrome">
+              <label className="field">
+                <span>Employé</span>
+                <select
+                  value={form.employe_id}
+                  onChange={(e) => setForm((f) => ({ ...f, employe_id: e.target.value }))}
+                >
+                  <option value="">— Choisir —</option>
+                  {employes.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.nom}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <ChampMontant
+                label="Montant"
+                valeur={form.montant}
+                onChange={(v) => setForm((f) => ({ ...f, montant: v }))}
+              />
+              <label className="field">
+                <span>Motif</span>
+                <input
+                  value={form.motif}
+                  onChange={(e) => setForm((f) => ({ ...f, motif: e.target.value }))}
+                />
+              </label>
+              <label className="field">
+                <span>Date</span>
+                <input
+                  type="date"
+                  value={form.date}
+                  onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+                />
+              </label>
+              <button className="btn btn-primary" type="submit">
+                Enregistrer le paiement
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="card">
         <h2>Totaux du mois</h2>
