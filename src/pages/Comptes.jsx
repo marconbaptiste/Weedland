@@ -22,6 +22,7 @@ export default function Comptes() {
   });
   const [statut, setStatut] = useState('');
   const [envoi, setEnvoi] = useState(false);
+  const [creationOuverte, setCreationOuverte] = useState(false); // modale « Nouveau compte »
   // Allowlist des emails autorisés à se connecter (notamment via Google).
   const [autorises, setAutorises] = useState([]);
   const [nouvelEmail, setNouvelEmail] = useState('');
@@ -38,7 +39,7 @@ export default function Comptes() {
     const [{ data }, { data: aut }, { data: mag }] = await Promise.all([
       supabase
         .from('users')
-        .select('id, nom, role, pourcentage_interessement, horaires_fixes')
+        .select('id, nom, role, pourcentage_interessement, horaires_fixes, email')
         .eq('magasin_id', magasinId)
         .order('nom'),
       supabase.from('comptes_autorises').select('email, role').eq('magasin_id', magasinId).order('email'),
@@ -167,66 +168,28 @@ export default function Comptes() {
     }
     setForm({ nom: '', email: '', motDePasse: '', role: 'employe', pourcentage: '' });
     setStatut('Compte créé ✅');
+    setCreationOuverte(false);
     charger();
   }
 
   return (
     <div className="page">
-      <h1>Comptes</h1>
-
-      <form className="card" onSubmit={creer}>
-        <h2>Nouveau compte</h2>
-        <label className="field">
-          <span>Nom</span>
-          <input
-            value={form.nom}
-            onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))}
-            required
-          />
-        </label>
-        <label className="field">
-          <span>Email</span>
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            required
-          />
-        </label>
-        <label className="field">
-          <span>Mot de passe</span>
-          <input
-            type="text"
-            value={form.motDePasse}
-            onChange={(e) => setForm((f) => ({ ...f, motDePasse: e.target.value }))}
-            required
-          />
-        </label>
-        <label className="field">
-          <span>Rôle</span>
-          <select
-            value={form.role}
-            onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
-          >
-            <option value="employe">Employé</option>
-            <option value="admin">Admin</option>
-          </select>
-        </label>
-        <label className="field">
-          <span>% d’intéressement (par défaut)</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            placeholder="ex. 5"
-            value={form.pourcentage}
-            onChange={(e) => setForm((f) => ({ ...f, pourcentage: e.target.value }))}
-          />
-        </label>
-        <button className="btn btn-primary" type="submit" disabled={envoi}>
-          {envoi ? 'Création…' : 'Créer le compte'}
+      <div className="entete-client">
+        <h1>Comptes</h1>
+        <button
+          type="button"
+          className="btn btn-primary btn-compact"
+          onClick={() => {
+            setForm({ nom: '', email: '', motDePasse: '', role: 'employe', pourcentage: '' });
+            setStatut('');
+            setCreationOuverte(true);
+          }}
+        >
+          + Nouveau compte
         </button>
-        {statut && <p className="statut">{statut}</p>}
-      </form>
+      </div>
+
+      {!creationOuverte && !gestion && statut && <p className="statut">{statut}</p>}
 
       <div className="card">
         <h2>Employés</h2>
@@ -258,57 +221,119 @@ export default function Comptes() {
         </ul>
       </div>
 
-      <div className="card">
-        <h2>Connexion Google — emails autorisés</h2>
-        <p className="statut">
-          Seuls ces emails peuvent se connecter (par Google ou mot de passe). Un email retiré ici
-          ne pourra plus créer de nouvelle session. Les comptes que tu crées ci-dessus sont ajoutés
-          automatiquement.
-        </p>
-        <form className="form-inline" onSubmit={autoriserEmail}>
-          <input
-            type="email"
-            placeholder="email@exemple.com"
-            value={nouvelEmail}
-            onChange={(e) => setNouvelEmail(e.target.value)}
-          />
-          <button className="btn" type="submit">
-            Autoriser
-          </button>
-        </form>
-        <table className="tableau">
-          <thead>
-            <tr>
-              <th>Email autorisé</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {autorises.map((a) => (
-              <tr key={a.email}>
-                <td>{a.email}</td>
-                <td className="droite">
-                  <button
-                    type="button"
-                    className="btn btn-discret"
-                    onClick={() => retirerEmail(a.email)}
-                    aria-label="Retirer l’autorisation"
-                  >
-                    ✕
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {autorises.length === 0 && (
-              <tr>
-                <td colSpan={2} className="vide">
-                  Aucun email autorisé.
-                </td>
-              </tr>
+      {(() => {
+        // L'email autorisé de chaque compte se gère depuis sa fiche. Ici on ne
+        // garde QUE les emails autorisés sans compte encore créé (connexion
+        // Google en attente), pour ne pas dupliquer la liste des comptes.
+        const emailsComptes = new Set(
+          users.map((u) => (u.email ?? '').toLowerCase()).filter(Boolean),
+        );
+        const orphelins = autorises.filter(
+          (a) => !emailsComptes.has((a.email ?? '').toLowerCase()),
+        );
+        return (
+          <div className="card">
+            <h2>Autoriser un email (connexion Google)</h2>
+            <p className="statut">
+              Autorise un email à se connecter <strong>sans créer de compte tout de suite</strong> :
+              la personne se connecte via Google et son profil se crée automatiquement. Les comptes
+              créés ci-dessus autorisent déjà leur email — leur accès se retire depuis leur fiche.
+            </p>
+            <form className="form-inline" onSubmit={autoriserEmail}>
+              <input
+                type="email"
+                placeholder="email@exemple.com"
+                value={nouvelEmail}
+                onChange={(e) => setNouvelEmail(e.target.value)}
+              />
+              <button className="btn" type="submit">
+                Autoriser
+              </button>
+            </form>
+            {orphelins.length > 0 && (
+              <ul className="liste-produits">
+                {orphelins.map((a) => (
+                  <li key={a.email} className="ligne-produit">
+                    <span className="ligne-produit-nom">{a.email}</span>
+                    <button
+                      type="button"
+                      className="btn btn-discret ligne-produit-gerer"
+                      onClick={() => retirerEmail(a.email)}
+                      aria-label="Retirer l’autorisation"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        );
+      })()}
+      {creationOuverte && (
+        <div
+          className="aide-fond"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Nouveau compte"
+          onClick={() => setCreationOuverte(false)}
+        >
+          <form className="modale-client" onClick={(e) => e.stopPropagation()} onSubmit={creer}>
+            <div className="modale-client-tete">
+              <strong>Nouveau compte</strong>
+              <button type="button" className="btn btn-discret" onClick={() => setCreationOuverte(false)}>
+                Fermer
+              </button>
+            </div>
+            <div className="form-chrome">
+              <label className="field">
+                <span>Nom</span>
+                <input value={form.nom} onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))} required />
+              </label>
+              <label className="field">
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Mot de passe</span>
+                <input
+                  type="text"
+                  value={form.motDePasse}
+                  onChange={(e) => setForm((f) => ({ ...f, motDePasse: e.target.value }))}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Rôle</span>
+                <select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
+                  <option value="employe">Employé</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>% d’intéressement (par défaut)</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="ex. 5"
+                  value={form.pourcentage}
+                  onChange={(e) => setForm((f) => ({ ...f, pourcentage: e.target.value }))}
+                />
+              </label>
+              <button className="btn btn-primary" type="submit" disabled={envoi}>
+                {envoi ? 'Création…' : 'Créer le compte'}
+              </button>
+              {statut && <p className="statut">{statut}</p>}
+            </div>
+          </form>
+        </div>
+      )}
+
       {gestion && (() => {
         const u = users.find((x) => x.id === gestion);
         if (!u) return null;
@@ -359,6 +384,10 @@ export default function Comptes() {
                     onBlur={(e) => enregistrerPourcentage(u.id, e.target.value)}
                   />
                 </label>
+                <label className="field">
+                  <span>Email de connexion</span>
+                  <input type="email" value={u.email ?? '—'} readOnly disabled />
+                </label>
                 <div className="form-inline">
                   <button type="button" className="btn" onClick={() => setHorairesEmp(u)}>
                     🗓️ Horaires fixes
@@ -371,6 +400,15 @@ export default function Comptes() {
                     🔑 Réinit. mot de passe
                   </button>
                 </div>
+                {u.email && (
+                  <button
+                    type="button"
+                    className="btn btn-discret fiche-supprimer"
+                    onClick={() => retirerEmail(u.email)}
+                  >
+                    🚫 Retirer l’accès (email autorisé)
+                  </button>
+                )}
                 {statut && <p className="statut">{statut}</p>}
               </div>
             </div>
