@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../auth/AuthProvider';
 import { aujourdhuiISO, versISO, premierDuMois } from '../lib/dates';
 import { formatDateFr } from '../lib/format';
+import { creneauEmploye, creneauMagasin } from '../lib/horaires';
 
 const JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const hhmm = (t) => (t ? String(t).slice(0, 5) : '');
@@ -30,8 +32,10 @@ function joursEntre(a, b) {
 // on ajoute un créneau (employé + horaires) à toute la période d'un coup.
 // Plusieurs employés le même jour = plusieurs chips. Écriture admin (RLS).
 export default function Plannings() {
+  const { magasinId } = useAuth();
   const [mois, setMois] = useState(premierDuMois());
   const [employes, setEmployes] = useState([]);
+  const [horairesMag, setHorairesMag] = useState(null);
   const [creneaux, setCreneaux] = useState([]);
   const [plage, setPlage] = useState(null); // { debut, fin|null }
   const [form, setForm] = useState({ employe_id: '', debut: '09:00', fin: '18:00' });
@@ -45,9 +49,18 @@ export default function Plannings() {
   const debutSemaine = (new Date(annee, moisNum, 1).getDay() + 6) % 7;
   const finMois = versISO(new Date(annee, moisNum + 1, 0));
 
+  // Employés (avec leurs horaires fixes) + horaires d'ouverture du magasin, pour
+  // pré-remplir les créneaux et générer le planning depuis les horaires fixes.
   useEffect(() => {
-    supabase.rpc('collegues').then(({ data }) => setEmployes(data ?? []));
-  }, []);
+    if (!magasinId) return;
+    Promise.all([
+      supabase.from('users').select('id, nom, horaires_fixes').eq('magasin_id', magasinId).order('nom'),
+      supabase.from('magasins').select('horaires').eq('id', magasinId).single(),
+    ]).then(([{ data: us }, { data: mag }]) => {
+      setEmployes(us ?? []);
+      setHorairesMag(mag?.horaires ?? null);
+    });
+  }, [magasinId]);
 
   const charger = useCallback(async () => {
     const { data } = await supabase
@@ -83,6 +96,44 @@ export default function Plannings() {
   const dansPlage = (iso) => plage && iso >= plage.debut && iso <= finEff;
   const joursSel = plage ? joursEntre(plage.debut, finEff) : [];
   const unSeulJour = joursSel.length === 1;
+
+  // Sélection d'un employé : pré-remplit les horaires depuis ses horaires fixes
+  // du jour sélectionné (à défaut, les horaires d'ouverture du magasin).
+  function choisirEmploye(id) {
+    setMsg('');
+    const emp = employes.find((e) => e.id === id);
+    const jour = plage?.debut;
+    const c = jour
+      ? creneauEmploye(emp?.horaires_fixes, jour) ?? creneauMagasin(horairesMag, jour)
+      : null;
+    setForm((f) => ({ ...f, employe_id: id, ...(c ? { debut: c.debut, fin: c.fin } : {}) }));
+  }
+
+  // Génère le planning de la période depuis les horaires fixes de chaque employé
+  // (jours travaillés seulement), sans écraser les créneaux déjà posés.
+  async function genererDepuisHoraires() {
+    setMsg('');
+    const lignes = [];
+    joursSel.forEach((iso) => {
+      employes.forEach((emp) => {
+        const c = creneauEmploye(emp.horaires_fixes, iso);
+        if (!c) return;
+        if (creneaux.some((x) => x.employe_id === emp.id && x.date === iso)) return;
+        lignes.push({ employe_id: emp.id, date: iso, debut: c.debut, fin: c.fin });
+      });
+    });
+    if (lignes.length === 0) {
+      setMsg('Aucun horaire fixe à appliquer ici (à définir dans Comptes).');
+      return;
+    }
+    const { error } = await supabase.from('plannings').insert(lignes);
+    if (error) {
+      setMsg(`Erreur : ${error.message}`);
+      return;
+    }
+    setMsg(`${lignes.length} créneau(x) ajouté(s) depuis les horaires fixes.`);
+    charger();
+  }
 
   async function ajouter(e) {
     e.preventDefault();
@@ -165,6 +216,10 @@ export default function Plannings() {
             <button type="button" className="btn btn-discret" onClick={() => setPlage(null)}>Effacer</button>
           </div>
 
+          <button type="button" className="btn" onClick={genererDepuisHoraires}>
+            🗓️ Remplir depuis les horaires fixes
+          </button>
+
           {unSeulJour &&
             (duJour(plage.debut).length === 0 ? (
               <p className="vide">Personne de prévu ce jour.</p>
@@ -187,7 +242,7 @@ export default function Plannings() {
           <form className="form-chrome" onSubmit={ajouter}>
             <label className="field">
               <span>Employé</span>
-              <select value={form.employe_id} onChange={(e) => setForm((f) => ({ ...f, employe_id: e.target.value }))}>
+              <select value={form.employe_id} onChange={(e) => choisirEmploye(e.target.value)}>
                 <option value="" disabled>Choisir…</option>
                 {employes.map((emp) => (
                   <option key={emp.id} value={emp.id}>{emp.nom}</option>

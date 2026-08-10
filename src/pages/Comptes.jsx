@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant } from '../lib/format';
 import { useInvite } from '../components/ModalePrompt';
+import HorairesEmploye from '../components/HorairesEmploye';
+import { horairesMagasinDefaut } from '../lib/horaires';
 
 // Module — Gestion des comptes (réservé admin).
 // La création de compte passe par l'Edge Function `creer-employe` (clé
@@ -23,22 +25,27 @@ export default function Comptes() {
   // Allowlist des emails autorisés à se connecter (notamment via Google).
   const [autorises, setAutorises] = useState([]);
   const [nouvelEmail, setNouvelEmail] = useState('');
+  // Horaires : défaut du magasin (pré-remplissage) + employé en cours d'édition.
+  const [horairesMag, setHorairesMag] = useState(horairesMagasinDefaut());
+  const [horairesEmp, setHorairesEmp] = useState(null); // employé { id, nom, horaires_fixes } | null
 
   const charger = useCallback(async () => {
     if (!magasinId) return;
     // Cloisonnement explicite au magasin actif : la RLS de `users` autorise un
     // superadmin à lire TOUS les magasins (pour le pilotage) — sans ce filtre,
     // la gestion des comptes d'un magasin afficherait les employés des autres.
-    const [{ data }, { data: aut }] = await Promise.all([
+    const [{ data }, { data: aut }, { data: mag }] = await Promise.all([
       supabase
         .from('users')
-        .select('id, nom, role, pourcentage_interessement')
+        .select('id, nom, role, pourcentage_interessement, horaires_fixes')
         .eq('magasin_id', magasinId)
         .order('nom'),
       supabase.from('comptes_autorises').select('email, role').eq('magasin_id', magasinId).order('email'),
+      supabase.from('magasins').select('horaires').eq('id', magasinId).single(),
     ]);
     setUsers(data ?? []);
     setAutorises(aut ?? []);
+    setHorairesMag({ ...horairesMagasinDefaut(), ...(mag?.horaires ?? {}) });
   }, [magasinId]);
 
   useEffect(() => {
@@ -263,7 +270,14 @@ export default function Comptes() {
                     onBlur={(e) => enregistrerPourcentage(u.id, e.target.value)}
                   />
                 </td>
-                <td>
+                <td className="actions-cellule">
+                  <button
+                    type="button"
+                    className="btn btn-discret"
+                    onClick={() => setHorairesEmp(u)}
+                  >
+                    Horaires
+                  </button>
                   <button
                     type="button"
                     className="btn btn-discret"
@@ -336,6 +350,18 @@ export default function Comptes() {
           </tbody>
         </table>
       </div>
+      {horairesEmp && (
+        <HorairesEmploye
+          employe={horairesEmp}
+          defautMagasin={horairesMag}
+          onClose={() => setHorairesEmp(null)}
+          onSaved={(h) =>
+            setUsers((liste) =>
+              liste.map((u) => (u.id === horairesEmp.id ? { ...u, horaires_fixes: h } : u)),
+            )
+          }
+        />
+      )}
       {elementInvite}
     </div>
   );
