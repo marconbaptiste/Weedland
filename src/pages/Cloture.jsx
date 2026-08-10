@@ -198,6 +198,11 @@ export default function Cloture() {
 
   async function enregistrer(e) {
     e.preventDefault();
+    // Garde-fou : éviter d'enregistrer une clôture vide par erreur.
+    const rienEncaisse = cbNum + especesNum + virementsNum === 0;
+    if (rienEncaisse && chromesJour.length === 0) {
+      if (!window.confirm('Aucune vente saisie (0 €). Enregistrer quand même cette clôture ?')) return;
+    }
     setEnregistrement(true);
     setStatut('');
     const { data: ligne, error } = await supabase
@@ -223,7 +228,8 @@ export default function Cloture() {
 
     if (error || !ligne) {
       setEnregistrement(false);
-      setStatut(`Erreur : ${error?.message ?? 'enregistrement impossible'}`);
+      console.error('Clôture — enregistrement:', error);
+      setStatut('Enregistrement impossible. Vérifie ta connexion et réessaie.');
       return;
     }
 
@@ -293,7 +299,9 @@ export default function Cloture() {
           valeur={form.virements}
           onChange={maj('virements')}
         />
+        <small className="champ-aide">Virements bancaires, chèques… reçus ce jour (hors CB et espèces).</small>
         <ChampMontant label="Fond de caisse" valeur={form.fond_caisse} onChange={maj('fond_caisse')} />
+        <small className="champ-aide">Espèces laissées dans la caisse pour rendre la monnaie. Optionnel.</small>
         <label className="field">
           <span>Heures travaillées</span>
           <input

@@ -80,18 +80,18 @@ export default function Import() {
         employe_id: employeId, date: c.date, ventes_directes: c.ventes_directes, cb: c.cb, especes: c.especes, virements: c.virements ?? 0,
       }));
       const { error } = await supabase.from('caisse_jour').upsert(rows, { onConflict: 'employe_id,date' });
-      if (error) erreurs.push(`Caisse : ${error.message}`);
+      if (error) { console.error('Import caisse:', error); erreurs.push('caisse'); }
     }
     if (resultat.charges.length) {
       const { error } = await supabase.from('charges').insert(resultat.charges);
-      if (error) erreurs.push(`Charges : ${error.message}`);
+      if (error) { console.error('Import charges:', error); erreurs.push('charges'); }
     }
     if (resultat.fournisseurs.length) {
       const { error } = await supabase.from('fournisseurs').insert(resultat.fournisseurs);
-      if (error) erreurs.push(`Fournisseurs : ${error.message}`);
+      if (error) { console.error('Import fournisseurs:', error); erreurs.push('fournisseurs'); }
     }
     setEnCours(false);
-    if (erreurs.length) { setStatut(`Erreur — ${erreurs.join(' · ')}`); return; }
+    if (erreurs.length) { setStatut(`Import impossible pour : ${erreurs.join(', ')}. Vérifie le fichier et réessaie.`); return; }
     setStatut(`Import réussi : ${resultat.caisse.length} journée(s), ${resultat.charges.length} charge(s), ${resultat.fournisseurs.length} fournisseur(s).`);
     setResultat(null);
   }
@@ -120,7 +120,7 @@ export default function Import() {
 
     if (remplacer) {
       const { error } = await supabase.from('chromes').delete().not('id', 'is', null);
-      if (error) { setEnCours(false); setStatut(`Erreur suppression : ${error.message}`); return; }
+      if (error) { console.error('Import chromes — purge:', error); setEnCours(false); setStatut('Impossible de repartir de zéro. Réessaie.'); return; }
     }
 
     // Rattachement des clients par surnom (réutilise l'existant, crée les manquants).
@@ -129,7 +129,7 @@ export default function Import() {
     const manquants = [...new Set(chromes.map((l) => l.surnom))].filter((s) => !map.has(cleEntete(s)));
     if (manquants.length) {
       const { data: crees, error } = await supabase.from('clients').insert(manquants.map((surnom) => ({ surnom }))).select('id, surnom');
-      if (error) { setEnCours(false); setStatut(`Erreur création clients : ${error.message}`); return; }
+      if (error) { console.error('Import chromes — clients:', error); setEnCours(false); setStatut('Impossible de créer les fiches clients manquantes. Réessaie.'); return; }
       (crees ?? []).forEach((c) => map.set(cleEntete(c.surnom), c.id));
     }
 
@@ -138,7 +138,7 @@ export default function Import() {
     }));
     const { error } = await supabase.from('chromes').insert(rows);
     setEnCours(false);
-    if (error) { setStatut(`Erreur : ${error.message}`); return; }
+    if (error) { console.error('Import chromes:', error); setStatut('Import impossible. Vérifie le fichier et réessaie.'); return; }
     setStatut(`${rows.length} ligne(s) de chromes importée(s) pour ${manquants.length} nouveau(x) client(s).`);
     setChromes(null);
   }
@@ -182,7 +182,7 @@ export default function Import() {
     const erreurs = [];
     if (aInserer.length) {
       const { data: crees, error } = await supabase.from('stocks').insert(aInserer).select('id, nom, quantite');
-      if (error) erreurs.push(error.message);
+      if (error) { console.error('Import stocks — création:', error); erreurs.push('création'); }
       // Trace chaque nouveau produit importé (mouvement d'entrée, motif import).
       for (const c of crees ?? []) {
         if (Number(c.quantite) > 0) {
@@ -198,7 +198,7 @@ export default function Import() {
     }
     for (const u of aMaj) {
       const { error } = await supabase.from('stocks').update({ quantite: u.quantite }).eq('id', u.id);
-      if (error) { erreurs.push(error.message); break; }
+      if (error) { console.error('Import stocks — réappro:', error); erreurs.push('réappro'); break; }
       // Trace la variation apportée par l'import (delta = ce qui a été ajouté).
       if (u.delta) {
         await journaliserMouvement({
@@ -211,7 +211,7 @@ export default function Import() {
       }
     }
     setEnCours(false);
-    if (erreurs.length) { setStatut(`Erreur — ${erreurs.join(' · ')}`); return; }
+    if (erreurs.length) { setStatut(`Import impossible (${erreurs.join(', ')}). Vérifie le fichier et réessaie.`); return; }
     setStatut(`Import stocks : ${aInserer.length} nouveau(x) produit(s), ${aMaj.length} réapprovisionné(s).`);
     setStocks(null);
   }
