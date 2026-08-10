@@ -28,6 +28,7 @@ export default function Comptes() {
   // Horaires : défaut du magasin (pré-remplissage) + employé en cours d'édition.
   const [horairesMag, setHorairesMag] = useState(horairesMagasinDefaut());
   const [horairesEmp, setHorairesEmp] = useState(null); // employé { id, nom, horaires_fixes } | null
+  const [gestion, setGestion] = useState(null); // id de l'employé géré (fiche modale) | null
 
   const charger = useCallback(async () => {
     if (!magasinId) return;
@@ -229,74 +230,32 @@ export default function Comptes() {
 
       <div className="card">
         <h2>Employés</h2>
-        <table className="tableau">
-          <thead>
-            <tr>
-              <th>Nom</th>
-              <th>Rôle</th>
-              <th className="droite">% intéress.</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id}>
-                <td>
-                  <input
-                    className="champ-nom"
-                    type="text"
-                    value={u.nom ?? ''}
-                    onChange={(e) => majNomLocal(u.id, e.target.value)}
-                    onBlur={(e) => enregistrerNom(u.id, e.target.value)}
-                  />
-                </td>
-                <td>
-                  {u.id === utilisateur.id ? (
-                    <span className="badge badge-solde">Admin (vous)</span>
-                  ) : (
-                    <select value={u.role} onChange={(e) => changerRole(u.id, e.target.value)}>
-                      <option value="employe">Employé</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  )}
-                </td>
-                <td className="droite">
-                  <input
-                    className="champ-pourcentage"
-                    type="text"
-                    inputMode="decimal"
-                    value={u.pourcentage_interessement ?? ''}
-                    onChange={(e) => majPourcentageLocal(u.id, e.target.value)}
-                    onBlur={(e) => enregistrerPourcentage(u.id, e.target.value)}
-                  />
-                </td>
-                <td className="actions-cellule">
-                  <button
-                    type="button"
-                    className="btn btn-discret"
-                    onClick={() => setHorairesEmp(u)}
-                  >
-                    Horaires
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-discret"
-                    onClick={() => reinitialiserMdp(u.id, u.nom)}
-                  >
-                    Réinit. MDP
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {users.length === 0 && (
-              <tr>
-                <td colSpan={4} className="vide">
-                  Aucun compte.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        {/* Liste compacte (mobile) : nom + rôle, bouton « Gérer » → fiche modale. */}
+        <ul className="liste-produits">
+          {users.map((u) => (
+            <li key={u.id} className="ligne-produit">
+              <div className="ligne-produit-nom">
+                <span>{u.nom || '—'}</span>
+                {u.id === utilisateur.id ? (
+                  <span className="badge badge-solde tag-partage">Admin (vous)</span>
+                ) : (
+                  <span className="badge tag-partage">{u.role === 'admin' ? 'Admin' : 'Employé'}</span>
+                )}
+              </div>
+              <span className="ligne-produit-qte">
+                {Number(u.pourcentage_interessement) > 0 ? `${u.pourcentage_interessement} %` : '—'}
+              </span>
+              <button
+                type="button"
+                className="btn btn-discret ligne-produit-gerer"
+                onClick={() => setGestion(u.id)}
+              >
+                Gérer
+              </button>
+            </li>
+          ))}
+          {users.length === 0 && <li className="vide">Aucun compte.</li>}
+        </ul>
       </div>
 
       <div className="card">
@@ -350,6 +309,75 @@ export default function Comptes() {
           </tbody>
         </table>
       </div>
+      {gestion && (() => {
+        const u = users.find((x) => x.id === gestion);
+        if (!u) return null;
+        const estMoi = u.id === utilisateur.id;
+        return (
+          <div
+            className="aide-fond"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Fiche employé"
+            onClick={() => setGestion(null)}
+          >
+            <div className="modale-client" onClick={(e) => e.stopPropagation()}>
+              <div className="modale-client-tete">
+                <strong>{u.nom || 'Employé'}</strong>
+                <button type="button" className="btn btn-discret" onClick={() => setGestion(null)}>
+                  Fermer
+                </button>
+              </div>
+              <div className="form-chrome">
+                <label className="field">
+                  <span>Nom</span>
+                  <input
+                    type="text"
+                    value={u.nom ?? ''}
+                    onChange={(e) => majNomLocal(u.id, e.target.value)}
+                    onBlur={(e) => enregistrerNom(u.id, e.target.value)}
+                  />
+                </label>
+                <label className="field">
+                  <span>Rôle</span>
+                  {estMoi ? (
+                    <span className="badge badge-solde">Admin (vous)</span>
+                  ) : (
+                    <select value={u.role} onChange={(e) => changerRole(u.id, e.target.value)}>
+                      <option value="employe">Employé</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  )}
+                </label>
+                <label className="field">
+                  <span>% d’intéressement</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={u.pourcentage_interessement ?? ''}
+                    onChange={(e) => majPourcentageLocal(u.id, e.target.value)}
+                    onBlur={(e) => enregistrerPourcentage(u.id, e.target.value)}
+                  />
+                </label>
+                <div className="form-inline">
+                  <button type="button" className="btn" onClick={() => setHorairesEmp(u)}>
+                    🗓️ Horaires fixes
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => reinitialiserMdp(u.id, u.nom)}
+                  >
+                    🔑 Réinit. mot de passe
+                  </button>
+                </div>
+                {statut && <p className="statut">{statut}</p>}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {horairesEmp && (
         <HorairesEmploye
           employe={horairesEmp}
