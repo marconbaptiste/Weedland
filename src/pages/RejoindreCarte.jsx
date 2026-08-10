@@ -53,8 +53,16 @@ export default function RejoindreCarte() {
       p_telephone: t,
     });
     setEnvoi(false);
-    if (error || !data) {
-      setErreur(error?.message || "Impossible de créer la carte. Vérifie le QR du magasin.");
+    if (error) {
+      setErreur(error.message || "Impossible de créer la carte. Vérifie le QR du magasin.");
+      return;
+    }
+    // Pas d'id renvoyé = ce numéro est déjà associé à une carte. On ne divulgue
+    // pas l'UUID de la carte existante (anti-oracle) : on oriente vers le comptoir.
+    if (!data) {
+      setErreur(
+        'Ce numéro est déjà associé à une carte de fidélité. Demande au comptoir du magasin pour la retrouver.',
+      );
       return;
     }
     localStorage.setItem(`carte:${magasinId}`, data);
