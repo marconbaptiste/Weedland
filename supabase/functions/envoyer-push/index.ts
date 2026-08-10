@@ -70,6 +70,7 @@ Deno.serve(async (req) => {
     }
     return json({ envoyes, purges, total: (subs ?? []).length });
   } catch (e) {
-    return json({ error: String((e as Error)?.message ?? e) }, 500);
+    console.error("envoyer-push error:", e);
+    return json({ error: "Erreur interne." }, 500);
   }
 });
