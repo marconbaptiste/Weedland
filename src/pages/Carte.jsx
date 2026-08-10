@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { urlLogo } from '../lib/logo';
 import { activerPush, etatPush, pushSupporte } from '../lib/push';
 import { JOURS_SEMAINE } from '../lib/horaires';
+import { urlPlan } from '../lib/plan';
 import QRClient from '../components/QRClient';
 
 const hhmm = (t) => (t ? String(t).slice(0, 5) : '');
@@ -388,7 +389,17 @@ export default function Carte() {
         {infosMag && (infosMag.adresse || infosMag.horaires) && (
           <div className="carte-infos">
             <h2>📍 Infos &amp; horaires</h2>
-            {infosMag.adresse && <p className="carte-adresse">{infosMag.adresse}</p>}
+            {infosMag.adresse && (
+              <a
+                className="carte-adresse-lien"
+                href={urlPlan(infosMag.adresse)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span className="carte-adresse">{infosMag.adresse}</span>
+                <span className="carte-adresse-cta">🗺️ Ouvrir dans Plans / Google Maps</span>
+              </a>
+            )}
             {infosMag.horaires && (
               <ul className="carte-horaires">
                 {JOURS_SEMAINE.map(({ cle, long }) => {

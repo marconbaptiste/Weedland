@@ -658,10 +658,29 @@ hr {
   font-size: 1rem;
   margin: 0 0 0.5rem;
 }
+.carte-adresse-lien {
+  display: block;
+  margin: 0 0 0.7rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--bordure);
+  border-radius: 10px;
+  background: var(--fond-input);
+  text-decoration: none;
+  color: inherit;
+}
+.carte-adresse-lien:hover {
+  border-color: var(--bordure-forte);
+}
 .carte-adresse {
-  margin: 0 0 0.6rem;
-  color: var(--texte-doux);
+  display: block;
+  margin: 0;
   white-space: pre-line;
+}
+.carte-adresse-cta {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--accent);
+  font-size: 0.85rem;
 }
 .carte-horaires {
   list-style: none;
