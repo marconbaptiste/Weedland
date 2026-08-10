@@ -303,6 +303,7 @@ export default function Cloture() {
             value={form.heures_travaillees}
             onChange={(e) => maj('heures_travaillees')(e.target.value)}
           />
+          <small className="champ-aide">Pour info / suivi RH — n’affecte pas l’intéressement.</small>
         </label>
         <p className="statut">
           Taux d’intéressement : <strong>{tauxParDefaut} %</strong> (défini dans Comptes par
