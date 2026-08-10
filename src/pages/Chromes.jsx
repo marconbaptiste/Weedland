@@ -572,13 +572,19 @@ export default function Chromes() {
               </div>
             </form>
           ) : (
-            <div className="form-inline">
-              <button className="btn" onClick={() => setCreationOuverte(true)}>
-                + Nouvelle fiche client
+            <div className="stocks-actions barre-actions-fin">
+              <button className="btn btn-primary btn-compact" onClick={() => setCreationOuverte(true)}>
+                + Nouvelle fiche
               </button>
               {options.fidelite && (
-                <button type="button" className="btn" onClick={() => setQrInscription(true)}>
-                  📲 QR d’inscription
+                <button
+                  type="button"
+                  className="btn btn-compact btn-icone"
+                  title="QR d’inscription"
+                  aria-label="QR d’inscription"
+                  onClick={() => setQrInscription(true)}
+                >
+                  📲
                 </button>
               )}
             </div>

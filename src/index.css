@@ -943,6 +943,11 @@ hr {
   padding: 0.45rem 0.8rem;
   font-size: 0.9rem;
 }
+/* Rangée d'actions compacte alignée à droite (ex. sous la liste clients). */
+.barre-actions-fin {
+  justify-content: flex-end;
+  margin-top: 0.6rem;
+}
 /* Liste de courses (to-do d'achats, page Stocks) */
 .courses-tete {
   display: flex;
