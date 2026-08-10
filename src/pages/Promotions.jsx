@@ -13,6 +13,7 @@ export default function Promotions() {
   const [produits, setProduits] = useState([]);
   const [form, setForm] = useState(VIDE);
   const [msg, setMsg] = useState('');
+  const [creationOuverte, setCreationOuverte] = useState(false);
 
   const charger = useCallback(async () => {
     const [{ data: pr }, { data: st }] = await Promise.all([
@@ -49,6 +50,7 @@ export default function Promotions() {
     }
     setForm(VIDE);
     setMsg('Promotion créée ✅');
+    setCreationOuverte(false);
     charger();
   }
 
@@ -65,80 +67,109 @@ export default function Promotions() {
 
   return (
     <div className="page">
-      <h1>Promotions</h1>
+      <div className="entete-client">
+        <h1>Promotions</h1>
+        <button
+          type="button"
+          className="btn btn-primary btn-compact"
+          onClick={() => {
+            setForm(VIDE);
+            setMsg('');
+            setCreationOuverte(true);
+          }}
+        >
+          + Nouvelle promotion
+        </button>
+      </div>
 
       <NotifierClients />
       <p className="statut">
         Les promotions actives s’affichent directement sur la carte de fidélité des clients.
       </p>
+      {!creationOuverte && msg && <p className="statut">{msg}</p>}
 
-      <div className="card">
-        <h2>Nouvelle promotion</h2>
-        <form className="form-chrome" onSubmit={creer}>
-          <label className="field">
-            <span>Titre</span>
-            <input
-              value={form.titre}
-              onChange={(e) => setForm((f) => ({ ...f, titre: e.target.value }))}
-              placeholder="ex. Offre du week-end"
-            />
-          </label>
-          <label className="field">
-            <span>Remise (facultatif)</span>
-            <input
-              value={form.remise}
-              onChange={(e) => setForm((f) => ({ ...f, remise: e.target.value }))}
-              placeholder="ex. -10%, 2g offerts…"
-            />
-          </label>
-          <label className="field">
-            <span>Produit concerné (facultatif)</span>
-            <select
-              value={form.stock_id}
-              onChange={(e) => setForm((f) => ({ ...f, stock_id: e.target.value }))}
-            >
-              <option value="">— Aucun (promo générale) —</option>
-              {produits.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.categorie ? `${p.categorie} · ${p.nom}` : p.nom}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Description (facultatif)</span>
-            <textarea
-              rows={2}
-              value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="Détails de l’offre…"
-            />
-          </label>
-          <div className="form-inline">
-            <label className="field">
-              <span>Du (facultatif)</span>
-              <input
-                type="date"
-                value={form.date_debut}
-                onChange={(e) => setForm((f) => ({ ...f, date_debut: e.target.value }))}
-              />
-            </label>
-            <label className="field">
-              <span>Au (facultatif)</span>
-              <input
-                type="date"
-                value={form.date_fin}
-                min={form.date_debut || undefined}
-                onChange={(e) => setForm((f) => ({ ...f, date_fin: e.target.value }))}
-              />
-            </label>
-          </div>
-          <button className="btn btn-primary" type="submit">
-            Créer la promotion
-          </button>
-        </form>
-        {msg && <p className="statut">{msg}</p>}
-      </div>
+      {creationOuverte && (
+        <div
+          className="aide-fond"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Nouvelle promotion"
+          onClick={() => setCreationOuverte(false)}
+        >
+          <form className="modale-client" onClick={(e) => e.stopPropagation()} onSubmit={creer}>
+            <div className="modale-client-tete">
+              <strong>Nouvelle promotion</strong>
+              <button type="button" className="btn btn-discret" onClick={() => setCreationOuverte(false)}>
+                Fermer
+              </button>
+            </div>
+            <div className="form-chrome">
+              <label className="field">
+                <span>Titre</span>
+                <input
+                  value={form.titre}
+                  onChange={(e) => setForm((f) => ({ ...f, titre: e.target.value }))}
+                  placeholder="ex. Offre du week-end"
+                />
+              </label>
+              <label className="field">
+                <span>Remise (facultatif)</span>
+                <input
+                  value={form.remise}
+                  onChange={(e) => setForm((f) => ({ ...f, remise: e.target.value }))}
+                  placeholder="ex. -10%, 2g offerts…"
+                />
+              </label>
+              <label className="field">
+                <span>Produit concerné (facultatif)</span>
+                <select
+                  value={form.stock_id}
+                  onChange={(e) => setForm((f) => ({ ...f, stock_id: e.target.value }))}
+                >
+                  <option value="">— Aucun (promo générale) —</option>
+                  {produits.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.categorie ? `${p.categorie} · ${p.nom}` : p.nom}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Description (facultatif)</span>
+                <textarea
+                  rows={2}
+                  value={form.description}
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="Détails de l’offre…"
+                />
+              </label>
+              <div className="form-inline">
+                <label className="field">
+                  <span>Du (facultatif)</span>
+                  <input
+                    type="date"
+                    value={form.date_debut}
+                    onChange={(e) => setForm((f) => ({ ...f, date_debut: e.target.value }))}
+                  />
+                </label>
+                <label className="field">
+                  <span>Au (facultatif)</span>
+                  <input
+                    type="date"
+                    value={form.date_fin}
+                    min={form.date_debut || undefined}
+                    onChange={(e) => setForm((f) => ({ ...f, date_fin: e.target.value }))}
+                  />
+                </label>
+              </div>
+              <button className="btn btn-primary" type="submit">
+                Créer la promotion
+              </button>
+              {msg && <p className="statut">{msg}</p>}
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="card">
         <h2>Promotions ({promotions.length})</h2>
