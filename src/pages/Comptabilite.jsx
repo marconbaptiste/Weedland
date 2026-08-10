@@ -40,6 +40,8 @@ export default function Comptabilite() {
   // heures par employé, filtrable par employé, + total des paiements.
   const [employes, setEmployes] = useState([]);
   const [employeFiltre, setEmployeFiltre] = useState('');
+  const [graphOuvert, setGraphOuvert] = useState(false); // section « Graphiques » repliée par défaut
+  const [detailOuvert, setDetailOuvert] = useState(false); // détail par jour (équipe) replié par défaut
   const [caEmpRows, setCaEmpRows] = useState([]); // v_ca_jour par clôture (avances/rembours.)
   const [intRows, setIntRows] = useState([]); // v_interessement_employe (propriétaires + partagés)
   const [chromesEmpRows, setChromesEmpRows] = useState([]); // chromes avec employe_id
@@ -418,6 +420,20 @@ export default function Comptabilite() {
       </div>
 
       <div className="card">
+        <button
+          type="button"
+          className="courses-tete"
+          onClick={() => setGraphOuvert((o) => !o)}
+          aria-expanded={graphOuvert}
+        >
+          <h2>📊 Graphiques</h2>
+          <span className="chevron">{graphOuvert ? '▾' : '▸'}</span>
+        </button>
+      </div>
+
+      {graphOuvert && (
+      <>
+      <div className="card">
         <h2>CA par jour</h2>
         <Courbe points={pointsCA} />
       </div>
@@ -447,6 +463,8 @@ export default function Comptabilite() {
         <div className="entete-client"><h2>Dépenses totales</h2><strong>{formatEuros(totalDepenses)}</strong></div>
         <Camembert parts={partsDepenses} />
       </div>
+      </>
+      )}
 
       {enMois ? (
         <>
@@ -503,6 +521,15 @@ export default function Comptabilite() {
           <div className="kpi"><span className="kpi-label">Heures</span><span className="kpi-valeur">{formatNombre(totalHeures)} h</span></div>
           <div className="kpi"><span className="kpi-label">Paiements employés</span><span className="kpi-valeur">{formatEuros(totalPaiements)}</span></div>
         </div>
+        <button
+          type="button"
+          className="btn btn-discret"
+          onClick={() => setDetailOuvert((o) => !o)}
+          aria-expanded={detailOuvert}
+        >
+          {detailOuvert ? '▾ Masquer le détail par jour' : '▸ Voir le détail par jour'}
+        </button>
+        {detailOuvert && (
         <div className="table-scroll">
         <table className="tableau tableau-cartes">
           <thead>
@@ -538,6 +565,7 @@ export default function Comptabilite() {
           </tbody>
         </table>
         </div>
+        )}
       </div>
 
       <div className="card recap">
