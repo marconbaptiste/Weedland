@@ -18,6 +18,7 @@ export default function Magasins() {
   const [statut, setStatut] = useState('');
   const [nomMagasin, setNomMagasin] = useState('');
   const [admin, setAdmin] = useState({ magasin_id: '', email: '', nom: '', motDePasse: '', pourcentage: '' });
+  const [adminOuvert, setAdminOuvert] = useState(false); // modale « Autoriser un administrateur »
   const [filActif, setFilActif] = useState(null); // magasin sélectionné pour la messagerie
 
   const charger = useCallback(async () => {
@@ -93,6 +94,7 @@ export default function Magasins() {
       setStatut('Email autorisé ✅ — l’admin peut se connecter avec Google.');
     }
     setAdmin({ magasin_id: '', email: '', nom: '', motDePasse: '', pourcentage: '' });
+    setAdminOuvert(false);
   }
 
   // --- Codes ---
@@ -192,20 +194,41 @@ export default function Magasins() {
             </div>
           ))}
 
-          <form className="card" onSubmit={autoriserAdmin}>
-            <h2>Autoriser un administrateur</h2>
-            <label className="field">
-              <span>Magasin</span>
-              <select value={admin.magasin_id} onChange={(e) => setAdmin((a) => ({ ...a, magasin_id: e.target.value }))}>
-                <option value="">— Choisir —</option>
-                {magasins.map((m) => <option key={m.id} value={m.id}>{m.nom}</option>)}
-              </select>
-            </label>
-            <label className="field"><span>Email</span><input type="email" value={admin.email} onChange={(e) => setAdmin((a) => ({ ...a, email: e.target.value }))} /></label>
-            <label className="field"><span>Nom (si mot de passe)</span><input value={admin.nom} onChange={(e) => setAdmin((a) => ({ ...a, nom: e.target.value }))} /></label>
-            <label className="field"><span>Mot de passe (optionnel)</span><input type="text" value={admin.motDePasse} onChange={(e) => setAdmin((a) => ({ ...a, motDePasse: e.target.value }))} placeholder="vide = connexion Google" /></label>
-            <button className="btn btn-primary" type="submit">Autoriser l’administrateur</button>
-          </form>
+          <button type="button" className="btn btn-primary" onClick={() => setAdminOuvert(true)}>
+            + Autoriser un administrateur
+          </button>
+
+          {adminOuvert && (
+            <div
+              className="aide-fond"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Autoriser un administrateur"
+              onClick={() => setAdminOuvert(false)}
+            >
+              <form className="modale-client" onClick={(e) => e.stopPropagation()} onSubmit={autoriserAdmin}>
+                <div className="modale-client-tete">
+                  <strong>Autoriser un administrateur</strong>
+                  <button type="button" className="btn btn-discret" onClick={() => setAdminOuvert(false)}>
+                    Fermer
+                  </button>
+                </div>
+                <div className="form-chrome">
+                  <label className="field">
+                    <span>Magasin</span>
+                    <select value={admin.magasin_id} onChange={(e) => setAdmin((a) => ({ ...a, magasin_id: e.target.value }))}>
+                      <option value="">— Choisir —</option>
+                      {magasins.map((m) => <option key={m.id} value={m.id}>{m.nom}</option>)}
+                    </select>
+                  </label>
+                  <label className="field"><span>Email</span><input type="email" value={admin.email} onChange={(e) => setAdmin((a) => ({ ...a, email: e.target.value }))} /></label>
+                  <label className="field"><span>Nom (si mot de passe)</span><input value={admin.nom} onChange={(e) => setAdmin((a) => ({ ...a, nom: e.target.value }))} /></label>
+                  <label className="field"><span>Mot de passe (optionnel)</span><input type="text" value={admin.motDePasse} onChange={(e) => setAdmin((a) => ({ ...a, motDePasse: e.target.value }))} placeholder="vide = connexion Google" /></label>
+                  <button className="btn btn-primary" type="submit">Autoriser l’administrateur</button>
+                </div>
+              </form>
+            </div>
+          )}
         </>
       )}
 
