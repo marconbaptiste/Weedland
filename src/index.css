@@ -1061,6 +1061,100 @@ hr {
   color: var(--texte-doux);
   font-size: 0.9rem;
 }
+/* Assistant de configuration (SAS onboarding) */
+.config-fil {
+  list-style: none;
+  display: flex;
+  gap: 0.4rem;
+  padding: 0;
+  margin: 0.6rem 0 0.4rem;
+  overflow-x: auto;
+}
+.config-pas {
+  flex: 1 1 0;
+  min-width: 4.5rem;
+}
+.config-pas button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  background: none;
+  border: none;
+  color: var(--texte-doux);
+  cursor: pointer;
+  padding: 0.2rem 0;
+}
+.config-pas-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fond-input);
+  border: 1px solid var(--bordure);
+  font-weight: 700;
+}
+.config-pas-nom {
+  font-size: 0.78rem;
+  text-align: center;
+  line-height: 1.1;
+}
+.config-pas.actif .config-pas-num {
+  background: var(--accent);
+  color: var(--accent-contraste);
+  border-color: var(--accent);
+}
+.config-pas.actif .config-pas-nom {
+  color: var(--texte);
+}
+.config-pas.fait .config-pas-num {
+  background: var(--accent-fonce);
+  color: var(--accent-contraste);
+  border-color: var(--accent-fonce);
+}
+.config-intro {
+  color: var(--texte-doux);
+  margin: 0.2rem 0 0.8rem;
+}
+.config-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+.config-nav .btn-primary {
+  margin-left: auto;
+}
+.config-plus-tard {
+  display: block;
+  margin: 0.8rem auto 0;
+}
+.banniere-config {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--fond-carte));
+}
+.banniere-config-emoji {
+  font-size: 1.8rem;
+}
+.banniere-config strong {
+  display: block;
+}
+.banniere-config .statut {
+  margin: 0.1rem 0 0;
+}
+.banniere-config-fleche {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 1.4rem;
+}
 /* Liste de courses (to-do d'achats, page Stocks) */
 .courses-tete {
   display: flex;

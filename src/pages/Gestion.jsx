@@ -28,13 +28,14 @@ function sections(estSuperadmin, options) {
     {
       titre: 'Boutique & outils',
       outils: [
+        { to: '/configuration', emoji: '🧭', nom: 'Assistant de configuration', desc: 'Mettre en place le magasin pas à pas.' },
         { to: '/a-propos-magasin', emoji: '🏪', nom: 'À propos du magasin', desc: 'Logo, adresse, téléphone et horaires — sur la carte de fidélité.' },
         ...(options.fidelite
           ? [{ to: '/promotions', emoji: '🎉', nom: 'Promotions', desc: 'Offres affichées sur les cartes de fidélité.' }]
           : []),
         { to: '/import', emoji: '📥', nom: 'Import', desc: 'Importer l’historique (CSV).' },
         ...(!estSuperadmin
-          ? [{ to: '/support', emoji: '💬', nom: 'Support', desc: 'Écrire à l’exploitant.' }]
+          ? [{ to: '/support', emoji: '💬', nom: 'Faire une doléance', desc: 'Un souci, une idée ? Écris-nous — réponse dans la messagerie.' }]
           : []),
       ],
     },
