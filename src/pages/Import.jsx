@@ -6,8 +6,33 @@ import { somme } from '../lib/comptabilite';
 import { cleEntete } from '../lib/csv';
 import { analyserFichiers, analyserChromes, analyserStocks } from '../lib/importHistorique';
 import { journaliserMouvement } from '../lib/mouvementsStock';
+import { telechargerCSV } from '../lib/export';
 
 const UNITES = ['g', 'kg', 'mg', 'ml', 'pièce'];
+
+// Modèles CSV téléchargeables : un exemple par type d'import, pour que
+// l'utilisateur voie exactement le format attendu (colonnes + une ligne).
+const MODELES = {
+  caisse: {
+    fichier: 'modele-caisse.csv',
+    entetes: ['date', 'ca', 'cb', 'especes', 'virements'],
+    exemple: ['2026-01-15', '250,00', '180,00', '70,00', '0'],
+  },
+  chromes: {
+    fichier: 'modele-dettes-clients.csv',
+    entetes: ['date', 'client', 'type', 'montant_eur'],
+    exemple: ['2026-01-15', 'Le Grand', 'avance', '20,00'],
+  },
+  stocks: {
+    fichier: 'modele-stocks.csv',
+    entetes: ['categorie', 'produit', 'quantite'],
+    exemple: ['Fleurs', 'Amnesia', '50'],
+  },
+};
+const telechargerModele = (cle) => {
+  const m = MODELES[cle];
+  telechargerCSV(m.fichier, m.entetes, [m.exemple]);
+};
 
 // Outil admin — Import de l'historique.
 // - Tableur : dépose les CSV exportés (caisse/charges/fournisseurs), dispatch auto.
@@ -222,10 +247,15 @@ export default function Import() {
                 {employes.map((emp) => (<option key={emp.id} value={emp.id}>{emp.nom}</option>))}
               </select>
             </label>
-            <label className="btn btn-primary">
-              Choisir les fichiers CSV…
-              <input type="file" accept=".csv,text/csv" multiple style={{ display: 'none' }} onChange={choisirFichiers} />
-            </label>
+            <div className="form-inline">
+              <label className="btn btn-primary">
+                Choisir les fichiers CSV…
+                <input type="file" accept=".csv,text/csv" multiple style={{ display: 'none' }} onChange={choisirFichiers} />
+              </label>
+              <button type="button" className="btn btn-discret" onClick={() => telechargerModele('caisse')}>
+                ⬇️ Télécharger un modèle
+              </button>
+            </div>
           </div>
 
           {resultat && (
@@ -253,10 +283,15 @@ export default function Import() {
               <input type="checkbox" checked={remplacer} onChange={(e) => setRemplacer(e.target.checked)} />
               <span>Repartir de zéro (supprime d'abord tous les chromes existants — utile si tu remplaces un total provisoire)</span>
             </label>
-            <label className="btn btn-primary">
-              Choisir le fichier CSV…
-              <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={choisirChromes} />
-            </label>
+            <div className="form-inline">
+              <label className="btn btn-primary">
+                Choisir le fichier CSV…
+                <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={choisirChromes} />
+              </label>
+              <button type="button" className="btn btn-discret" onClick={() => telechargerModele('chromes')}>
+                ⬇️ Télécharger un modèle
+              </button>
+            </div>
           </div>
 
           {chromes && (
@@ -319,10 +354,15 @@ export default function Import() {
               <input type="checkbox" checked={ajouterQte} onChange={(e) => setAjouterQte(e.target.checked)} />
               <span>Ajouter aux quantités existantes (réappro). Décoché = remplace la quantité.</span>
             </label>
-            <label className="btn btn-primary">
-              Choisir le fichier CSV…
-              <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={choisirStocks} />
-            </label>
+            <div className="form-inline">
+              <label className="btn btn-primary">
+                Choisir le fichier CSV…
+                <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={choisirStocks} />
+              </label>
+              <button type="button" className="btn btn-discret" onClick={() => telechargerModele('stocks')}>
+                ⬇️ Télécharger un modèle
+              </button>
+            </div>
           </div>
 
           {stocks && (

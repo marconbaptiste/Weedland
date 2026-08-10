@@ -1061,6 +1061,18 @@ hr {
   color: var(--texte-doux);
   font-size: 0.9rem;
 }
+.champ-aide {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--texte-doux);
+  font-size: 0.8rem;
+}
+.encart-aide {
+  background: var(--fond-input);
+  border: 1px solid var(--bordure);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+}
 /* Assistant de configuration (SAS onboarding) */
 .config-fil {
   list-style: none;

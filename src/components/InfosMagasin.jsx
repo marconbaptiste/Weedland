@@ -62,7 +62,7 @@ export default function InfosMagasin() {
         />
       </label>
       <label className="field">
-        <span>Numéro du magasin</span>
+        <span>Numéro de téléphone du magasin</span>
         <input
           type="tel"
           inputMode="tel"

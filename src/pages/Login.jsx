@@ -10,6 +10,7 @@ export default function Login() {
   const [motDePasse, setMotDePasse] = useState('');
   const [erreur, setErreur] = useState('');
   const [envoi, setEnvoi] = useState(false);
+  const [aide, setAide] = useState(false); // encart « mot de passe oublié »
 
   async function soumettre(e) {
     e.preventDefault();
@@ -18,7 +19,7 @@ export default function Login() {
     const { error } = await connexion(email.trim(), motDePasse);
     setEnvoi(false);
     if (error) {
-      setErreur('Identifiants incorrects.');
+      setErreur('Email ou mot de passe incorrect. Vérifie bien les deux.');
       return;
     }
     navigate('/', { replace: true });
@@ -60,6 +61,21 @@ export default function Login() {
         <button className="btn btn-primary" type="submit" disabled={envoi}>
           {envoi ? 'Connexion…' : 'Se connecter'}
         </button>
+
+        <button
+          type="button"
+          className="btn btn-discret lien-oubli"
+          onClick={() => setAide((a) => !a)}
+        >
+          Mot de passe oublié ?
+        </button>
+        {aide && (
+          <p className="statut encart-aide">
+            Demande à ton responsable de le réinitialiser (menu <strong>Comptes → Gérer →
+            Réinit. mot de passe</strong>). Si tu es le patron, écris à l’exploitant depuis
+            <strong> Gestion → Faire une doléance</strong> (ou par email).
+          </p>
+        )}
 
         <div className="separateur"><span>ou</span></div>
 
