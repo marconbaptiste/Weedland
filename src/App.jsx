@@ -17,6 +17,7 @@ import Chromes from './pages/Chromes';
 import Fidelite from './pages/Fidelite';
 import Stocks from './pages/Stocks';
 import Gestion from './pages/Gestion';
+import AProposMagasin from './pages/AProposMagasin';
 import Paiements from './pages/Paiements';
 import Comptes from './pages/Comptes';
 import Promotions from './pages/Promotions';
@@ -75,6 +76,7 @@ export default function App() {
           {/* Réservé à l'admin */}
           <Route element={<RequireAdmin />}>
             <Route path="gestion" element={<Gestion />} />
+            <Route path="a-propos-magasin" element={<AProposMagasin />} />
             <Route path="comptabilite" element={<Comptabilite />} />
             <Route path="paiements" element={<Paiements />} />
             <Route path="journal" element={<Journal />} />

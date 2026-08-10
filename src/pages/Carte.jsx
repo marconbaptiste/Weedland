@@ -4,7 +4,10 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { urlLogo } from '../lib/logo';
 import { activerPush, etatPush, pushSupporte } from '../lib/push';
+import { JOURS_SEMAINE } from '../lib/horaires';
 import QRClient from '../components/QRClient';
+
+const hhmm = (t) => (t ? String(t).slice(0, 5) : '');
 
 // Génère l'icône de la carte de fidélité (🎟️ sur fond sombre arrondi) en PNG
 // (data URI). Utilisé pour le raccourci écran d'accueil : iOS exige un PNG
@@ -94,11 +97,19 @@ export default function Carte() {
   const [promptInstall, setPromptInstall] = useState(null);
   const [afficheAide, setAfficheAide] = useState(false);
   const [promos, setPromos] = useState([]);
+  const [infosMag, setInfosMag] = useState(null); // { nom, adresse, horaires } | null
   const [pushEtat, setPushEtat] = useState('inactif'); // non-supporte | refuse | actif | inactif
 
   useEffect(() => {
     etatPush().then(setPushEtat);
   }, []);
+
+  // Coordonnées + horaires du magasin (public, anon) — affichés sur la carte.
+  useEffect(() => {
+    supabase
+      .rpc('magasin_infos_carte', { p_client: clientId })
+      .then(({ data }) => setInfosMag(data?.[0] ?? null));
+  }, [clientId]);
 
   async function activerNotifs() {
     // Tire un token FRAIS juste avant l'appel : `etat.token` peut être périmé si
@@ -371,6 +382,29 @@ export default function Carte() {
                 {p.description && <p className="promo-desc">{p.description}</p>}
               </div>
             ))}
+          </div>
+        )}
+
+        {infosMag && (infosMag.adresse || infosMag.horaires) && (
+          <div className="carte-infos">
+            <h2>📍 Infos &amp; horaires</h2>
+            {infosMag.adresse && <p className="carte-adresse">{infosMag.adresse}</p>}
+            {infosMag.horaires && (
+              <ul className="carte-horaires">
+                {JOURS_SEMAINE.map(({ cle, long }) => {
+                  const j = infosMag.horaires[cle];
+                  const ouvert = j?.ouvert;
+                  return (
+                    <li key={cle}>
+                      <span>{long}</span>
+                      <span className={ouvert ? '' : 'vide'}>
+                        {ouvert ? `${hhmm(j.debut)} – ${hhmm(j.fin)}` : 'Fermé'}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         )}
 

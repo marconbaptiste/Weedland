@@ -3,7 +3,6 @@ import { useAuth } from '../auth/AuthProvider';
 import BoutonAbonnement from '../components/BoutonAbonnement';
 import GestionOptions from '../components/GestionOptions';
 import LogoMagasin from '../components/LogoMagasin';
-import InfosMagasin from '../components/InfosMagasin';
 
 // Hub d'administration (regroupe les anciens liens du menu admin en une seule
 // entrée « Gestion » → grille de cartes, plus court et ergonomique sur mobile).
@@ -30,6 +29,7 @@ function sections(estSuperadmin, options) {
     {
       titre: 'Boutique & outils',
       outils: [
+        { to: '/a-propos-magasin', emoji: '🏪', nom: 'À propos du magasin', desc: 'Adresse et horaires — affichés sur la carte de fidélité.' },
         ...(options.fidelite
           ? [{ to: '/promotions', emoji: '🎉', nom: 'Promotions', desc: 'Offres affichées sur les cartes de fidélité.' }]
           : []),
@@ -64,7 +64,6 @@ export default function Gestion() {
 
       <section className="hub-section">
         <h2>Personnalisation</h2>
-        <InfosMagasin />
         <LogoMagasin />
       </section>
 
