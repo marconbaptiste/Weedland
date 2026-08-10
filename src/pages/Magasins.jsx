@@ -216,13 +216,13 @@ export default function Magasins() {
             <button type="button" className="btn btn-primary" onClick={genererCode}>+ Générer</button>
           </div>
           <p className="statut">Donne un code à un nouveau patron pour qu’il crée son magasin.</p>
-          <table className="tableau">
+          <table className="tableau tableau-cartes">
             <thead><tr><th>Code</th><th className="droite">Utilisé</th><th></th></tr></thead>
             <tbody>
               {codes.map((c) => (
                 <tr key={c.code} style={{ opacity: c.actif ? 1 : 0.5 }}>
-                  <td><strong>{c.code}</strong>{!c.actif && ' (inactif)'}</td>
-                  <td className="droite">{c.utilisations}×</td>
+                  <td data-label="Code"><strong>{c.code}</strong>{!c.actif && ' (inactif)'}</td>
+                  <td className="droite" data-label="Utilisé">{c.utilisations}×</td>
                   <td className="actions-cellule">
                     <button type="button" className="btn btn-discret" onClick={() => copierCode(c.code)}>Copier</button>
                     <button type="button" className="btn btn-discret" onClick={() => basculerCode(c.code, c.actif)}>{c.actif ? 'Désactiver' : 'Activer'}</button>

@@ -2003,6 +2003,69 @@ textarea,
   white-space: nowrap;
 }
 
+/* Tableau « réactif » : vrai tableau sur ordinateur, mais sur mobile chaque
+   ligne devient une carte empilée (libellé + valeur), sans coulissement
+   horizontal. Chaque <td> porte un data-label = intitulé de sa colonne. */
+@media (max-width: 720px) {
+  .tableau-cartes,
+  .tableau-cartes tbody,
+  .tableau-cartes tr {
+    display: block;
+    width: 100%;
+  }
+  /* Si le tableau réactif est dans un .table-scroll, on neutralise le scroll. */
+  .table-scroll > .tableau-cartes {
+    display: block;
+    min-width: 0;
+    white-space: normal;
+  }
+  .tableau-cartes thead {
+    display: none;
+  }
+  .tableau-cartes tr {
+    border: 1px solid var(--bordure);
+    border-radius: 12px;
+    background: var(--fond-input);
+    padding: 0.2rem 0.7rem;
+    margin-bottom: 0.6rem;
+  }
+  .tableau-cartes td {
+    border-bottom: 1px solid var(--bordure);
+    padding: 0.45rem 0;
+  }
+  .tableau-cartes tr td:last-child {
+    border-bottom: none;
+  }
+  /* Cellule avec libellé : « Intitulé …………… valeur » sur une ligne. */
+  .tableau-cartes td[data-label] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    text-align: right;
+  }
+  .tableau-cartes td[data-label]::before {
+    content: attr(data-label);
+    color: var(--texte-doux);
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+  }
+  /* Champs de saisie dans une cellule libellée : occupent la largeur restante. */
+  .tableau-cartes td[data-label] > input,
+  .tableau-cartes td[data-label] > select {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  /* Cellule sans libellé (détail sur toute la largeur, actions, état vide). */
+  .tableau-cartes td:not([data-label]) {
+    display: block;
+  }
+  .tableau-cartes .droite {
+    text-align: right;
+  }
+}
+
 /* Journal : au contraire on veut que TOUT tienne dans la largeur (pas de
    défilement horizontal) — colonnes à largeurs fixes + retour à la ligne. */
 .journal-tableau {

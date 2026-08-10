@@ -91,7 +91,7 @@ export default function HistoriqueStock({ onClose }) {
         ) : filtres.length === 0 ? (
           <p className="vide">Aucun mouvement enregistré.</p>
         ) : (
-          <table className="tableau">
+          <table className="tableau tableau-cartes">
             <thead>
               <tr>
                 <th>Date</th>
@@ -107,15 +107,15 @@ export default function HistoriqueStock({ onClose }) {
                 const positif = Number(l.delta) > 0;
                 return (
                   <tr key={l.id}>
-                    <td>{formatDateHeure(l.created_at)}</td>
-                    <td>{l.produit}</td>
-                    <td>{l.auteur?.nom ?? '—'}</td>
-                    <td>{MOTIFS[l.motif] ?? l.motif}</td>
-                    <td className={`droite ${positif ? 'solde-ok' : 'dette'}`}>
+                    <td data-label="Date">{formatDateHeure(l.created_at)}</td>
+                    <td data-label="Produit">{l.produit}</td>
+                    <td data-label="Employé">{l.auteur?.nom ?? '—'}</td>
+                    <td data-label="Motif">{MOTIFS[l.motif] ?? l.motif}</td>
+                    <td className={`droite ${positif ? 'solde-ok' : 'dette'}`} data-label="Mouvement">
                       {positif ? '+' : '−'}
                       {formatNombre(Math.abs(Number(l.delta)))}
                     </td>
-                    <td className="droite">
+                    <td className="droite" data-label="Stock après">
                       {l.quantite_apres == null ? '—' : formatNombre(l.quantite_apres)}
                     </td>
                   </tr>

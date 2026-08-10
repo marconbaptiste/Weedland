@@ -21,11 +21,11 @@ export default function ListeMontants({
         <h2>{titre}</h2>
         <strong>{formatEuros(total)}</strong>
       </div>
-      <table className="tableau">
+      <table className="tableau tableau-cartes">
         <tbody>
           {items.map((it) => (
             <tr key={it.id}>
-              <td>
+              <td data-label="Libellé">
                 <input
                   className="champ-nom"
                   placeholder="Libellé"
@@ -34,7 +34,7 @@ export default function ListeMontants({
                   onBlur={() => onEnregistrer(it.id)}
                 />
               </td>
-              <td className="droite">
+              <td className="droite" data-label="Montant">
                 <input
                   className="champ-pourcentage"
                   inputMode="decimal"
@@ -44,7 +44,7 @@ export default function ListeMontants({
                   onBlur={() => onEnregistrer(it.id)}
                 />
               </td>
-              <td>
+              <td data-label="Facture">
                 <label className="btn btn-discret" title="Ajouter une facture (photo)">
                   📷
                   <input

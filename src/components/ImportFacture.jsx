@@ -104,7 +104,7 @@ export default function ImportFacture({ categories = [], onClose, onImported }) 
         {msg && <p className="statut">{msg}</p>}
 
         {lignes.length > 0 && (
-          <table className="tableau">
+          <table className="tableau tableau-cartes">
             <thead>
               <tr>
                 <th>Produit</th>
@@ -116,7 +116,7 @@ export default function ImportFacture({ categories = [], onClose, onImported }) 
             <tbody>
               {lignes.map((l, i) => (
                 <tr key={i}>
-                  <td>
+                  <td data-label="Produit">
                     <input
                       className="champ-nom"
                       value={l.produit}
@@ -124,7 +124,7 @@ export default function ImportFacture({ categories = [], onClose, onImported }) 
                       placeholder="Nom du produit"
                     />
                   </td>
-                  <td className="droite">
+                  <td className="droite" data-label="Quantité">
                     <input
                       className="champ-pourcentage"
                       inputMode="decimal"
@@ -132,7 +132,7 @@ export default function ImportFacture({ categories = [], onClose, onImported }) 
                       onChange={(e) => majLigne(i, 'quantite', e.target.value)}
                     />
                   </td>
-                  <td>
+                  <td data-label="Unité">
                     <select value={l.unite} onChange={(e) => majLigne(i, 'unite', e.target.value)}>
                       {UNITES.map((u) => (
                         <option key={u} value={u}>

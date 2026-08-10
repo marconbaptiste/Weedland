@@ -268,15 +268,15 @@ export default function Import() {
               </div>
               <div className="card">
                 <h2>Aperçu</h2>
-                <table className="tableau">
+                <table className="tableau tableau-cartes">
                   <thead><tr><th>Date</th><th>Client</th><th>Type</th><th className="droite">Montant</th></tr></thead>
                   <tbody>
                     {chromes.slice(0, 12).map((l, i) => (
                       <tr key={i}>
-                        <td>{formatDateFr(l.date)}</td>
-                        <td>{l.surnom}</td>
-                        <td>{l.type === 'avance' ? 'Avance' : 'Remboursement'}</td>
-                        <td className={`droite ${l.type === 'avance' ? 'dette' : 'solde-ok'}`}>{formatEuros(l.montant)}</td>
+                        <td data-label="Date">{formatDateFr(l.date)}</td>
+                        <td data-label="Client">{l.surnom}</td>
+                        <td data-label="Type">{l.type === 'avance' ? 'Avance' : 'Remboursement'}</td>
+                        <td className={`droite ${l.type === 'avance' ? 'dette' : 'solde-ok'}`} data-label="Montant">{formatEuros(l.montant)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -333,14 +333,14 @@ export default function Import() {
               </div>
               <div className="card">
                 <h2>Aperçu</h2>
-                <table className="tableau">
+                <table className="tableau tableau-cartes">
                   <thead><tr><th>Catégorie</th><th>Produit</th><th className="droite">Quantité</th></tr></thead>
                   <tbody>
                     {stocks.slice(0, 12).map((s, i) => (
                       <tr key={i}>
-                        <td>{catForcee.trim() || s.categorie || '—'}</td>
-                        <td>{s.nom}</td>
-                        <td className="droite">{formatNombre(s.quantite)} {uniteDefaut}</td>
+                        <td data-label="Catégorie">{catForcee.trim() || s.categorie || '—'}</td>
+                        <td data-label="Produit">{s.nom}</td>
+                        <td className="droite" data-label="Quantité">{formatNombre(s.quantite)} {uniteDefaut}</td>
                       </tr>
                     ))}
                   </tbody>

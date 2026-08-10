@@ -723,7 +723,7 @@ export default function Chromes() {
                   </button>
                 </form>
 
-                <table className="tableau">
+                <table className="tableau tableau-cartes">
                   <thead>
                     <tr>
                       <th>Date</th>
@@ -797,11 +797,11 @@ export default function Chromes() {
                         </tr>
                       ) : (
                         <tr key={l.id}>
-                          <td>
+                          <td data-label="Date">
                             {formatDateFr(l.date)}
                             {l.created_at && <span className="chrome-heure"> · {formatHeure(l.created_at)}</span>}
                           </td>
-                          <td className={`droite ${l.type === 'avance' ? 'dette' : l.type === 'remboursement' ? 'solde-ok' : ''}`}>
+                          <td className={`droite ${l.type === 'avance' ? 'dette' : l.type === 'remboursement' ? 'solde-ok' : ''}`} data-label="Montant">
                             {l.type === 'avance' ? '+ ' : l.type === 'remboursement' ? '− ' : ''}
                             {formatEuros(l.montant)}
                             {l.type === 'autre' && <span className="chrome-heure"> · autre</span>}

@@ -504,7 +504,7 @@ export default function Comptabilite() {
           <div className="kpi"><span className="kpi-label">Paiements employés</span><span className="kpi-valeur">{formatEuros(totalPaiements)}</span></div>
         </div>
         <div className="table-scroll">
-        <table className="tableau">
+        <table className="tableau tableau-cartes">
           <thead>
             <tr>
               <th>Date</th>
@@ -521,15 +521,15 @@ export default function Comptabilite() {
           <tbody>
             {lignesDetail.map((r) => (
               <tr key={r.cle}>
-                <td>{formatDateFr(r.date)}</td>
-                <td>{nomLigne(r)}</td>
-                <td className="droite">{r.ca_jour != null ? formatEuros(r.ca_jour) : '—'}</td>
-                <td className="droite">{r.encaissements != null ? formatEuros(r.encaissements) : '—'}</td>
-                <td className="droite">{r.avances != null ? formatEuros(r.avances) : '—'}</td>
-                <td className="droite">{r.remboursements != null ? formatEuros(r.remboursements) : '—'}</td>
-                <td className="droite">{r.autres != null ? formatEuros(r.autres) : '—'}</td>
-                <td className="droite">{formatNombre(r.heures)}</td>
-                <td className="droite">{formatEuros(r.interessement)}</td>
+                <td data-label="Date">{formatDateFr(r.date)}</td>
+                <td data-label="Employé">{nomLigne(r)}</td>
+                <td className="droite" data-label="CA">{r.ca_jour != null ? formatEuros(r.ca_jour) : '—'}</td>
+                <td className="droite" data-label="Encaiss.">{r.encaissements != null ? formatEuros(r.encaissements) : '—'}</td>
+                <td className="droite" data-label="Avances">{r.avances != null ? formatEuros(r.avances) : '—'}</td>
+                <td className="droite" data-label="Rembours.">{r.remboursements != null ? formatEuros(r.remboursements) : '—'}</td>
+                <td className="droite" data-label="Autres">{r.autres != null ? formatEuros(r.autres) : '—'}</td>
+                <td className="droite" data-label="Heures">{formatNombre(r.heures)}</td>
+                <td className="droite" data-label="Intéress.">{formatEuros(r.interessement)}</td>
               </tr>
             ))}
             {lignesDetail.length === 0 && (
