@@ -1516,8 +1516,8 @@ details > summary {
 }
 /* Logo personnalisé du magasin. */
 .logo-magasin {
-  height: 34px;
-  max-width: 160px;
+  height: 48px;
+  max-width: 220px;
   object-fit: contain;
   display: block;
 }
@@ -2311,6 +2311,23 @@ html, body { overflow-x: clip; max-width: 100%; }
 
 /* Modale de saisie (prompt/alert intégrés) — un peu plus étroite que la fiche client. */
 .modale-invite { max-width: 460px; }
+
+/* En-tête : marque du magasin (logo + nom), marque blanche. */
+.entete-marque { display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
+.entete-nom-magasin {
+  font-weight: 700; font-size: 1.2rem; letter-spacing: -0.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Historique employé : chromes du jour sous chaque clôture. */
+.histo-chromes-ligne td { padding-top: 0; border-bottom: 1px solid var(--bordure); }
+.histo-chromes-jour { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0 0 0.55rem; }
+.histo-chromes-label { color: var(--texte-doux); font-size: 0.8rem; margin-right: 0.15rem; }
+.chip-chrome {
+  display: inline-flex; gap: 0.3rem; align-items: baseline;
+  background: var(--fond-input); border: 1px solid var(--bordure);
+  border-radius: 999px; padding: 0.2rem 0.6rem; font-size: 0.82rem;
+}
 
 /* Écran vide avec appel à l'action (ex. Stocks). */
 .etat-vide { display: flex; flex-direction: column; align-items: center; gap: 0.8rem; text-align: center; }

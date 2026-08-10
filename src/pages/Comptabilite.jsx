@@ -23,7 +23,7 @@ const moisCourt = (ym) =>
 // sur un mois, une année, ou une période personnalisée. L'édition des charges
 // et fournisseurs se fait en mode « Mois ».
 export default function Comptabilite() {
-  const { magasinId } = useAuth();
+  const { magasinId, magasinNom } = useAuth();
   const [periode, setPeriode] = useState('mois');
   const [mois, setMois] = useState(premierDuMois());
   const [perso, setPerso] = useState(() => {
@@ -339,7 +339,7 @@ export default function Comptabilite() {
 
   function exporterPDF() {
     telechargerPDF(`comptabilite-${debut}_${fin}.pdf`, {
-      titre: 'Kanabiz — Comptabilité',
+      titre: magasinNom ? `${magasinNom} — Comptabilité` : 'Comptabilité',
       sousTitre: `${formatDateFr(debut)} → ${formatDateFr(fin)}`,
       resume: [
         ['CA', formatEuros(caPeriode)],

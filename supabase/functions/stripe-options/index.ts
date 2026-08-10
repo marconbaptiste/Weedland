@@ -70,6 +70,7 @@ Deno.serve(async (req) => {
     await svc.from("magasins").update({ [conf.col]: !!actif }).eq("id", magasinId);
     return json({ ok: true });
   } catch (e) {
-    return json({ error: String((e as Error)?.message ?? e) }, 500);
+    console.error("stripe-options error:", e);
+    return json({ error: "Erreur interne." }, 500);
   }
 });

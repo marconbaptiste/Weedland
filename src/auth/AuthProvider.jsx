@@ -89,7 +89,7 @@ export function AuthProvider({ children }) {
     }
     const { data } = await supabase
       .from('magasins')
-      .select('abonnement, essai_fin, logo, gratuit, stripe_subscription_id, opt_planning, opt_stock, opt_fidelite')
+      .select('nom, abonnement, essai_fin, logo, gratuit, stripe_subscription_id, opt_planning, opt_stock, opt_fidelite')
       .eq('id', profil.magasin_id)
       .single();
     setMagasinInfo(data ?? null);
@@ -142,6 +142,7 @@ export function AuthProvider({ children }) {
     magasins,
     magasinId: profil?.magasin_id ?? null,
     magasinInfo,
+    magasinNom: magasinInfo?.nom ?? null,
     magasinLogo,
     setMagasinLogo,
     rechargerMagasin,

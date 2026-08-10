@@ -160,7 +160,8 @@ Deno.serve(async (req) => {
       },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e?.message ?? e) }), {
+    console.error("carte-wallet error:", e);
+    return new Response(JSON.stringify({ error: "Erreur interne." }), {
       status: 500,
       headers: { ...cors, "Content-Type": "application/json" },
     });

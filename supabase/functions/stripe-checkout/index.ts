@@ -63,6 +63,7 @@ Deno.serve(async (req) => {
     });
     return json({ url: session.url });
   } catch (e) {
-    return json({ error: String((e as Error)?.message ?? e) }, 500);
+    console.error("stripe-checkout error:", e);
+    return json({ error: "Erreur interne." }, 500);
   }
 });

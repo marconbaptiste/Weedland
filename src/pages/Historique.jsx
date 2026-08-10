@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { Fragment, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatNombre, formatDateFr } from '../lib/format';
@@ -14,14 +14,36 @@ export default function Historique() {
 
   // ---------- Vue employé (personnelle) ----------
   const [perso, setPerso] = useState([]);
+  const [chromesPerso, setChromesPerso] = useState({}); // date -> {avances, remboursements, autres}
   useEffect(() => {
-    if (estAdmin) return;
-    supabase
-      .from('v_interessement_employe')
-      .select('caisse_id, date, est_proprietaire, ca_jour, encaissements, ecart, heures_travaillees, interessement')
-      .eq('employe_id', utilisateur.id)
-      .order('date', { ascending: false })
-      .then(({ data }) => setPerso(data ?? []));
+    if (estAdmin) return undefined;
+    let annule = false;
+    (async () => {
+      const [{ data: p }, { data: chr }] = await Promise.all([
+        supabase
+          .from('v_interessement_employe')
+          .select('caisse_id, date, est_proprietaire, ca_jour, encaissements, ecart, heures_travaillees, interessement')
+          .eq('employe_id', utilisateur.id)
+          .order('date', { ascending: false }),
+        supabase
+          .from('chromes')
+          .select('date, type, montant, clients(surnom)')
+          .eq('employe_id', utilisateur.id),
+      ]);
+      if (annule) return;
+      setPerso(p ?? []);
+      const map = {};
+      (chr ?? []).forEach((c) => {
+        if (!map[c.date]) map[c.date] = { avances: [], remboursements: [], autres: [] };
+        const cible =
+          c.type === 'avance' ? map[c.date].avances : c.type === 'autre' ? map[c.date].autres : map[c.date].remboursements;
+        cible.push({ surnom: c.clients?.surnom ?? 'client', montant: c.montant });
+      });
+      setChromesPerso(map);
+    })();
+    return () => {
+      annule = true;
+    };
   }, [estAdmin, utilisateur.id]);
 
   // ---------- Vue admin (générale) ----------
@@ -87,18 +109,48 @@ export default function Historique() {
               </tr>
             </thead>
             <tbody>
-              {perso.map((l) => (
-                <tr key={l.caisse_id}>
-                  <td>
-                    {formatDateFr(l.date)}
-                    {!l.est_proprietaire && <span className="badge badge-solde tag-partage">partagée</span>}
-                  </td>
-                  <td className="droite">{l.est_proprietaire ? formatEuros(l.ca_jour) : '—'}</td>
-                  <td className="droite">{l.est_proprietaire ? formatEuros(l.encaissements) : '—'}</td>
-                  <td className="droite">{formatNombre(l.heures_travaillees)}</td>
-                  <td className="droite">{formatEuros(l.interessement)}</td>
-                </tr>
-              ))}
+              {perso.map((l) => {
+                const d = chromesPerso[l.date];
+                const aChromes = d && (d.avances.length || d.remboursements.length || d.autres.length);
+                return (
+                  <Fragment key={l.caisse_id}>
+                    <tr>
+                      <td>
+                        {formatDateFr(l.date)}
+                        {!l.est_proprietaire && <span className="badge badge-solde tag-partage">partagée</span>}
+                      </td>
+                      <td className="droite">{l.est_proprietaire ? formatEuros(l.ca_jour) : '—'}</td>
+                      <td className="droite">{l.est_proprietaire ? formatEuros(l.encaissements) : '—'}</td>
+                      <td className="droite">{formatNombre(l.heures_travaillees)}</td>
+                      <td className="droite">{formatEuros(l.interessement)}</td>
+                    </tr>
+                    {aChromes && (
+                      <tr className="histo-chromes-ligne">
+                        <td colSpan={5}>
+                          <div className="histo-chromes-jour">
+                            <span className="histo-chromes-label">Chromes du jour :</span>
+                            {d.avances.map((a, i) => (
+                              <span key={`a${i}`} className="chip-chrome">
+                                {a.surnom} <span className="dette">+{formatEuros(a.montant)}</span>
+                              </span>
+                            ))}
+                            {d.remboursements.map((r, i) => (
+                              <span key={`r${i}`} className="chip-chrome">
+                                {r.surnom} <span className="solde-ok">−{formatEuros(r.montant)}</span>
+                              </span>
+                            ))}
+                            {d.autres.map((v, i) => (
+                              <span key={`o${i}`} className="chip-chrome">
+                                {v.surnom} <span>{formatEuros(v.montant)}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
               {perso.length === 0 && (
                 <tr><td colSpan={5} className="vide">Aucune clôture enregistrée.</td></tr>
               )}
