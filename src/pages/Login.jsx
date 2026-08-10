@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import Logo from '../components/Logo';
 
@@ -11,6 +12,31 @@ export default function Login() {
   const [erreur, setErreur] = useState('');
   const [envoi, setEnvoi] = useState(false);
   const [aide, setAide] = useState(false); // encart « mot de passe oublié »
+  const [resetEnvoi, setResetEnvoi] = useState(false);
+  const [infoReset, setInfoReset] = useState('');
+
+  async function envoyerReset() {
+    setErreur('');
+    setInfoReset('');
+    const mail = email.trim().toLowerCase();
+    if (!mail) {
+      setErreur('Saisis d’abord ton email ci-dessus, puis clique sur « Recevoir un lien ».');
+      return;
+    }
+    setResetEnvoi(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(mail, {
+      redirectTo: `${window.location.origin}/nouveau-mot-de-passe`,
+    });
+    setResetEnvoi(false);
+    if (error) {
+      console.error('resetPasswordForEmail:', error);
+      setErreur('Envoi impossible pour le moment. Réessaie dans un instant.');
+      return;
+    }
+    setInfoReset(
+      '📧 Si un compte existe pour cet email, un lien de réinitialisation vient d’être envoyé. Pense à vérifier tes spams.',
+    );
+  }
 
   async function soumettre(e) {
     e.preventDefault();
@@ -70,11 +96,24 @@ export default function Login() {
           Mot de passe oublié ?
         </button>
         {aide && (
-          <p className="statut encart-aide">
-            Demande à ton responsable de le réinitialiser (menu <strong>Comptes → Gérer →
-            Réinit. mot de passe</strong>). Si tu es le patron, écris à l’exploitant depuis
-            <strong> Gestion → Faire une doléance</strong> (ou par email).
-          </p>
+          <div className="encart-aide">
+            <p className="statut" style={{ marginTop: 0 }}>
+              Saisis ton email en haut, puis reçois un lien pour choisir un nouveau mot de passe :
+            </p>
+            <button
+              type="button"
+              className="btn"
+              onClick={envoyerReset}
+              disabled={resetEnvoi}
+            >
+              {resetEnvoi ? 'Envoi…' : '📧 Recevoir un lien par email'}
+            </button>
+            {infoReset && <p className="statut">{infoReset}</p>}
+            <p className="statut" style={{ marginBottom: 0 }}>
+              Tu peux aussi demander à ton responsable de le réinitialiser (menu{' '}
+              <strong>Comptes → Gérer → Réinit. mot de passe</strong>).
+            </p>
+          </div>
         )}
 
         <div className="separateur"><span>ou</span></div>

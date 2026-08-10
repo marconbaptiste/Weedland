@@ -19,6 +19,7 @@ import Stocks from './pages/Stocks';
 import Gestion from './pages/Gestion';
 import AProposMagasin from './pages/AProposMagasin';
 import Configuration from './pages/Configuration';
+import NouveauMotDePasse from './pages/NouveauMotDePasse';
 import Paiements from './pages/Paiements';
 import Comptes from './pages/Comptes';
 import Promotions from './pages/Promotions';
@@ -48,6 +49,7 @@ export default function App() {
       <Route path="/cgu" element={<CGU />} />
       <Route path="/confidentialite" element={<Confidentialite />} />
       <Route path="/connexion" element={<Login />} />
+      <Route path="/nouveau-mot-de-passe" element={<NouveauMotDePasse />} />
       <Route path="/inscription" element={<Inscription />} />
       <Route path="/carte/:clientId" element={<Carte />} />
       <Route path="/rejoindre/:magasinId" element={<RejoindreCarte />} />
