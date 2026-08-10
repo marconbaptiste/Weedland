@@ -948,6 +948,47 @@ hr {
   justify-content: flex-end;
   margin-top: 0.6rem;
 }
+/* Horaires hebdomadaires (magasin + employés) : une ligne par jour. */
+.horaires-grille {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.7rem 0;
+}
+.horaire-jour {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--bordure);
+}
+.horaire-jour:last-child {
+  border-bottom: none;
+}
+.horaire-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+.horaire-check input {
+  width: auto;
+  margin: 0;
+}
+.horaire-plage {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.horaire-plage input[type='time'] {
+  width: auto;
+}
+.horaire-ferme {
+  color: var(--texte-doux);
+  font-size: 0.9rem;
+}
 /* Liste de courses (to-do d'achats, page Stocks) */
 .courses-tete {
   display: flex;
