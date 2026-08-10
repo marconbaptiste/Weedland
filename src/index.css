@@ -1793,7 +1793,9 @@ details > summary {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 1rem;
+  /* safe-area (encoche / barre d'état iOS en plein écran) : la modale ne doit
+     pas passer sous l'heure/la batterie en haut ni la barre d'accueil en bas. */
+  padding: calc(1rem + env(safe-area-inset-top)) 1rem calc(1rem + env(safe-area-inset-bottom));
   overflow-y: auto;
 }
 .aide-modale {
