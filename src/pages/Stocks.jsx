@@ -308,17 +308,6 @@ export default function Stocks() {
           value={recherche}
           onChange={(e) => setRecherche(e.target.value)}
         />
-        <div className="tri-ligne">
-          <span className="tri-label">Classer&nbsp;:</span>
-          <div className="bascule">
-            <button type="button" className={tri === 'nom' ? 'actif' : ''} onClick={() => setTri('nom')}>
-              Par nom
-            </button>
-            <button type="button" className={tri === 'quantite' ? 'actif' : ''} onClick={() => setTri('quantite')}>
-              Par quantité
-            </button>
-          </div>
-        </div>
         {creationOuverte ? (
           <form className="form-chrome" onSubmit={creer}>
             <ChampCategorie
@@ -364,22 +353,45 @@ export default function Stocks() {
             </div>
           </form>
         ) : (
-          <div className="form-inline">
-            <button
-              className="btn"
-              onClick={() => {
-                setForm(FORM_VIDE);
-                setCreationOuverte(true);
-              }}
-            >
-              + Ajouter un produit
-            </button>
-            <button type="button" className="btn" onClick={() => setImportOuvert(true)}>
-              📄 Importer depuis une facture
-            </button>
-            <button type="button" className="btn" onClick={() => setHistoriqueOuvert(true)}>
-              📋 Historique des mouvements
-            </button>
+          <div className="stocks-outils">
+            <div className="bascule bascule-mini">
+              <button type="button" className={tri === 'nom' ? 'actif' : ''} onClick={() => setTri('nom')}>
+                Par nom
+              </button>
+              <button type="button" className={tri === 'quantite' ? 'actif' : ''} onClick={() => setTri('quantite')}>
+                Par quantité
+              </button>
+            </div>
+            <div className="stocks-actions">
+              <button
+                type="button"
+                className="btn btn-primary btn-compact"
+                onClick={() => {
+                  setForm(FORM_VIDE);
+                  setCreationOuverte(true);
+                }}
+              >
+                + Produit
+              </button>
+              <button
+                type="button"
+                className="btn btn-compact btn-icone"
+                title="Importer depuis une facture"
+                aria-label="Importer depuis une facture"
+                onClick={() => setImportOuvert(true)}
+              >
+                📄
+              </button>
+              <button
+                type="button"
+                className="btn btn-compact btn-icone"
+                title="Historique des mouvements"
+                aria-label="Historique des mouvements"
+                onClick={() => setHistoriqueOuvert(true)}
+              >
+                📋
+              </button>
+            </div>
           </div>
         )}
         {statut && <p className="statut">{statut}</p>}

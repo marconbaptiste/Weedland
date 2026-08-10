@@ -917,6 +917,32 @@ hr {
   margin-top: 0.4rem;
   color: #ff9d9d;
 }
+/* Barre d'outils compacte (Stocks) : tri + actions sur une seule rangée. */
+.stocks-outils {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+.bascule-mini {
+  padding: 0.15rem;
+}
+.bascule-mini button {
+  flex: none;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.85rem;
+}
+.stocks-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.btn-compact {
+  padding: 0.45rem 0.8rem;
+  font-size: 0.9rem;
+}
 /* Liste de courses (to-do d'achats, page Stocks) */
 .courses-tete {
   display: flex;
