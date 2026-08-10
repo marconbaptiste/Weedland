@@ -143,9 +143,23 @@ export default function Profil() {
   const remboursementsJour = chromesJour.filter((c) => c.type === 'remboursement');
   const autresJour = chromesJour.filter((c) => c.type === 'autre');
 
+  const configFaite =
+    typeof localStorage !== 'undefined' && localStorage.getItem(`config-terminee:${utilisateur.id}`) === '1';
+
   return (
     <div className="page">
       <h1>Bonjour {prenom} 👋</h1>
+
+      {estAdmin && !configFaite && (
+        <Link to="/configuration" className="card banniere-config">
+          <span className="banniere-config-emoji">🧭</span>
+          <span>
+            <strong>Configurer ton magasin pas à pas</strong>
+            <span className="statut">Infos, équipe, comptabilité, produits — on te guide.</span>
+          </span>
+          <span className="banniere-config-fleche">→</span>
+        </Link>
+      )}
 
       <div className="cartes-kpi">
         <div className="kpi">

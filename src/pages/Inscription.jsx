@@ -63,15 +63,22 @@ export default function Inscription() {
           <h1 className="logo-connexion">Félicitations&nbsp;!</h1>
           <p className="statut">
             Le magasin <strong>{form.nomMagasin.trim()}</strong> est créé. Bienvenue
-            {form.nom.trim() ? `, ${form.nom.trim()}` : ''}&nbsp;! Tu es l’administrateur de ta
-            boutique — tu peux dès maintenant ajouter tes employés, tes clients et tes stocks.
+            {form.nom.trim() ? `, ${form.nom.trim()}` : ''}&nbsp;! On te guide maintenant pas à pas
+            pour tout mettre en place (infos du magasin, équipe, comptabilité, produits).
           </p>
           <button
             className="btn btn-primary"
             type="button"
+            onClick={() => navigate('/configuration', { replace: true })}
+          >
+            🧭 Configurer mon magasin
+          </button>
+          <button
+            className="btn btn-discret"
+            type="button"
             onClick={() => navigate('/', { replace: true })}
           >
-            Accéder à mon magasin
+            Passer, j’explore d’abord
           </button>
         </div>
       </div>
