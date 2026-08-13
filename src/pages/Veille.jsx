@@ -13,6 +13,7 @@ const CATEGORIES = {
   a_suivre: { emoji: '🟡', libelle: 'À suivre', classe: 'veille-suivre' },
   produit: { emoji: '🆕', libelle: 'Nouveau produit / tendance', classe: 'veille-produit' },
   fournisseur: { emoji: '🏭', libelle: 'Fournisseur / appro', classe: 'veille-fournisseur' },
+  opportunite: { emoji: '💡', libelle: 'Opportunité — à ajouter au catalogue', classe: 'veille-opportunite' },
 };
 
 export default function Veille() {
@@ -97,7 +98,11 @@ export default function Veille() {
             <span className="chrome-heure">{formatDateFr(bulletin.created_at)}</span>
           </div>
           {bulletin.magasin_id && (
-            <p className="statut">🎯 Ciblé sur les produits de ta boutique.</p>
+            <p className="statut">
+              🎯 Ciblé sur les produits de ta boutique. Les <strong>💡 Opportunités</strong> sont des
+              suggestions de produits qui ressortent dans l’actu et que tu ne vends pas encore
+              (indicatif, pas une garantie de vente).
+            </p>
           )}
           {bulletin.intro && <p className="veille-intro">{bulletin.intro}</p>}
 
