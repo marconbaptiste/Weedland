@@ -90,7 +90,11 @@ export default function Veille() {
   const [reglOuvert, setReglOuvert] = useState(false); // tiroir réglementation
   const monteRef = useRef(true); // évite les setState après démontage
   const pollRef = useRef(null); // id du timer de surveillance
+  const attenduRef = useRef(undefined); // id du bulletin AVANT génération (undefined = pas de génération en cours)
 
+  // Charge le dernier bulletin. Si une génération est en cours et qu'un bulletin
+  // PLUS RÉCENT est arrivé (id différent de celui d'avant le clic), on l'affiche
+  // et on coupe la roue — que ce soit détecté par le polling OU au retour de veille.
   const charger = useCallback(async () => {
     const { data } = await supabase
       .from('veille')
@@ -101,58 +105,63 @@ export default function Veille() {
     if (!monteRef.current) return null;
     setBulletin(data ?? null);
     setCharge(true);
+    if (attenduRef.current !== undefined && data && data.id !== attenduRef.current) {
+      attenduRef.current = undefined;
+      if (pollRef.current) clearTimeout(pollRef.current);
+      setGen(false);
+      setMsg(`Bulletin mis à jour ✅ (${(data.items ?? []).length} info(s)).`);
+    }
     return data ?? null;
   }, []);
 
   useEffect(() => {
     monteRef.current = true;
     charger();
+    // Au retour de veille / de l'arrière-plan, on recharge : ça récupère le
+    // bulletin même si le polling a été suspendu pendant l'écran éteint.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') charger();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
     return () => {
       monteRef.current = false;
       if (pollRef.current) clearTimeout(pollRef.current);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
     };
   }, [charger]);
 
   // La génération tourne EN TÂCHE DE FOND côté serveur (elle continue même si on
-  // ferme l'app). On surveille l'arrivée d'un bulletin plus récent que celui
-  // affiché avant le clic, puis on l'affiche automatiquement.
+  // ferme l'app). On sonde périodiquement via `charger` (qui applique le nouveau
+  // bulletin dès qu'il apparaît). Le retour de veille déclenche aussi `charger`.
   const surveiller = useCallback(
-    (avantId, essai = 0) => {
-      const MAX = 24; // ~4 min à 10 s
+    (essai = 0) => {
+      const MAX = 30; // ~5 min à 10 s
       pollRef.current = setTimeout(async () => {
         if (!monteRef.current) return;
-        const { data } = await supabase
-          .from('veille')
-          .select(COLS)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (!monteRef.current) return;
-        if (data && data.id !== avantId) {
-          setBulletin(data);
-          setGen(false);
-          setMsg(`Bulletin mis à jour ✅ (${(data.items ?? []).length} info(s)).`);
-          return;
-        }
+        await charger();
+        if (!monteRef.current || attenduRef.current === undefined) return; // terminé
         if (essai >= MAX) {
           setGen(false);
+          attenduRef.current = undefined;
           setMsg(
-            "La recherche prend plus de temps que prévu, ou rien de neuf n'est ressorti. " +
-              'Le bulletin s’affichera ici dès qu’il est prêt — reviens dans un moment ou réessaie.'
+            'La recherche prend plus de temps que prévu. Le bulletin s’affichera ici dès qu’il ' +
+              'est prêt — rouvre l’app dans un moment, ou réessaie.'
           );
           return;
         }
-        surveiller(avantId, essai + 1);
+        surveiller(essai + 1);
       }, 10000);
     },
-    []
+    [charger]
   );
 
   async function genererMaintenant() {
     if (pollRef.current) clearTimeout(pollRef.current);
     setGen(true);
     setMsg('');
-    const avantId = bulletin?.id ?? null;
+    attenduRef.current = bulletin?.id ?? null; // on attend un bulletin d'id différent
     const { data, error } = await supabase.functions.invoke('veille-cbd', { body: {} });
     // Erreur immédiate (non autorisé, clé IA manquante…) → on s'arrête là.
     if (error || data?.error) {
@@ -163,6 +172,7 @@ export default function Veille() {
       } catch {
         /* message générique */
       }
+      attenduRef.current = undefined;
       setGen(false);
       setMsg(m);
       return;
@@ -170,9 +180,9 @@ export default function Veille() {
     // La recherche est lancée côté serveur : on surveille son résultat.
     setMsg(
       '🔎 Recherche en cours… Ça peut prendre 1 à 2 minutes. Tu peux fermer l’app : ' +
-        'le bulletin s’affichera ici dès qu’il est prêt.'
+        'le bulletin s’affichera ici à ta prochaine ouverture, dès qu’il est prêt.'
     );
-    surveiller(avantId);
+    surveiller(0);
   }
 
   const items = bulletin?.items ?? [];
