@@ -29,7 +29,7 @@ function sections(estSuperadmin, options) {
       titre: 'Boutique & outils',
       outils: [
         { to: '/configuration', emoji: '🧭', nom: 'Assistant de configuration', desc: 'Mettre en place le magasin pas à pas.' },
-        { to: '/veille', emoji: '📰', nom: 'Veille réglementaire', desc: 'Nouveautés légales CBD — pour garder une longueur d’avance.' },
+        { to: '/veille', emoji: '📰', nom: 'News', desc: 'Nouveautés légales, produits & fournisseurs CBD — une longueur d’avance.' },
         { to: '/a-propos-magasin', emoji: '🏪', nom: 'À propos du magasin', desc: 'Logo, adresse, téléphone et horaires — sur la carte de fidélité.' },
         ...(options.fidelite
           ? [{ to: '/promotions', emoji: '🎉', nom: 'Promotions', desc: 'Offres affichées sur les cartes de fidélité.' }]

@@ -73,7 +73,7 @@ export default function Veille() {
   return (
     <div className="page">
       <div className="entete-client">
-        <h1>📰 Veille réglementaire</h1>
+        <h1>📰 News</h1>
         {estAdmin && (
           <button type="button" className="btn btn-compact" onClick={genererMaintenant} disabled={gen}>
             {gen ? 'Recherche…' : '🔄 Générer maintenant'}

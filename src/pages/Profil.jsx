@@ -277,18 +277,18 @@ export default function Profil() {
         )}
       </div>
 
+      {options.planning && <CalendrierLecture />}
+
       {veille && (
         <Link to="/veille" className="card banniere-config">
           <span className="banniere-config-emoji">📰</span>
           <span>
-            <strong>Veille réglementaire CBD</strong>
-            <span className="statut">{veille.intro || 'Nouveautés légales — reste à jour en un coup d’œil.'}</span>
+            <strong>News CBD</strong>
+            <span className="statut">{veille.intro || 'Nouveautés légales, produits & fournisseurs — en un coup d’œil.'}</span>
           </span>
           <span className="banniere-config-fleche">→</span>
         </Link>
       )}
-
-      {options.planning && <CalendrierLecture />}
 
       <GuideDemarrage />
 
