@@ -1167,6 +1167,55 @@ hr {
   color: var(--accent);
   font-size: 1.4rem;
 }
+/* Veille réglementaire */
+.veille-avertissement {
+  background: rgba(255, 196, 84, 0.12);
+  border: 1px solid rgba(255, 196, 84, 0.35);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9rem;
+  color: var(--texte);
+}
+.veille-intro {
+  margin: 0.2rem 0 0.8rem;
+}
+.veille-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.veille-item {
+  border: 1px solid var(--bordure);
+  border-left: 4px solid var(--bordure-forte);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  background: var(--fond-input);
+}
+.veille-item.veille-interdit {
+  border-left-color: #ff7a7a;
+}
+.veille-item.veille-autorise {
+  border-left-color: var(--accent);
+}
+.veille-item.veille-suivre {
+  border-left-color: #ffc454;
+}
+.veille-cat {
+  font-size: 0.8rem;
+  color: var(--texte-doux);
+  font-weight: 600;
+}
+.veille-texte {
+  margin: 0.25rem 0 0.35rem;
+}
+.veille-source {
+  font-size: 0.85rem;
+  color: var(--accent);
+  text-decoration: none;
+}
 /* Liste de courses (to-do d'achats, page Stocks) */
 .courses-tete {
   display: flex;

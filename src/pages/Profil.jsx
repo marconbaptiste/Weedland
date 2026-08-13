@@ -22,6 +22,7 @@ export default function Profil() {
   const [statsPerso, setStatsPerso] = useState({ intMois: 0, intAnnee: 0 });
   const [chromesJour, setChromesJour] = useState([]); // chromes du jour du magasin (tout le monde)
   const [outil, setOutil] = useState(null); // 'monnaie' | 'scanner' | 'courses' | null
+  const [veille, setVeille] = useState(null); // dernier bulletin de veille réglementaire
   const [nbCourses, setNbCourses] = useState(0);
   const [coursesNouveau, setCoursesNouveau] = useState(false);
   const vusRef = useRef(null); // nb d'articles « déjà vus » (référence notif)
@@ -87,6 +88,17 @@ export default function Profil() {
       document.removeEventListener('visibilitychange', recharger);
       window.removeEventListener('focus', recharger);
     };
+  }, []);
+
+  // Dernier bulletin de veille réglementaire (aperçu sur l'accueil).
+  useEffect(() => {
+    supabase
+      .from('veille')
+      .select('titre, intro, created_at')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => setVeille(data ?? null));
   }, []);
 
   // Compteur de la liste de courses + notification quand un collègue ajoute.
@@ -263,6 +275,17 @@ export default function Profil() {
           </Link>
         )}
       </div>
+
+      {veille && (
+        <Link to="/veille" className="card banniere-config">
+          <span className="banniere-config-emoji">📰</span>
+          <span>
+            <strong>Veille réglementaire CBD</strong>
+            <span className="statut">{veille.intro || 'Nouveautés légales — reste à jour en un coup d’œil.'}</span>
+          </span>
+          <span className="banniere-config-fleche">→</span>
+        </Link>
+      )}
 
       {options.planning && <CalendrierLecture />}
 
