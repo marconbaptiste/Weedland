@@ -104,7 +104,8 @@ Deno.serve(async (req) => {
       if (cats.length || noms.length) {
         contexteStock =
           "Cette boutique vend notamment : " + [...cats, ...noms].join(", ") +
-          ". Priorise en particulier les infos utiles a ces produits (nouveautes, reglementation, fournisseurs), sans ignorer la legalite generale. ";
+          ". Priorise les infos utiles a ces produits (nouveautes, reglementation, fournisseurs), sans ignorer la legalite generale. " +
+          "IMPORTANT : si des PRODUITS ou TENDANCES qui marchent ressortent des sources et NE figurent PAS deja dans ce que vend la boutique, propose-les en categorie 'opportunite' (suggestion d'achat a envisager), en te basant uniquement sur les sources. ";
         for (const c of cats.slice(0, 3)) feedsSup.push({ url: gnews(c + " CBD nouveaute OR tendance OR reglementation"), source: "" });
       }
     }
@@ -150,7 +151,7 @@ Deno.serve(async (req) => {
       "(3) FOURNISSEURS / GROSSISTES / SALONS PROFESSIONNELS et approvisionnement. " +
       "Sois GENEREUX : garde tout ce qui touche de pres ou de loin au secteur CBD/chanvre/cannabis et peut interesser un gerant. Ne jette que le vraiment hors-sujet (faits divers sans lien, pub pure). " +
       "Reponds en JSON STRICT, sans texte autour : " +
-      '{"intro":"une phrase de synthese en francais","items":[{"categorie":"interdit|autorise|a_suivre|produit|fournisseur","texte":"phrase claire et factuelle en francais","source_nom":"nom du media","source_url":"lien"}]}. ' +
+      '{"intro":"une phrase de synthese en francais","items":[{"categorie":"interdit|autorise|a_suivre|produit|fournisseur|opportunite","texte":"phrase claire et factuelle en francais","source_nom":"nom du media","source_url":"lien"}]}. ' +
       "Vise 6 a 10 items pertinents si la matiere le permet (max 10). N'INVENTE RIEN : n'ajoute que ce qui ressort d'un titre/source. " +
       "Pour la categorie fournisseur : cite seulement ceux mentionnes dans les sources, NE CLASSE PAS et NE RECOMMANDE PAS de toi-meme. Si rien de pertinent, renvoie items vide. " +
       "Titres :" + NL + liste;
@@ -173,7 +174,7 @@ Deno.serve(async (req) => {
     const parsed = extraireJson(texte);
     if (!parsed || !Array.isArray(parsed.items)) return json({ error: "Resume illisible." }, 200);
 
-    const cats = new Set(["interdit", "autorise", "a_suivre", "produit", "fournisseur"]);
+    const cats = new Set(["interdit", "autorise", "a_suivre", "produit", "fournisseur", "opportunite"]);
     const items = parsed.items
       .filter((x: Record<string, unknown>) => x && typeof x.texte === "string")
       .slice(0, 10)

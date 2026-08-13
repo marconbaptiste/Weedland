@@ -1209,6 +1209,10 @@ hr {
 .veille-item.veille-fournisseur {
   border-left-color: #c58cff;
 }
+.veille-item.veille-opportunite {
+  border-left-color: #4fd08a;
+  background: rgba(79, 208, 138, 0.08);
+}
 .veille-cat {
   font-size: 0.8rem;
   color: var(--texte-doux);
