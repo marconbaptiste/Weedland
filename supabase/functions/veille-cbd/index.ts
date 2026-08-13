@@ -110,6 +110,13 @@ Deno.serve(async (req) => {
     if (!apiKey) return json({ error: "IA non configuree (ANTHROPIC_API_KEY manquante)." }, 503);
 
     // Personnalisation : on lit le stock du magasin pour cibler la recherche.
+    // CLOISONNEMENT (regle absolue) : on ne lit QUE le stock du magasin appelant
+    // (magasinId = profil verifie cote serveur, jamais fourni par le client), et
+    // UNIQUEMENT `stocks` (noms/categories). On ne lit JAMAIS `fournisseurs` ni
+    // aucune donnee sensible/negociee : les fournisseurs, prix et deals prives d'un
+    // magasin ne doivent jamais atteindre l'IA ni fuiter vers un autre magasin.
+    // Le bulletin genere est ensuite stocke avec ce meme magasin_id (RLS = seul ce
+    // magasin le lira). Ne JAMAIS croiser le contexte de plusieurs magasins ici.
     let contexteStock = "";
     const feedsSup: { url: string; source: string }[] = [];
     if (magasinId) {
@@ -176,6 +183,7 @@ Deno.serve(async (req) => {
       "(C) FOURNISSEURS / GROSSISTES / MARQUES / SALONS PROFESSIONNELS et approvisionnement (nouveaux acteurs, nouvelles gammes annoncees). " +
       "Croise avec ces titres RSS recents (date entre crochets — titre — source — lien) comme point de depart, SANS t'y limiter :" + NL + liste + NL +
       "Regles STRICTES : " +
+      "0) Ce bulletin est PRIVE et propre a CETTE boutique. Appuie-toi UNIQUEMENT sur des sources PUBLIQUES (web, presse, RSS). N'invente aucun 'deal', tarif ou accord fournisseur, et ne suppose rien sur les fournisseurs ou secrets commerciaux d'autres boutiques : tu n'as aucune information privee, seulement le web public. " +
       "1) N'INVENTE RIEN. Chaque item doit venir d'une source web reelle que tu as consultee ; recopie fidelement l'URL (source_url) et le nom du media (source_nom), et la date de publication si tu la vois (sinon laisse date vide). " +
       "2) Privilegie les infos des 60 derniers jours ; ecarte le vieux et le hors-sujet. " +
       "3) Pour la categorie fournisseur : cite seulement ceux mentionnes dans une source, NE CLASSE PAS et NE RECOMMANDE PAS de toi-meme un 'meilleur'. " +
