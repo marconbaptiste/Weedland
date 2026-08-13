@@ -1,7 +1,11 @@
 // Edge Function — veille-cbd
-// Veille reglementaire CBD automatique : flux RSS (Newsweed + Google Actualites)
-// -> tri/resume par l'IA Claude -> bulletin insere dans la table `veille`
-// (partagee par tous les magasins). Bandeau « informations indicatives » cote app.
+// News CBD automatique. Deux sources combinees :
+//   1) flux RSS (Newsweed + Google Actualites) -> titres recents dates (contexte)
+//   2) RECHERCHE WEB active par l'IA Claude (outil serveur web_search_20260209)
+//      -> l'IA va chercher elle-meme les nouvelles molecules cannabinoides, les
+//         nouveaux produits derives vendables en boutique et les fournisseurs.
+// L'IA trie/resume le tout -> bulletin insere dans la table `veille`.
+// Bandeau « informations indicatives » cote app (sources citees sous chaque point).
 //
 // Auth : en-tete `x-cron-secret` (tache planifiee) OU JWT admin/superadmin.
 // Secrets : ANTHROPIC_API_KEY (obligatoire), VEILLE_CRON_SECRET (cron).
@@ -116,12 +120,12 @@ Deno.serve(async (req) => {
         contexteStock =
           "Cette boutique vend notamment : " + [...cats, ...noms].join(", ") +
           ". Priorise les infos utiles a ces produits (nouveautes, reglementation, fournisseurs), sans ignorer la legalite generale. " +
-          "IMPORTANT : si des PRODUITS ou TENDANCES qui marchent ressortent des sources et NE figurent PAS deja dans ce que vend la boutique, propose-les en categorie 'opportunite' (suggestion d'achat a envisager), en te basant uniquement sur les sources. ";
+          "IMPORTANT : si des MOLECULES, PRODUITS ou TENDANCES qui marchent ressortent de tes recherches et NE figurent PAS deja dans ce que vend la boutique, propose-les en categorie 'opportunite' (suggestion d'achat a envisager), en te basant uniquement sur des sources reelles. ";
         for (const c of cats.slice(0, 3)) feedsSup.push({ url: gnews(c + " CBD nouveaute OR tendance OR reglementation"), source: "" });
       }
     }
 
-    // 1) Collecte RSS
+    // 1) Collecte RSS (contexte date ; peut etre vide, la recherche web prend le relais)
     const bruts: Article[] = [];
     const diag: string[] = [];
     for (const feed of [...FEEDS, ...feedsSup]) {
@@ -148,43 +152,69 @@ Deno.serve(async (req) => {
       vus.add(k);
       return true;
     });
-    const top = uniques.slice(0, 55);
-    if (top.length === 0) return json({ error: "Aucune actualite recuperee (" + diag.join(", ") + ")." }, 200);
+    const top = uniques.slice(0, 40);
+    const liste = top.length
+      ? top
+          .map((t, i) => (i + 1) + ". [" + (t.date || "date inconnue") + "] " + t.titre + " — " + t.source + " — " + t.lien)
+          .join(NL)
+      : "(aucun titre RSS recupere ce coup-ci — appuie-toi sur tes recherches web)";
 
-    // 2) Resume par l'IA (la date est indiquee entre [ ] pour chaque titre)
-    const liste = top
-      .map((t, i) => (i + 1) + ". [" + (t.date || "date inconnue") + "] " + t.titre + " — " + t.source + " — " + t.lien)
-      .join(NL);
+    const aujourdhui = new Date().toISOString().slice(0, 10);
+
+    // 2) L'IA fait une VRAIE recherche web + resume. Outil serveur web_search.
+    const molecules =
+      "HHC, HHCP, HHCPO, HHCH, THCP, THCPO, THCJD, THCH, THCB, THCV, THCA, H4CBD, H2CBD, " +
+      "CBN, CBG, CBC, CBDV, CBDP, 10-OH-HHC, delta-8 THC, delta-10 THC, delta-6a10a, CBD9, CBDA";
     const prompt =
-      "Tu fais une veille pour des GERANTS de boutiques de CBD en France, pour qu'ils aient une longueur d'avance. " +
+      "Tu es analyste de veille pour des GERANTS de boutiques de CBD en France. Objectif : leur donner une longueur d'avance concrete. " +
+      "Nous sommes le " + aujourdhui + ". " +
       contexteStock +
-      "Voici des titres d'actualites recentes, chacun precede de sa DATE entre crochets (date — titre — source — lien). " +
-      "Retiens tout ce qui aide concretement une boutique de CBD : (1) LEGALITE / REGLEMENTATION du CBD, chanvre, THC et cannabinoides de synthese (HHC, THCP, H4CBD, CBN, etc.) en France/Europe ; " +
-      "(2) NOUVEAUX PRODUITS et TENDANCES vendables en boutique CBD (fleurs, resines, huiles, vapes/puffs, infusions, boissons, cosmetiques, comestibles, accessoires, champignons/adaptogenes, etc.) ; " +
-      "(3) FOURNISSEURS / GROSSISTES / SALONS PROFESSIONNELS et approvisionnement. " +
-      "Sois GENEREUX : garde tout ce qui touche de pres ou de loin au secteur CBD/chanvre/cannabis et peut interesser un gerant. Ne jette que le vraiment hors-sujet (faits divers sans lien, pub pure). " +
-      "Recopie fidelement le lien (source_url) et la date de l'article choisi. " +
-      "Reponds en JSON STRICT, sans texte autour : " +
-      '{"intro":"une phrase de synthese en francais","items":[{"categorie":"interdit|autorise|a_suivre|produit|fournisseur|opportunite","texte":"phrase claire et factuelle en francais","date":"AAAA-MM-JJ","source_nom":"nom du media","source_url":"lien"}]}. ' +
-      "Vise 6 a 10 items pertinents si la matiere le permet (max 10). N'INVENTE RIEN : n'ajoute que ce qui ressort d'un titre/source. " +
-      "Pour la categorie fournisseur : cite seulement ceux mentionnes dans les sources, NE CLASSE PAS et NE RECOMMANDE PAS de toi-meme. Si rien de pertinent, renvoie items vide. " +
-      "Titres :" + NL + liste;
+      "FAIS DE VRAIES RECHERCHES WEB (outil web_search) pour trouver l'actualite la plus RECENTE et PRECISE sur le secteur cannabis/CBD/chanvre, en francais ET en anglais. " +
+      "Cherche activement, en plusieurs requetes ciblees, ces trois axes : " +
+      "(A) NOUVELLES MOLECULES / CANNABINOIDES (naturels, semi-synthetiques, de synthese) qui sortent ou montent — par ex. " + molecules + " ; leur statut legal en France/UE, ce qui devient interdit ou reste autorise. " +
+      "(B) NOUVEAUX PRODUITS DERIVES vendables en boutique (fleurs, resines, huiles, vapes/puffs, e-liquides, infusions, boissons, gummies/comestibles, cosmetiques, champignons/adaptogenes, accessoires) et les TENDANCES qui marchent. " +
+      "(C) FOURNISSEURS / GROSSISTES / MARQUES / SALONS PROFESSIONNELS et approvisionnement (nouveaux acteurs, nouvelles gammes annoncees). " +
+      "Croise avec ces titres RSS recents (date entre crochets — titre — source — lien) comme point de depart, SANS t'y limiter :" + NL + liste + NL +
+      "Regles STRICTES : " +
+      "1) N'INVENTE RIEN. Chaque item doit venir d'une source web reelle que tu as consultee ; recopie fidelement l'URL (source_url) et le nom du media (source_nom), et la date de publication si tu la vois (sinon laisse date vide). " +
+      "2) Privilegie les infos des 60 derniers jours ; ecarte le vieux et le hors-sujet. " +
+      "3) Pour la categorie fournisseur : cite seulement ceux mentionnes dans une source, NE CLASSE PAS et NE RECOMMANDE PAS de toi-meme un 'meilleur'. " +
+      "4) Sois precis et factuel (nom de molecule, nom de produit, nom du texte reglementaire, nom du fournisseur). " +
+      "Rends UNIQUEMENT un JSON strict, sans aucun texte autour, de la forme : " +
+      '{"intro":"une a deux phrases de synthese en francais","items":[{"categorie":"interdit|autorise|a_suivre|produit|fournisseur|opportunite","texte":"phrase claire et factuelle en francais","date":"AAAA-MM-JJ","source_nom":"nom du media","source_url":"lien"}]}. ' +
+      "Vise 8 a 12 items pertinents et varies (couvre les 3 axes A/B/C si la matiere le permet ; max 12). Si vraiment rien, renvoie items vide.";
 
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 2200,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-    if (!resp.ok) {
-      console.error("Anthropic", resp.status, await resp.text());
-      return json({ error: "Resume IA indisponible." }, 502);
+    const tools = [{ type: "web_search_20260209", name: "web_search", max_uses: 8 }];
+    const messages: { role: string; content: unknown }[] = [{ role: "user", content: prompt }];
+    let data: Record<string, unknown> | null = null;
+    let restarts = 0;
+    while (true) {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-5",
+          max_tokens: 4000,
+          tools,
+          messages,
+        }),
+      });
+      if (!resp.ok) {
+        console.error("Anthropic", resp.status, await resp.text());
+        return json({ error: "Recherche IA indisponible." }, 502);
+      }
+      data = await resp.json();
+      // Boucle serveur d'outils : si l'API met en pause (10 iterations), on relance.
+      if (data?.stop_reason === "pause_turn" && restarts < 4) {
+        messages.push({ role: "assistant", content: data.content });
+        restarts++;
+        continue;
+      }
+      break;
     }
-    const data = await resp.json();
-    const texte = data?.content?.[0]?.text ?? "";
+
+    const blocs = Array.isArray(data?.content) ? (data.content as { type: string; text?: string }[]) : [];
+    const texte = blocs.filter((b) => b.type === "text" && typeof b.text === "string").map((b) => b.text).join(NL);
     const parsed = extraireJson(texte);
     if (!parsed || !Array.isArray(parsed.items)) return json({ error: "Resume illisible." }, 200);
 
@@ -193,9 +223,12 @@ Deno.serve(async (req) => {
     const dateParLien = new Map(top.map((t) => [t.lien, t.date]));
     const items = parsed.items
       .filter((x: Record<string, unknown>) => x && typeof x.texte === "string")
-      .slice(0, 10)
+      .slice(0, 12)
       .map((x: Record<string, unknown>) => {
-        const url = String(x.source_url ?? "").slice(0, 500);
+        // Securite : source_url vient de pages web (contenu non fiable via web_search).
+        // On n'accepte QUE http(s) pour fermer un vecteur XSS (javascript:, data:, ...).
+        const brut = String(x.source_url ?? "").slice(0, 500).trim();
+        const url = /^https?:\/\//i.test(brut) ? brut : "";
         const dateIa = typeof x.date === "string" ? x.date.slice(0, 20) : "";
         return {
           categorie: cats.has(String(x.categorie)) ? x.categorie : "a_suivre",
@@ -208,7 +241,7 @@ Deno.serve(async (req) => {
 
     // 3) Enregistrement
     const { error } = await svc.from("veille").insert({
-      titre: (magasinId ? "Veille ciblée — " : "Veille CBD — ") + new Date().toISOString().slice(0, 10),
+      titre: (magasinId ? "News ciblée — " : "News CBD — ") + aujourdhui,
       intro: typeof parsed.intro === "string" ? parsed.intro.slice(0, 400) : null,
       items,
       source: parCron ? "auto" : "manuel",
