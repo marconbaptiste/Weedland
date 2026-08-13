@@ -90,21 +90,48 @@ function SectionTiroir({ titre, synthese, items, ouvert, onToggle, videTexte }) 
 // Fiche molécules du marché : tiroir sous le bandeau « informations indicatives ».
 // Se met à jour tout seul (l'IA alimente la table `molecules` à chaque génération).
 function MoleculesTiroir({ molecules, ouvert, onToggle }) {
+  const [filtre, setFiltre] = useState('tous');
   if (!molecules || molecules.length === 0) return null;
+  const compte = { autorise: 0, gris: 0, interdit: 0 };
+  let maj = '';
+  for (const m of molecules) {
+    if (compte[m.statut] !== undefined) compte[m.statut] += 1;
+    if (m.updated_at && m.updated_at > maj) maj = m.updated_at;
+  }
+  const affichees = filtre === 'tous' ? molecules : molecules.filter((m) => m.statut === filtre);
+  const FILTRES = [
+    ['tous', `Tous (${molecules.length})`],
+    ['autorise', `🟢 ${compte.autorise}`],
+    ['gris', `🟡 ${compte.gris}`],
+    ['interdit', `🔴 ${compte.interdit}`],
+  ];
   return (
     <div className="card mol-card">
       <button type="button" className="veille-tiroir" onClick={onToggle} aria-expanded={ouvert}>
-        🧬 Molécules du marché — {molecules.length} référencées{' '}
-        <span className="chevron">{ouvert ? '▾' : '▸'}</span>
+        🧬 Molécules du marché — {compte.autorise} autorisées · {compte.gris} zone grise ·{' '}
+        {compte.interdit} interdites <span className="chevron">{ouvert ? '▾' : '▸'}</span>
       </button>
       {ouvert && (
         <>
           <p className="statut mol-avert">
-            Statut au regard de la loi française (indicatif, évolue vite) — mis à jour
-            automatiquement à chaque génération des News.
+            Statut au regard de la loi française — indicatif, évolue vite.{' '}
+            {maj ? `Mis à jour le ${formatDateFr(maj)}` : 'Pas encore actualisé'}, à chaque
+            génération des News.
           </p>
+          <div className="mol-filtres">
+            {FILTRES.map(([val, lib]) => (
+              <button
+                key={val}
+                type="button"
+                className={filtre === val ? 'actif' : ''}
+                onClick={() => setFiltre(val)}
+              >
+                {lib}
+              </button>
+            ))}
+          </div>
           <ul className="mol-liste">
-            {molecules.map((m) => {
+            {affichees.map((m) => {
               const st = STATUTS_MOL[m.statut] ?? STATUTS_MOL.gris;
               return (
                 <li key={m.code} className={`mol-item ${st.classe}`}>
@@ -139,7 +166,8 @@ function MoleculesTiroir({ molecules, ouvert, onToggle }) {
 }
 
 export default function Veille() {
-  const { estAdmin } = useAuth();
+  const { estAdmin, profil } = useAuth();
+  const monMag = profil?.magasin_id ?? null;
   const [bulletin, setBulletin] = useState(null);
   const [molecules, setMolecules] = useState([]);
   const [molOuvert, setMolOuvert] = useState(false);
@@ -157,19 +185,25 @@ export default function Veille() {
   // PLUS RÉCENT est arrivé (id différent de celui d'avant le clic), on l'affiche
   // et on coupe la roue — que ce soit détecté par le polling OU au retour de veille.
   const charger = useCallback(async () => {
-    const { data } = await supabase
+    // On prend les derniers bulletins visibles (RLS = mon magasin + global) et on
+    // PRIORISE celui de mon magasin (le ciblé) ; à défaut le global le plus récent.
+    // Évite que le bulletin global du cron masque le bulletin ciblé de la boutique.
+    const { data: liste } = await supabase
       .from('veille')
       .select(COLS)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(8);
     if (!monteRef.current) return null;
-    setBulletin(data ?? null);
+    const rows = Array.isArray(liste) ? liste : [];
+    const mien = monMag ? rows.find((b) => b.magasin_id === monMag) : null;
+    const glob = rows.find((b) => b.magasin_id == null);
+    const data = mien ?? glob ?? rows[0] ?? null;
+    setBulletin(data);
     setCharge(true);
     // Fiche molécules (référence globale, alimentée par l'IA) — triée par statut.
     const { data: mols } = await supabase
       .from('molecules')
-      .select('code, nom, statut, profil, avis, a_noter, ordre');
+      .select('code, nom, statut, profil, avis, a_noter, ordre, updated_at');
     if (monteRef.current && Array.isArray(mols)) {
       setMolecules(
         mols.slice().sort(
@@ -186,8 +220,8 @@ export default function Veille() {
       setGen(false);
       setMsg(`Bulletin mis à jour ✅ (${(data.items ?? []).length} info(s)).`);
     }
-    return data ?? null;
-  }, []);
+    return data;
+  }, [monMag]);
 
   useEffect(() => {
     monteRef.current = true;
@@ -252,11 +286,9 @@ export default function Veille() {
       setMsg(m);
       return;
     }
-    // La recherche est lancée côté serveur : on surveille son résultat.
-    setMsg(
-      '🔎 Recherche en cours… Ça peut prendre 1 à 2 minutes. Tu peux fermer l’app : ' +
-        'le bulletin s’affichera ici à ta prochaine ouverture, dès qu’il est prêt.'
-    );
+    // La recherche est lancée côté serveur : la roue « Recherche en cours » suffit
+    // (on évite le triple signal). On surveille l'arrivée du bulletin.
+    setMsg('');
     surveiller(0);
   }
 
@@ -303,19 +335,16 @@ export default function Veille() {
         )}
       </button>
 
-      <MoleculesTiroir
-        molecules={molecules}
-        ouvert={molOuvert}
-        onToggle={() => setMolOuvert((o) => !o)}
-      />
-
       {gen && (
         <div className="veille-recherche">
           <span className="spinner-inline spinner-lg" aria-hidden="true" />
-          <span>Recherche en cours…</span>
+          <span>
+            🔎 Recherche en cours… 1 à 2 min. Tu peux fermer l’app : le bulletin
+            s’affichera tout seul dès qu’il est prêt.
+          </span>
         </div>
       )}
-      {msg && <p className="statut">{msg}</p>}
+      {!gen && msg && <p className="statut">{msg}</p>}
 
       {!charge ? (
         <p className="statut">Chargement…</p>
@@ -325,7 +354,7 @@ export default function Veille() {
           <p className="statut">
             {estAdmin
               ? 'Clique sur « Générer maintenant » (nécessite la clé IA côté serveur), ou attends la génération automatique hebdomadaire.'
-              : 'Le premier bulletin arrivera bientôt.'}
+              : 'Le premier bulletin arrivera bientôt. La génération est lancée par le responsable, ou automatiquement chaque semaine.'}
           </p>
         </div>
       ) : (
@@ -374,6 +403,13 @@ export default function Veille() {
           )}
         </div>
       )}
+
+      {/* Fiche molécules du marché — sous le bulletin (référence à consulter) */}
+      <MoleculesTiroir
+        molecules={molecules}
+        ouvert={molOuvert}
+        onToggle={() => setMolOuvert((o) => !o)}
+      />
     </div>
   );
 }
