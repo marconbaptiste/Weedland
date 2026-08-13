@@ -7,11 +7,17 @@
 // L'IA trie/resume le tout -> bulletin insere dans la table `veille`.
 // Bandeau « informations indicatives » cote app (sources citees sous chaque point).
 //
+// La generation (RSS + IA + recherche web) est LONGUE : on repond tout de suite
+// (202) et on fait le travail EN TACHE DE FOND via EdgeRuntime.waitUntil, pour
+// (a) ne pas se faire tuer par la limite de duree de la requete (erreur 546) et
+// (b) continuer meme si l'utilisateur ferme l'app. Le front surveille l'arrivee
+// du nouveau bulletin dans `veille`.
+//
 // Auth : en-tete `x-cron-secret` (tache planifiee) OU JWT admin/superadmin.
 // Secrets : ANTHROPIC_API_KEY (obligatoire), VEILLE_CRON_SECRET (cron).
 // Deploiement : supabase functions deploy veille-cbd
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -79,6 +85,171 @@ function extraireJson(texte: string) {
   }
 }
 
+// Travail lourd (RSS + IA + recherche web + insertion). Lance en tache de fond.
+async function genererEtInserer(svc: SupabaseClient, magasinId: string | null, parCron: boolean) {
+  const apiKey = env("ANTHROPIC_API_KEY");
+  if (!apiKey) {
+    console.error("veille: ANTHROPIC_API_KEY manquante");
+    return;
+  }
+
+  // Personnalisation : on lit le stock du magasin pour cibler la recherche.
+  // CLOISONNEMENT (regle absolue) : on ne lit QUE le stock du magasin appelant
+  // (magasinId = profil verifie cote serveur, jamais fourni par le client), et
+  // UNIQUEMENT `stocks` (noms/categories). On ne lit JAMAIS `fournisseurs` ni
+  // aucune donnee sensible/negociee : les fournisseurs, prix et deals prives d'un
+  // magasin ne doivent jamais atteindre l'IA ni fuiter vers un autre magasin.
+  // Le bulletin genere est ensuite stocke avec ce meme magasin_id (RLS = seul ce
+  // magasin le lira). Ne JAMAIS croiser le contexte de plusieurs magasins ici.
+  let contexteStock = "";
+  const feedsSup: { url: string; source: string }[] = [];
+  if (magasinId) {
+    const { data: st } = await svc.from("stocks").select("categorie, nom").eq("magasin_id", magasinId).limit(300);
+    const cats = [...new Set((st ?? []).map((s) => (s.categorie || "").trim()).filter(Boolean))].slice(0, 6);
+    const noms = [...new Set((st ?? []).map((s) => (s.nom || "").trim()).filter(Boolean))].slice(0, 15);
+    if (cats.length || noms.length) {
+      contexteStock =
+        "Cette boutique vend notamment : " + [...cats, ...noms].join(", ") +
+        ". Priorise les infos utiles a ces produits (nouveautes, reglementation, fournisseurs), sans ignorer la legalite generale. " +
+        "IMPORTANT : si des MOLECULES, PRODUITS ou TENDANCES qui marchent ressortent de tes recherches et NE figurent PAS deja dans ce que vend la boutique, propose-les en categorie 'opportunite' (suggestion d'achat a envisager), en te basant uniquement sur des sources reelles. ";
+      for (const c of cats.slice(0, 3)) feedsSup.push({ url: gnews(c + " CBD nouveaute OR tendance OR reglementation"), source: "" });
+    }
+  }
+
+  // 1) Collecte RSS (contexte date ; peut etre vide, la recherche web prend le relais)
+  const bruts: Article[] = [];
+  const diag: string[] = [];
+  for (const feed of [...FEEDS, ...feedsSup]) {
+    const nom = feed.source || "gnews";
+    try {
+      const r = await fetch(feed.url, {
+        headers: { "User-Agent": UA, Accept: "application/rss+xml, application/xml, text/xml, */*" },
+      });
+      const xml = await r.text();
+      const items = parseRss(xml).map((it) => ({ ...it, source: it.source || feed.source }));
+      diag.push(nom + ":" + r.status + ":" + items.length);
+      bruts.push(...items);
+    } catch (e) {
+      console.error("RSS", feed.url, e);
+      diag.push(nom + ":ERR");
+    }
+  }
+  console.log("veille RSS diag " + diag.join(" | ") + " total " + bruts.length);
+
+  const vus = new Set<string>();
+  const uniques = bruts.filter((it) => {
+    const k = it.titre.toLowerCase();
+    if (vus.has(k)) return false;
+    vus.add(k);
+    return true;
+  });
+  const top = uniques.slice(0, 40);
+  // On ne passe qu'un extrait au modele : le RSS est surtout reglementaire et
+  // ancre trop l'IA sur le legal ; pour les nouveautes produits/fournisseurs
+  // c'est la recherche web qui doit primer.
+  const listeSrc = top.slice(0, 22);
+  const liste = listeSrc.length
+    ? listeSrc
+        .map((t, i) => (i + 1) + ". [" + (t.date || "date inconnue") + "] " + t.titre + " — " + t.source + " — " + t.lien)
+        .join(NL)
+    : "(aucun titre RSS recupere ce coup-ci — appuie-toi sur tes recherches web)";
+
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+
+  // 2) L'IA fait une VRAIE recherche web + resume. Outil serveur web_search.
+  const molecules =
+    "HHC, HHCP, HHCPO, HHCH, THCP, THCPO, THCJD, THCH, THCB, THCV, THCA, H4CBD, H2CBD, " +
+    "CBN, CBG, CBC, CBDV, CBDP, 10-OH-HHC, delta-8 THC, delta-10 THC, delta-6a10a, CBD9, CBDA";
+  const prompt =
+    "Tu es analyste de veille pour des GERANTS de boutiques de CBD en France. Objectif : leur donner une longueur d'avance COMMERCIALE concrete (produits a mettre en rayon, fournisseurs a contacter), pas seulement de la reglementation. " +
+    "Nous sommes le " + aujourdhui + ". " +
+    "PERIMETRE STRICT — reste EXCLUSIVEMENT sur les CANNABINOIDES : CBD, chanvre, THC et cannabinoides/derivees (molecules HHC/THCP/H4CBD/CBN/CBG/CBC/etc.), leur cadre LEGAL en France et en UE, les PRODUITS cannabinoides ou derives vendables en boutique, et les FOURNISSEURS/grossistes/marques/salons de ces produits. N'explore AUCUN sujet hors de ce perimetre (politique de legalisation a l'etranger, cannabis medical etranger, faits divers, agriculture generale, actualite politique) SAUF s'il a un IMPACT DIRECT et concret sur une boutique CBD en France. Concentre tes requetes web sur ce domaine, ne t'eparpille pas. " +
+    contexteStock +
+    "Tu DOIS utiliser l'outil web_search en plusieurs requetes ciblees (francais ET anglais). Couvre OBLIGATOIREMENT ces trois axes, avec PRIORITE aux axes B et C : " +
+    "(A) MOLECULES / CANNABINOIDES : ce qui sort ou change de statut legal en France/UE (interdiction, autorisation, zone grise) — ex. " + molecules + ". " +
+    "(B) NOUVEAUX PRODUITS a vendre en boutique : lancements CONCRETS de marques — nouveau puff/vape, nouveau e-liquide, nouvelle fleur/resine/hash, nouvelle huile, boisson, gummies, nouveau gout, nouvelle molecule integree a un produit, nouveau format/pipette, edition limitee. Donne des exemples PRECIS et RECENTS (marque + produit + nouveaute). " +
+    "(C) FOURNISSEURS / GROSSISTES / MARQUES / SALONS : grossistes qui sortent une nouvelle gamme, nouveaux distributeurs, nouveautes annoncees sur des salons pro chanvre/CBD, catalogues qui s'etoffent. " +
+    "Pour B et C, NE te contente PAS des titres RSS ci-dessous (surtout reglementaires) : lance de VRAIES recherches web (sites de marques, grossistes, boutiques, presse specialisee, salons) et privilegie l'actualite des 90 derniers jours. " +
+    "Exemples du NIVEAU DE DETAIL attendu (a produire UNIQUEMENT si une source reelle l'atteste, sinon ne rien inventer) : 'La marque X lance un puff 9000 taffs gout pasteque au CBD', 'Le grossiste Y ajoute une gamme de resines H4CBD a son catalogue', 'Le CBC gagne en popularite, propose en huile par la marque Z'. " +
+    "Titres RSS recents (surtout reglementaires — point de depart, PAS une limite) [date — titre — source — lien] :" + NL + liste + NL +
+    "Regles STRICTES : " +
+    "0) Ce bulletin est PRIVE et propre a CETTE boutique. Sources PUBLIQUES uniquement (web, presse, RSS). N'invente aucun 'deal', tarif ou accord fournisseur, et ne suppose rien sur les secrets d'autres boutiques : tu n'as que le web public. " +
+    "1) N'INVENTE RIEN : chaque item vient d'une source web reelle consultee ; recopie fidelement l'URL (source_url), le media (source_nom) et la date si visible (sinon laisse vide). " +
+    "2) EQUILIBRE OBLIGATOIRE : vise 8 a 12 items, dont AU MOINS LA MOITIE de type 'produit' ou 'fournisseur' (nouveautes commerciales concretes) si le web en fournit. N'empile PAS des news reglementaires etrangeres ou de cannabis medical peu actionnables. " +
+    "3) Categories : 'produit' = un produit/gamme precis qui sort (vendable en boutique) ; 'fournisseur' = grossiste/marque/distributeur/salon avec une nouveaute ; 'opportunite' = molecule/produit qui monte et que la boutique ne vend pas encore ; 'interdit'/'autorise'/'a_suivre' = reglementaire. Pour 'fournisseur', cite seulement ceux d'une source, sans classer ni recommander un 'meilleur'. " +
+    "4) Sois precis et factuel (marque, nom de produit, molecule, gout, format, texte reglementaire). " +
+    "Rends UNIQUEMENT un JSON strict, sans texte autour. Ecris TROIS syntheses courtes en francais (chacune 1 a 2 phrases, factuelles) : 'intro' = synthese generale du jour ; 'synthese_produits' = synthese des NOUVEAUTES produits & fournisseurs du jour ; 'synthese_reglementation' = synthese du LEGAL & reglementaire du jour. Si une section n'a rien, mets une chaine vide. Puis 'items' = le detail source par source. Forme EXACTE : " +
+    '{"intro":"...","synthese_produits":"...","synthese_reglementation":"...","items":[{"categorie":"interdit|autorise|a_suivre|produit|fournisseur|opportunite","texte":"phrase claire et factuelle en francais","date":"AAAA-MM-JJ","source_nom":"nom du media","source_url":"lien"}]}.';
+
+  const tools = [{ type: "web_search_20260209", name: "web_search", max_uses: 8 }];
+  const messages: { role: string; content: unknown }[] = [{ role: "user", content: prompt }];
+  let data: Record<string, unknown> | null = null;
+  let restarts = 0;
+  while (true) {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 4500, tools, messages }),
+    });
+    if (!resp.ok) {
+      console.error("Anthropic", resp.status, await resp.text());
+      return;
+    }
+    data = await resp.json();
+    // Boucle serveur d'outils : si l'API met en pause (10 iterations), on relance.
+    if (data?.stop_reason === "pause_turn" && restarts < 3) {
+      messages.push({ role: "assistant", content: data.content });
+      restarts++;
+      continue;
+    }
+    break;
+  }
+
+  const blocs = Array.isArray(data?.content) ? (data.content as { type: string; text?: string }[]) : [];
+  const texte = blocs.filter((b) => b.type === "text" && typeof b.text === "string").map((b) => b.text).join(NL);
+  const parsed = extraireJson(texte);
+  if (!parsed || !Array.isArray(parsed.items)) {
+    console.error("veille: resume illisible");
+    return;
+  }
+
+  const cats = new Set(["interdit", "autorise", "a_suivre", "produit", "fournisseur", "opportunite"]);
+  // Date fiable : celle du flux (pubDate) retrouvée par le lien ; sinon celle de l'IA.
+  const dateParLien = new Map(top.map((t) => [t.lien, t.date]));
+  const items = parsed.items
+    .filter((x: Record<string, unknown>) => x && typeof x.texte === "string")
+    .slice(0, 12)
+    .map((x: Record<string, unknown>) => {
+      // Securite : source_url vient de pages web (contenu non fiable via web_search).
+      // On n'accepte QUE http(s) pour fermer un vecteur XSS (javascript:, data:, ...).
+      const brut = String(x.source_url ?? "").slice(0, 500).trim();
+      const bas = brut.toLowerCase();
+      const url = bas.startsWith("http://") || bas.startsWith("https://") ? brut : "";
+      const dateIa = typeof x.date === "string" ? x.date.slice(0, 20) : "";
+      return {
+        categorie: cats.has(String(x.categorie)) ? x.categorie : "a_suivre",
+        texte: String(x.texte).slice(0, 400),
+        date: dateParLien.get(url) || dateIa,
+        source_nom: String(x.source_nom ?? "").slice(0, 120),
+        source_url: url,
+      };
+    });
+
+  // 3) Enregistrement
+  const synth = (v: unknown) => (typeof v === "string" && v.trim() ? v.slice(0, 600) : null);
+  const { error } = await svc.from("veille").insert({
+    titre: (magasinId ? "News ciblée — " : "News CBD — ") + aujourdhui,
+    intro: typeof parsed.intro === "string" ? parsed.intro.slice(0, 400) : null,
+    synthese_produits: synth(parsed.synthese_produits),
+    synthese_reglementation: synth(parsed.synthese_reglementation),
+    items,
+    source: parCron ? "auto" : "manuel",
+    magasin_id: magasinId,
+  });
+  if (error) console.error("veille insert", error);
+  else console.log("veille insert OK nb=" + items.length + " magasin=" + (magasinId ?? "global"));
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
@@ -106,164 +277,19 @@ Deno.serve(async (req) => {
     }
     if (!autorise) return json({ error: "Non autorise" }, 401);
 
-    const apiKey = env("ANTHROPIC_API_KEY");
-    if (!apiKey) return json({ error: "IA non configuree (ANTHROPIC_API_KEY manquante)." }, 503);
+    if (!env("ANTHROPIC_API_KEY")) return json({ error: "IA non configuree (ANTHROPIC_API_KEY manquante)." }, 503);
 
-    // Personnalisation : on lit le stock du magasin pour cibler la recherche.
-    // CLOISONNEMENT (regle absolue) : on ne lit QUE le stock du magasin appelant
-    // (magasinId = profil verifie cote serveur, jamais fourni par le client), et
-    // UNIQUEMENT `stocks` (noms/categories). On ne lit JAMAIS `fournisseurs` ni
-    // aucune donnee sensible/negociee : les fournisseurs, prix et deals prives d'un
-    // magasin ne doivent jamais atteindre l'IA ni fuiter vers un autre magasin.
-    // Le bulletin genere est ensuite stocke avec ce meme magasin_id (RLS = seul ce
-    // magasin le lira). Ne JAMAIS croiser le contexte de plusieurs magasins ici.
-    let contexteStock = "";
-    const feedsSup: { url: string; source: string }[] = [];
-    if (magasinId) {
-      const { data: st } = await svc.from("stocks").select("categorie, nom").eq("magasin_id", magasinId).limit(300);
-      const cats = [...new Set((st ?? []).map((s) => (s.categorie || "").trim()).filter(Boolean))].slice(0, 6);
-      const noms = [...new Set((st ?? []).map((s) => (s.nom || "").trim()).filter(Boolean))].slice(0, 15);
-      if (cats.length || noms.length) {
-        contexteStock =
-          "Cette boutique vend notamment : " + [...cats, ...noms].join(", ") +
-          ". Priorise les infos utiles a ces produits (nouveautes, reglementation, fournisseurs), sans ignorer la legalite generale. " +
-          "IMPORTANT : si des MOLECULES, PRODUITS ou TENDANCES qui marchent ressortent de tes recherches et NE figurent PAS deja dans ce que vend la boutique, propose-les en categorie 'opportunite' (suggestion d'achat a envisager), en te basant uniquement sur des sources reelles. ";
-        for (const c of cats.slice(0, 3)) feedsSup.push({ url: gnews(c + " CBD nouveaute OR tendance OR reglementation"), source: "" });
-      }
+    // Travail long => tache de fond : on repond tout de suite et la generation
+    // continue meme si le client se deconnecte (waitUntil garde le worker en vie).
+    const tache = genererEtInserer(svc, magasinId, parCron).catch((e) => console.error("veille bg", e));
+    try {
+      // deno-lint-ignore no-explicit-any
+      (globalThis as any).EdgeRuntime?.waitUntil?.(tache);
+    } catch (_e) {
+      // Pas d'EdgeRuntime (execution locale) : on attend la tache pour ne pas la perdre.
+      await tache;
     }
-
-    // 1) Collecte RSS (contexte date ; peut etre vide, la recherche web prend le relais)
-    const bruts: Article[] = [];
-    const diag: string[] = [];
-    for (const feed of [...FEEDS, ...feedsSup]) {
-      const nom = feed.source || "gnews";
-      try {
-        const r = await fetch(feed.url, {
-          headers: { "User-Agent": UA, Accept: "application/rss+xml, application/xml, text/xml, */*" },
-        });
-        const xml = await r.text();
-        const items = parseRss(xml).map((it) => ({ ...it, source: it.source || feed.source }));
-        diag.push(nom + ":" + r.status + ":" + items.length);
-        bruts.push(...items);
-      } catch (e) {
-        console.error("RSS", feed.url, e);
-        diag.push(nom + ":ERR");
-      }
-    }
-    console.log("veille RSS diag " + diag.join(" | ") + " total " + bruts.length);
-
-    const vus = new Set<string>();
-    const uniques = bruts.filter((it) => {
-      const k = it.titre.toLowerCase();
-      if (vus.has(k)) return false;
-      vus.add(k);
-      return true;
-    });
-    const top = uniques.slice(0, 40);
-    // On ne passe qu'un extrait au modele : le RSS est surtout reglementaire et
-    // ancre trop l'IA sur le legal ; pour les nouveautes produits/fournisseurs
-    // c'est la recherche web qui doit primer.
-    const listeSrc = top.slice(0, 22);
-    const liste = listeSrc.length
-      ? listeSrc
-          .map((t, i) => (i + 1) + ". [" + (t.date || "date inconnue") + "] " + t.titre + " — " + t.source + " — " + t.lien)
-          .join(NL)
-      : "(aucun titre RSS recupere ce coup-ci — appuie-toi sur tes recherches web)";
-
-    const aujourdhui = new Date().toISOString().slice(0, 10);
-
-    // 2) L'IA fait une VRAIE recherche web + resume. Outil serveur web_search.
-    const molecules =
-      "HHC, HHCP, HHCPO, HHCH, THCP, THCPO, THCJD, THCH, THCB, THCV, THCA, H4CBD, H2CBD, " +
-      "CBN, CBG, CBC, CBDV, CBDP, 10-OH-HHC, delta-8 THC, delta-10 THC, delta-6a10a, CBD9, CBDA";
-    const prompt =
-      "Tu es analyste de veille pour des GERANTS de boutiques de CBD en France. Objectif : leur donner une longueur d'avance COMMERCIALE concrete (produits a mettre en rayon, fournisseurs a contacter), pas seulement de la reglementation. " +
-      "Nous sommes le " + aujourdhui + ". " +
-      contexteStock +
-      "Tu DOIS utiliser l'outil web_search en plusieurs requetes ciblees (francais ET anglais). Couvre OBLIGATOIREMENT ces trois axes, avec PRIORITE aux axes B et C : " +
-      "(A) MOLECULES / CANNABINOIDES : ce qui sort ou change de statut legal en France/UE (interdiction, autorisation, zone grise) — ex. " + molecules + ". " +
-      "(B) NOUVEAUX PRODUITS a vendre en boutique : lancements CONCRETS de marques — nouveau puff/vape, nouveau e-liquide, nouvelle fleur/resine/hash, nouvelle huile, boisson, gummies, nouveau gout, nouvelle molecule integree a un produit, nouveau format/pipette, edition limitee. Donne des exemples PRECIS et RECENTS (marque + produit + nouveaute). " +
-      "(C) FOURNISSEURS / GROSSISTES / MARQUES / SALONS : grossistes qui sortent une nouvelle gamme, nouveaux distributeurs, nouveautes annoncees sur des salons pro chanvre/CBD, catalogues qui s'etoffent. " +
-      "Pour B et C, NE te contente PAS des titres RSS ci-dessous (surtout reglementaires) : lance de VRAIES recherches web (sites de marques, grossistes, boutiques, presse specialisee, salons) et privilegie l'actualite des 90 derniers jours. " +
-      "Exemples du NIVEAU DE DETAIL attendu (a produire UNIQUEMENT si une source reelle l'atteste, sinon ne rien inventer) : 'La marque X lance un puff 9000 taffs gout pasteque au CBD', 'Le grossiste Y ajoute une gamme de resines H4CBD a son catalogue', 'Le CBC gagne en popularite, propose en huile par la marque Z'. " +
-      "Titres RSS recents (surtout reglementaires — point de depart, PAS une limite) [date — titre — source — lien] :" + NL + liste + NL +
-      "Regles STRICTES : " +
-      "0) Ce bulletin est PRIVE et propre a CETTE boutique. Sources PUBLIQUES uniquement (web, presse, RSS). N'invente aucun 'deal', tarif ou accord fournisseur, et ne suppose rien sur les secrets d'autres boutiques : tu n'as que le web public. " +
-      "1) N'INVENTE RIEN : chaque item vient d'une source web reelle consultee ; recopie fidelement l'URL (source_url), le media (source_nom) et la date si visible (sinon laisse vide). " +
-      "2) EQUILIBRE OBLIGATOIRE : vise 8 a 12 items, dont AU MOINS LA MOITIE de type 'produit' ou 'fournisseur' (nouveautes commerciales concretes) si le web en fournit. N'empile PAS des news reglementaires etrangeres ou de cannabis medical peu actionnables. " +
-      "3) Categories : 'produit' = un produit/gamme precis qui sort (vendable en boutique) ; 'fournisseur' = grossiste/marque/distributeur/salon avec une nouveaute ; 'opportunite' = molecule/produit qui monte et que la boutique ne vend pas encore ; 'interdit'/'autorise'/'a_suivre' = reglementaire. Pour 'fournisseur', cite seulement ceux d'une source, sans classer ni recommander un 'meilleur'. " +
-      "4) Sois precis et factuel (marque, nom de produit, molecule, gout, format, texte reglementaire). " +
-      "Rends UNIQUEMENT un JSON strict, sans texte autour : " +
-      '{"intro":"une a deux phrases de synthese en francais, en mentionnant les nouveautes produits marquantes","items":[{"categorie":"interdit|autorise|a_suivre|produit|fournisseur|opportunite","texte":"phrase claire et factuelle en francais","date":"AAAA-MM-JJ","source_nom":"nom du media","source_url":"lien"}]}.';
-
-    const tools = [{ type: "web_search_20260209", name: "web_search", max_uses: 12 }];
-    const messages: { role: string; content: unknown }[] = [{ role: "user", content: prompt }];
-    let data: Record<string, unknown> | null = null;
-    let restarts = 0;
-    while (true) {
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-5",
-          max_tokens: 4500,
-          tools,
-          messages,
-        }),
-      });
-      if (!resp.ok) {
-        console.error("Anthropic", resp.status, await resp.text());
-        return json({ error: "Recherche IA indisponible." }, 502);
-      }
-      data = await resp.json();
-      // Boucle serveur d'outils : si l'API met en pause (10 iterations), on relance.
-      if (data?.stop_reason === "pause_turn" && restarts < 4) {
-        messages.push({ role: "assistant", content: data.content });
-        restarts++;
-        continue;
-      }
-      break;
-    }
-
-    const blocs = Array.isArray(data?.content) ? (data.content as { type: string; text?: string }[]) : [];
-    const texte = blocs.filter((b) => b.type === "text" && typeof b.text === "string").map((b) => b.text).join(NL);
-    const parsed = extraireJson(texte);
-    if (!parsed || !Array.isArray(parsed.items)) return json({ error: "Resume illisible." }, 200);
-
-    const cats = new Set(["interdit", "autorise", "a_suivre", "produit", "fournisseur", "opportunite"]);
-    // Date fiable : celle du flux (pubDate) retrouvée par le lien ; sinon celle de l'IA.
-    const dateParLien = new Map(top.map((t) => [t.lien, t.date]));
-    const items = parsed.items
-      .filter((x: Record<string, unknown>) => x && typeof x.texte === "string")
-      .slice(0, 12)
-      .map((x: Record<string, unknown>) => {
-        // Securite : source_url vient de pages web (contenu non fiable via web_search).
-        // On n'accepte QUE http(s) pour fermer un vecteur XSS (javascript:, data:, ...).
-        const brut = String(x.source_url ?? "").slice(0, 500).trim();
-        const url = /^https?:\/\//i.test(brut) ? brut : "";
-        const dateIa = typeof x.date === "string" ? x.date.slice(0, 20) : "";
-        return {
-          categorie: cats.has(String(x.categorie)) ? x.categorie : "a_suivre",
-          texte: String(x.texte).slice(0, 400),
-          date: dateParLien.get(url) || dateIa,
-          source_nom: String(x.source_nom ?? "").slice(0, 120),
-          source_url: url,
-        };
-      });
-
-    // 3) Enregistrement
-    const { error } = await svc.from("veille").insert({
-      titre: (magasinId ? "News ciblée — " : "News CBD — ") + aujourdhui,
-      intro: typeof parsed.intro === "string" ? parsed.intro.slice(0, 400) : null,
-      items,
-      source: parCron ? "auto" : "manuel",
-      magasin_id: magasinId,
-    });
-    if (error) {
-      console.error("veille insert", error);
-      return json({ error: "Enregistrement impossible." }, 500);
-    }
-    return json({ ok: true, nb: items.length });
+    return json({ ok: true, started: true }, 202);
   } catch (e) {
     console.error("veille-cbd error:", e);
     return json({ error: "Erreur interne." }, 500);
