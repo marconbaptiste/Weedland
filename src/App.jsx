@@ -20,6 +20,7 @@ import Gestion from './pages/Gestion';
 import AProposMagasin from './pages/AProposMagasin';
 import Configuration from './pages/Configuration';
 import NouveauMotDePasse from './pages/NouveauMotDePasse';
+import Veille from './pages/Veille';
 import Paiements from './pages/Paiements';
 import Comptes from './pages/Comptes';
 import Promotions from './pages/Promotions';
@@ -66,6 +67,7 @@ export default function App() {
           <Route path="caisse/cloture" element={<Cloture />} />
           <Route path="caisse/historique" element={<Historique />} />
           <Route path="chromes" element={<Chromes />} />
+          <Route path="veille" element={<Veille />} />
           <Route path="support" element={<Support />} />
 
           {/* Modules à option d'abonnement */}
