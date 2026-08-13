@@ -1199,6 +1199,14 @@ hr {
 .veille-tiroir:hover {
   border-color: var(--bordure-forte);
 }
+.veille-tiroir {
+  min-height: 44px;
+}
+.veille-tiroir:focus-visible,
+.veille-avert-btn:focus-visible {
+  outline: 2px solid var(--accent, #5fbf8e);
+  outline-offset: 2px;
+}
 .veille-intro {
   margin: 0.2rem 0 0.8rem;
 }
@@ -1252,25 +1260,51 @@ hr {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 .mol-pill {
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   font-weight: 700;
-  padding: 0.16em 0.6em;
+  padding: 0.18em 0.65em;
   border-radius: 999px;
   white-space: nowrap;
 }
 .mol-pill.mol-legal {
-  color: #5fbf8e;
-  background: rgba(95, 191, 142, 0.15);
+  color: #7fd3a6;
+  background: rgba(95, 191, 142, 0.22);
 }
 .mol-pill.mol-gris {
-  color: #e3b341;
-  background: rgba(227, 179, 65, 0.15);
+  color: #ecc35f;
+  background: rgba(227, 179, 65, 0.22);
 }
 .mol-pill.mol-interdit {
-  color: #e8746e;
-  background: rgba(232, 116, 110, 0.15);
+  color: #f08b86;
+  background: rgba(232, 116, 110, 0.22);
+}
+/* Filtres par statut de la fiche molécules */
+.mol-filtres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.2rem 0 0.6rem;
+}
+.mol-filtres button {
+  min-height: 36px;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--bordure);
+  border-radius: 999px;
+  background: var(--fond-input);
+  color: var(--texte);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mol-filtres button.actif {
+  border-color: var(--bordure-forte);
+  background: var(--bordure-forte);
+}
+.mol-filtres button:focus-visible {
+  outline: 2px solid var(--accent, #5fbf8e);
+  outline-offset: 2px;
 }
 .mol-nom {
   font-size: 0.82rem;
