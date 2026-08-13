@@ -1,25 +1,11 @@
-// ============================================================================
 // Edge Function — veille-cbd
-// ----------------------------------------------------------------------------
-// Veille réglementaire CBD 100 % automatique :
-//   1) récupère des actualités via des flux RSS Google Actualités (gratuit),
-//   2) les fait trier + résumer par l'IA (Claude) en un bulletin FR structuré,
-//   3) enregistre le bulletin dans la table `veille` (partagée par tous les
-//      magasins). L'app l'affiche avec un bandeau « informations indicatives ».
+// Veille reglementaire CBD automatique : flux RSS (Newsweed + Google Actualites)
+// -> tri/resume par l'IA Claude -> bulletin insere dans la table `veille`
+// (partagee par tous les magasins). Bandeau « informations indicatives » cote app.
 //
-// Déclenchement :
-//   - AUTOMATIQUE : une tâche planifiée (cron) appelle cette fonction avec
-//     l'en-tête `x-cron-secret: <VEILLE_CRON_SECRET>` (cf. SUPABASE_VEILLE.md).
-//   - MANUEL : un admin/superadmin connecté peut la lancer depuis l'app
-//     (bouton « Générer maintenant » → JWT vérifié ici).
-//
-// Secrets requis (Supabase → Edge Functions → Secrets) :
-//   ANTHROPIC_API_KEY   clé API Claude (résumé). Sans elle : 503, rien n'est publié.
-//   VEILLE_CRON_SECRET  secret partagé pour l'appel planifié (facultatif si manuel).
-//   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY : injectés auto.
-//
-// Déploiement : supabase functions deploy veille-cbd
-// ============================================================================
+// Auth : en-tete `x-cron-secret` (tache planifiee) OU JWT admin/superadmin.
+// Secrets : ANTHROPIC_API_KEY (obligatoire), VEILLE_CRON_SECRET (cron).
+// Deploiement : supabase functions deploy veille-cbd
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -30,38 +16,49 @@ const cors = {
 const json = (o: unknown, status = 200) =>
   new Response(JSON.stringify(o), { status, headers: { ...cors, "Content-Type": "application/json" } });
 const env = (n: string) => Deno.env.get(n) ?? "";
+const NL = String.fromCharCode(10);
 
-// Requêtes RSS ciblées (Google Actualités FR, 12 derniers jours).
-const REQUETES = [
-  "CBD chanvre cannabinoïde réglementation",
-  "HHC THCP H4CBD cannabinoïde interdit légal",
-  "cannabis CBD arrêté décret France loi",
+const gnews = (q: string) =>
+  "https://news.google.com/rss/search?q=" + encodeURIComponent(q) + "&hl=fr&gl=FR&ceid=FR:fr";
+const FEEDS: { url: string; source: string }[] = [
+  { url: "https://www.newsweed.fr/feed/", source: "Newsweed" },
+  { url: gnews("CBD OR chanvre OR cannabinoide reglementation France"), source: "" },
+  { url: gnews("HHC OR THCP OR H4CBD OR CBN cannabinoide interdit OR legal"), source: "" },
+  { url: gnews("nouveau produit CBD OR boutique CBD tendance"), source: "" },
+  { url: gnews("grossiste CBD OR fournisseur CBD OR salon professionnel chanvre"), source: "" },
 ];
+const UA = "Mozilla/5.0 (compatible; KanabizVeille/1.0)";
 
-// Extraction naïve des <item> d'un flux RSS Google Actualités.
+function texteEntre(s: string, a: string, b: string): string {
+  const i = s.indexOf(a);
+  if (i < 0) return "";
+  const j = s.indexOf(b, i + a.length);
+  if (j < 0) return "";
+  return s.slice(i + a.length, j);
+}
+function nettoie(s: string): string {
+  return s.split("<![CDATA[").join("").split("]]>").join("").trim();
+}
+// Parse RSS sans expression reguliere (evite tout souci d'echappement).
 function parseRss(xml: string) {
   const items: { titre: string; lien: string; source: string }[] = [];
-  const blocs = xml.split(/<item>/).slice(1);
-  for (const b of blocs) {
-    const titre = (b.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? "")
-      .replace(/<!\[CDATA\[|\]\]>/g, "")
-      .trim();
-    const lien = (b.match(/<link>([\s\S]*?)<\/link>/)?.[1] ?? "").trim();
-    const source = (b.match(/<source[^>]*>([\s\S]*?)<\/source>/)?.[1] ?? "")
-      .replace(/<!\[CDATA\[|\]\]>/g, "")
-      .trim();
+  const blocs = xml.split("<item").slice(1);
+  for (const brut of blocs) {
+    const b = brut.slice(brut.indexOf(">") + 1);
+    const titre = nettoie(texteEntre(b, "<title>", "</title>"));
+    const lien = nettoie(texteEntre(b, "<link>", "</link>"));
+    const srcBrut = texteEntre(b, "<source", "</source>");
+    const source = nettoie(srcBrut.indexOf(">") >= 0 ? srcBrut.slice(srcBrut.indexOf(">") + 1) : srcBrut);
     if (titre && lien) items.push({ titre, lien, source });
   }
   return items;
 }
-
-// Récupère le premier objet JSON d'un texte (l'IA peut l'entourer de prose).
 function extraireJson(texte: string) {
-  const debut = texte.indexOf("{");
-  const fin = texte.lastIndexOf("}");
-  if (debut < 0 || fin < 0) return null;
+  const d = texte.indexOf("{");
+  const f = texte.lastIndexOf("}");
+  if (d < 0 || f < 0) return null;
   try {
-    return JSON.parse(texte.slice(debut, fin + 1));
+    return JSON.parse(texte.slice(d, f + 1));
   } catch {
     return null;
   }
@@ -72,7 +69,6 @@ Deno.serve(async (req) => {
   try {
     const svc = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"));
 
-    // --- Autorisation : secret cron OU admin/superadmin connecté ---
     const cronSecret = env("VEILLE_CRON_SECRET");
     const headerSecret = req.headers.get("x-cron-secret");
     const parCron = Boolean(cronSecret) && headerSecret === cronSecret;
@@ -87,23 +83,31 @@ Deno.serve(async (req) => {
         if (profil?.role === "admin" || profil?.role === "superadmin") autorise = true;
       }
     }
-    if (!autorise) return json({ error: "Non autorisé" }, 401);
+    if (!autorise) return json({ error: "Non autorise" }, 401);
 
     const apiKey = env("ANTHROPIC_API_KEY");
-    if (!apiKey) return json({ error: "IA non configurée (ANTHROPIC_API_KEY manquante)." }, 503);
+    if (!apiKey) return json({ error: "IA non configuree (ANTHROPIC_API_KEY manquante)." }, 503);
 
-    // --- 1) Collecte RSS ---
+    // 1) Collecte RSS
     const bruts: { titre: string; lien: string; source: string }[] = [];
-    for (const q of REQUETES) {
-      const url = `https://news.google.com/rss/search?q=${encodeURIComponent(`${q} when:12d`)}&hl=fr&gl=FR&ceid=FR:fr`;
+    const diag: string[] = [];
+    for (const feed of FEEDS) {
+      const nom = feed.source || "gnews";
       try {
-        const r = await fetch(url);
-        bruts.push(...parseRss(await r.text()));
+        const r = await fetch(feed.url, {
+          headers: { "User-Agent": UA, Accept: "application/rss+xml, application/xml, text/xml, */*" },
+        });
+        const xml = await r.text();
+        const items = parseRss(xml).map((it) => ({ ...it, source: it.source || feed.source }));
+        diag.push(nom + ":" + r.status + ":" + items.length);
+        bruts.push(...items);
       } catch (e) {
-        console.error("RSS", q, e);
+        console.error("RSS", feed.url, e);
+        diag.push(nom + ":ERR");
       }
     }
-    // Dédoublonnage par titre.
+    console.log("veille RSS diag " + diag.join(" | ") + " total " + bruts.length);
+
     const vus = new Set<string>();
     const uniques = bruts.filter((it) => {
       const k = it.titre.toLowerCase();
@@ -112,26 +116,25 @@ Deno.serve(async (req) => {
       return true;
     });
     const top = uniques.slice(0, 40);
-    if (top.length === 0) return json({ error: "Aucune actualité récupérée." }, 200);
+    if (top.length === 0) return json({ error: "Aucune actualite recuperee (" + diag.join(", ") + ")." }, 200);
 
-    // --- 2) Résumé par l'IA ---
-    const liste = top.map((t, i) => `${i + 1}. ${t.titre} — ${t.source} — ${t.lien}`).join("\n");
+    // 2) Resume par l'IA
+    const liste = top.map((t, i) => (i + 1) + ". " + t.titre + " — " + t.source + " — " + t.lien).join(NL);
     const prompt =
-      `Tu es un veilleur juridique pour des boutiques de CBD en France. Voici des titres d'actualités récentes (titre — source — lien). ` +
-      `Sélectionne UNIQUEMENT ce qui concerne réellement la LÉGALITÉ, la RÉGLEMENTATION ou le MARCHÉ du CBD / chanvre / cannabinoïdes ` +
-      `(HHC, THCP, H4CBD, CBN, etc.) en France ou en Europe. Ignore le reste (faits divers, ouvertures de magasins, publicités). ` +
-      `Réponds en JSON STRICT, sans texte autour : ` +
-      `{"intro":"une phrase de synthèse en français","items":[{"categorie":"interdit|autorise|a_suivre","texte":"phrase claire et factuelle en français","source_nom":"nom du média","source_url":"lien"}]}. ` +
-      `Maximum 6 items. N'INVENTE RIEN : n'ajoute que ce qui ressort clairement d'un titre. Si rien de pertinent, renvoie "items":[]. ` +
-      `Titres :\n${liste}`;
+      "Tu fais une veille pour des GERANTS de boutiques de CBD en France, pour qu'ils aient une longueur d'avance. Voici des titres d'actualites recentes (titre — source — lien). " +
+      "Retiens ce qui aide concretement une boutique : (1) LEGALITE / REGLEMENTATION du CBD, chanvre, THC et cannabinoides de synthese (HHC, THCP, H4CBD, CBN, etc.) en France/Europe ; " +
+      "(2) NOUVEAUX PRODUITS et TENDANCES vendables en boutique CBD (fleurs, resines, huiles, vapes/puffs, infusions, boissons, cosmetiques, comestibles, accessoires, champignons/adaptogenes, etc.) ; " +
+      "(3) FOURNISSEURS / GROSSISTES / SALONS PROFESSIONNELS et approvisionnement. " +
+      "Ignore le hors-sujet (faits divers, ouvertures de magasins isolees, pub). " +
+      "Reponds en JSON STRICT, sans texte autour : " +
+      '{"intro":"une phrase de synthese en francais","items":[{"categorie":"interdit|autorise|a_suivre|produit|fournisseur","texte":"phrase claire et factuelle en francais","source_nom":"nom du media","source_url":"lien"}]}. ' +
+      "Maximum 8 items. N'INVENTE RIEN : n'ajoute que ce qui ressort clairement d'un titre/source. " +
+      "Pour la categorie fournisseur : cite seulement ceux mentionnes dans les sources, NE CLASSE PAS et NE RECOMMANDE PAS de toi-meme. Si rien de pertinent, renvoie items vide. " +
+      "Titres :" + NL + liste;
 
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 1500,
@@ -140,18 +143,17 @@ Deno.serve(async (req) => {
     });
     if (!resp.ok) {
       console.error("Anthropic", resp.status, await resp.text());
-      return json({ error: "Résumé IA indisponible." }, 502);
+      return json({ error: "Resume IA indisponible." }, 502);
     }
     const data = await resp.json();
     const texte = data?.content?.[0]?.text ?? "";
     const parsed = extraireJson(texte);
-    if (!parsed || !Array.isArray(parsed.items)) return json({ error: "Résumé illisible." }, 200);
+    if (!parsed || !Array.isArray(parsed.items)) return json({ error: "Resume illisible." }, 200);
 
-    // Nettoie / borne les items.
-    const cats = new Set(["interdit", "autorise", "a_suivre"]);
+    const cats = new Set(["interdit", "autorise", "a_suivre", "produit", "fournisseur"]);
     const items = parsed.items
       .filter((x: Record<string, unknown>) => x && typeof x.texte === "string")
-      .slice(0, 6)
+      .slice(0, 8)
       .map((x: Record<string, unknown>) => ({
         categorie: cats.has(String(x.categorie)) ? x.categorie : "a_suivre",
         texte: String(x.texte).slice(0, 400),
@@ -159,9 +161,9 @@ Deno.serve(async (req) => {
         source_url: String(x.source_url ?? "").slice(0, 500),
       }));
 
-    // --- 3) Enregistrement ---
+    // 3) Enregistrement
     const { error } = await svc.from("veille").insert({
-      titre: `Veille CBD — ${new Date().toISOString().slice(0, 10)}`,
+      titre: "Veille CBD — " + new Date().toISOString().slice(0, 10),
       intro: typeof parsed.intro === "string" ? parsed.intro.slice(0, 400) : null,
       items,
       source: parCron ? "auto" : "manuel",
