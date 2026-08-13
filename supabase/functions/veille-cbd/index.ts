@@ -29,15 +29,12 @@ const json = (o: unknown, status = 200) =>
 const env = (n: string) => Deno.env.get(n) ?? "";
 const NL = String.fromCharCode(10);
 
-const gnews = (q: string) =>
-  "https://news.google.com/rss/search?q=" + encodeURIComponent(q) + "&hl=fr&gl=FR&ceid=FR:fr";
+// NB : les flux Google News (news.google.com/rss) renvoient 503 depuis l'egress
+// Supabase (Google bloque ces IP) et faisaient perdre ~35 s par generation ->
+// retires. On garde Newsweed (repond 200, ~25 items, specialise CBD). La
+// richesse "nouveautes" vient de la recherche web de l'IA, pas du RSS.
 const FEEDS: { url: string; source: string }[] = [
   { url: "https://www.newsweed.fr/feed/", source: "Newsweed" },
-  { url: gnews("CBD OR chanvre OR cannabinoide reglementation France"), source: "" },
-  { url: gnews("HHC OR THCP OR H4CBD OR CBN cannabinoide interdit OR legal"), source: "" },
-  { url: gnews("CBD OR chanvre OR cannabis arrete OR decret Journal Officiel OR Legifrance"), source: "" },
-  { url: gnews("nouveau produit CBD OR boutique CBD tendance"), source: "" },
-  { url: gnews("grossiste CBD OR fournisseur CBD OR salon professionnel chanvre"), source: "" },
 ];
 const UA = "Mozilla/5.0 (compatible; KanabizVeille/1.0)";
 
@@ -96,7 +93,7 @@ async function appelIA(
   const controller = new AbortController();
   const minuteur = setTimeout(() => controller.abort(), timeoutMs);
   const messages: { role: string; content: unknown }[] = [{ role: "user", content: prompt }];
-  const tools = withWebSearch ? [{ type: "web_search_20260209", name: "web_search", max_uses: 5 }] : undefined;
+  const tools = withWebSearch ? [{ type: "web_search_20260209", name: "web_search", max_uses: 4 }] : undefined;
   let data: Record<string, unknown> | null = null;
   let restarts = 0;
   try {
@@ -224,13 +221,14 @@ async function genererEtInserer(svc: SupabaseClient, magasinId: string | null, p
     cadre +
     "Sans recherche web, a partir UNIQUEMENT des titres RSS recents ci-dessous : tri, classe et resume ce qui est utile a une boutique CBD (legal, nouveaux produits, fournisseurs). Recopie fidelement lien et date de chaque titre choisi. Vise 6 a 10 items. Titres :" + NL + liste + NL + finJson;
 
-  // On tente la recherche web (garde-temps 90 s) ; sinon repli RSS rapide (25 s).
-  // Marge : RSS ~10 s + web ≤90 s + repli ≤25 s ≈ 125 s < limite ~150 s.
-  let parsed = await appelIA(apiKey, promptWeb, true, 3500, 90000);
+  // On tente la recherche web (garde-temps 80 s) ; sinon repli RSS rapide (30 s).
+  // Budget : RSS ~3 s (Newsweed seul) + web ≤80 s + repli ≤30 s ≈ 113 s < limite ~150 s,
+  // donc le repli a TOUJOURS le temps d'inserer avant le shutdown.
+  let parsed = await appelIA(apiKey, promptWeb, true, 3500, 80000);
   let via = "web";
   if (!parsed || !Array.isArray(parsed.items)) {
     console.log("veille: bascule sur repli RSS (web indisponible/trop long)");
-    parsed = top.length ? await appelIA(apiKey, promptRss, false, 2500, 25000) : null;
+    parsed = top.length ? await appelIA(apiKey, promptRss, false, 2500, 30000) : null;
     via = "rss";
   }
   if (!parsed || !Array.isArray(parsed.items)) {
