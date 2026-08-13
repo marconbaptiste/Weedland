@@ -135,6 +135,11 @@ async function genererEtInserer(svc: SupabaseClient, magasinId: string | null, p
     return;
   }
 
+  // Reference GLOBALE des molecules (statut legal identique pour tous). On la passe
+  // a l'IA pour qu'elle signale UNIQUEMENT les nouveautes / changements de statut.
+  const { data: molRef } = await svc.from("molecules").select("code, statut");
+  const molListe = (molRef ?? []).map((m) => m.code + "=" + m.statut).join(", ");
+
   // CLOISONNEMENT (regle absolue) : on ne lit QUE le stock du magasin appelant
   // (magasinId = profil verifie cote serveur, jamais fourni par le client), et
   // UNIQUEMENT `stocks` (noms/categories). On ne lit JAMAIS `fournisseurs` ni
@@ -214,7 +219,8 @@ async function genererEtInserer(svc: SupabaseClient, magasinId: string | null, p
     "(A) MOLECULES : ce qui sort ou change de statut legal en France/UE. " +
     "(B) NOUVEAUX PRODUITS a vendre en boutique : lancements CONCRETS de marques (puff/vape, e-liquide, fleur/resine/hash, huile, boisson, gummies, nouveau gout/format, edition limitee) — exemples PRECIS (marque + produit + nouveaute). " +
     "(C) FOURNISSEURS / GROSSISTES / SALONS : nouvelles gammes, nouveaux acteurs, salons pro. " +
-    "Vise 8 a 12 items, dont AU MOINS LA MOITIE de type 'produit' ou 'fournisseur' si le web en fournit. Titres RSS recents comme point de depart (surtout reglementaires, ne t'y limite pas) :" + NL + liste + NL + finJson;
+    "Vise 8 a 12 items, dont AU MOINS LA MOITIE de type 'produit' ou 'fournisseur' si le web en fournit. Titres RSS recents comme point de depart (surtout reglementaires, ne t'y limite pas) :" + NL + liste + NL + finJson +
+    " AJOUTE aussi au meme JSON un champ 'molecules_maj' : liste d'objets (cle 'code', 'nom', 'statut' = autorise|gris|interdit, 'profil', 'avis', 'a_noter') pour les molecules cannabinoides NOUVELLES (vendues/discutees en boutique) OU dont le STATUT LEGAL FRANCAIS a change. Voici la reference actuelle (code=statut) : " + (molListe || "(vide)") + ". NE renvoie QUE de vrais changements/nouveautes attestes par une source, sinon molecules_maj vide [].";
 
   // Variante 2 (repli rapide, sans outil) : tri/resume des titres RSS.
   const promptRss =
@@ -224,7 +230,7 @@ async function genererEtInserer(svc: SupabaseClient, magasinId: string | null, p
   // On tente la recherche web (garde-temps 80 s) ; sinon repli RSS rapide (30 s).
   // Budget : RSS ~3 s (Newsweed seul) + web ≤80 s + repli ≤30 s ≈ 113 s < limite ~150 s,
   // donc le repli a TOUJOURS le temps d'inserer avant le shutdown.
-  let parsed = await appelIA(apiKey, promptWeb, true, 3500, 80000);
+  let parsed = await appelIA(apiKey, promptWeb, true, 4200, 80000);
   let via = "web";
   if (!parsed || !Array.isArray(parsed.items)) {
     console.log("veille: bascule sur repli RSS (web indisponible/trop long)");
@@ -268,6 +274,29 @@ async function genererEtInserer(svc: SupabaseClient, magasinId: string | null, p
   });
   if (error) console.error("veille insert", error);
   else console.log("veille insert OK via=" + via + " nb=" + items.length + " magasin=" + (magasinId ?? "global"));
+
+  // Mise a jour de la reference molecules (uniquement via la recherche web fiable).
+  // Reference GLOBALE : upsert par service_role, statut base sur la loi FR generale.
+  if (via === "web" && Array.isArray(parsed.molecules_maj) && parsed.molecules_maj.length) {
+    const stOk = new Set(["autorise", "gris", "interdit"]);
+    const rows = parsed.molecules_maj
+      .filter((m: Record<string, unknown>) => m && typeof m.code === "string" && String(m.code).trim() && stOk.has(String(m.statut)))
+      .slice(0, 20)
+      .map((m: Record<string, unknown>) => ({
+        code: String(m.code).trim().slice(0, 40),
+        nom: String(m.nom ?? m.code).slice(0, 120),
+        statut: String(m.statut),
+        profil: m.profil ? String(m.profil).slice(0, 400) : null,
+        avis: m.avis ? String(m.avis).slice(0, 400) : null,
+        a_noter: m.a_noter ? String(m.a_noter).slice(0, 400) : null,
+        updated_at: new Date().toISOString(),
+      }));
+    if (rows.length) {
+      const { error: eMol } = await svc.from("molecules").upsert(rows, { onConflict: "code" });
+      if (eMol) console.error("molecules upsert", eMol);
+      else console.log("molecules maj " + rows.length + " (" + rows.map((r) => r.code).join(",") + ")");
+    }
+  }
 }
 
 Deno.serve(async (req) => {

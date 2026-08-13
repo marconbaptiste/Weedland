@@ -1210,6 +1210,87 @@ hr {
   margin: 0.2rem 0 0.5rem;
   color: var(--texte);
 }
+/* Fiche molécules du marché (tiroir de la page News) */
+.mol-card {
+  margin-top: 0.6rem;
+}
+.mol-avert {
+  margin: 0.5rem 0 0.3rem;
+}
+.mol-liste {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.mol-item {
+  border: 1px solid var(--bordure);
+  border-left: 4px solid var(--bordure-forte);
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+}
+.mol-item.mol-legal {
+  border-left-color: #5fbf8e;
+}
+.mol-item.mol-gris {
+  border-left-color: #e3b341;
+}
+.mol-item.mol-interdit {
+  border-left-color: #e8746e;
+}
+.mol-item-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.mol-code {
+  font-weight: 700;
+  font-size: 1.05rem;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+.mol-pill {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  padding: 0.16em 0.6em;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.mol-pill.mol-legal {
+  color: #5fbf8e;
+  background: rgba(95, 191, 142, 0.15);
+}
+.mol-pill.mol-gris {
+  color: #e3b341;
+  background: rgba(227, 179, 65, 0.15);
+}
+.mol-pill.mol-interdit {
+  color: #e8746e;
+  background: rgba(232, 116, 110, 0.15);
+}
+.mol-nom {
+  font-size: 0.82rem;
+  color: #9db0a4;
+  font-style: italic;
+  margin: 0.1rem 0 0.4rem;
+}
+.mol-ligne {
+  margin: 0.18rem 0;
+  font-size: 0.86rem;
+}
+.mol-ligne b {
+  display: inline-block;
+  min-width: 0;
+  margin-right: 0.35em;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
 .veille-recherche {
   display: flex;
   align-items: center;

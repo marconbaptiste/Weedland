@@ -24,6 +24,14 @@ const PROD = ['produit', 'fournisseur', 'opportunite']; // nouveautés commercia
 const REGL = ['interdit', 'autorise', 'a_suivre']; // réglementaire / légal
 const COLS = 'id, created_at, titre, intro, synthese_produits, synthese_reglementation, items, magasin_id';
 
+// Fiche molécules (table `molecules`, référence globale mise à jour par l'IA).
+const STATUTS_MOL = {
+  autorise: { libelle: 'Autorisé', classe: 'mol-legal' },
+  gris: { libelle: 'Zone grise', classe: 'mol-gris' },
+  interdit: { libelle: 'Interdit', classe: 'mol-interdit' },
+};
+const ORDRE_STATUT = { autorise: 0, gris: 1, interdit: 2 };
+
 function ItemLi({ it }) {
   const cat = CATEGORIES[it.categorie] ?? CATEGORIES.a_suivre;
   return (
@@ -79,9 +87,62 @@ function SectionTiroir({ titre, synthese, items, ouvert, onToggle, videTexte }) 
   );
 }
 
+// Fiche molécules du marché : tiroir sous le bandeau « informations indicatives ».
+// Se met à jour tout seul (l'IA alimente la table `molecules` à chaque génération).
+function MoleculesTiroir({ molecules, ouvert, onToggle }) {
+  if (!molecules || molecules.length === 0) return null;
+  return (
+    <div className="card mol-card">
+      <button type="button" className="veille-tiroir" onClick={onToggle} aria-expanded={ouvert}>
+        🧬 Molécules du marché — {molecules.length} référencées{' '}
+        <span className="chevron">{ouvert ? '▾' : '▸'}</span>
+      </button>
+      {ouvert && (
+        <>
+          <p className="statut mol-avert">
+            Statut au regard de la loi française (indicatif, évolue vite) — mis à jour
+            automatiquement à chaque génération des News.
+          </p>
+          <ul className="mol-liste">
+            {molecules.map((m) => {
+              const st = STATUTS_MOL[m.statut] ?? STATUTS_MOL.gris;
+              return (
+                <li key={m.code} className={`mol-item ${st.classe}`}>
+                  <div className="mol-item-tete">
+                    <span className="mol-code">{m.code}</span>
+                    <span className={`mol-pill ${st.classe}`}>{st.libelle}</span>
+                  </div>
+                  {m.nom && <div className="mol-nom">{m.nom}</div>}
+                  {m.profil && (
+                    <p className="mol-ligne">
+                      <b>Profil</b> {m.profil}
+                    </p>
+                  )}
+                  {m.avis && (
+                    <p className="mol-ligne">
+                      <b>Avis / popularité</b> {m.avis}
+                    </p>
+                  )}
+                  {m.a_noter && (
+                    <p className="mol-ligne">
+                      <b>À noter</b> {m.a_noter}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Veille() {
   const { estAdmin } = useAuth();
   const [bulletin, setBulletin] = useState(null);
+  const [molecules, setMolecules] = useState([]);
+  const [molOuvert, setMolOuvert] = useState(false);
   const [charge, setCharge] = useState(false);
   const [gen, setGen] = useState(false);
   const [msg, setMsg] = useState('');
@@ -105,6 +166,20 @@ export default function Veille() {
     if (!monteRef.current) return null;
     setBulletin(data ?? null);
     setCharge(true);
+    // Fiche molécules (référence globale, alimentée par l'IA) — triée par statut.
+    const { data: mols } = await supabase
+      .from('molecules')
+      .select('code, nom, statut, profil, avis, a_noter, ordre');
+    if (monteRef.current && Array.isArray(mols)) {
+      setMolecules(
+        mols.slice().sort(
+          (a, b) =>
+            (ORDRE_STATUT[a.statut] ?? 9) - (ORDRE_STATUT[b.statut] ?? 9) ||
+            (a.ordre ?? 100) - (b.ordre ?? 100) ||
+            a.code.localeCompare(b.code)
+        )
+      );
+    }
     if (attenduRef.current !== undefined && data && data.id !== attenduRef.current) {
       attenduRef.current = undefined;
       if (pollRef.current) clearTimeout(pollRef.current);
@@ -227,6 +302,12 @@ export default function Veille() {
           </span>
         )}
       </button>
+
+      <MoleculesTiroir
+        molecules={molecules}
+        ouvert={molOuvert}
+        onToggle={() => setMolOuvert((o) => !o)}
+      />
 
       {gen && (
         <div className="veille-recherche">
