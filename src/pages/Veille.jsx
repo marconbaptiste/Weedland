@@ -26,6 +26,8 @@ export default function Veille() {
   const [gen, setGen] = useState(false);
   const [msg, setMsg] = useState('');
   const [onglet, setOnglet] = useState('regl'); // 'regl' | 'produits'
+  const [avertOuvert, setAvertOuvert] = useState(false); // bandeau « indicatif » replié
+  const [articlesOuvert, setArticlesOuvert] = useState(false); // tiroir des articles
 
   const charger = useCallback(async () => {
     const { data } = await supabase
@@ -79,12 +81,27 @@ export default function Veille() {
         )}
       </div>
 
-      <p className="veille-avertissement">
-        ⚠️ <strong>Informations indicatives</strong>, générées automatiquement à partir d’actualités
-        publiques (légal, nouveaux produits, fournisseurs). Elles <strong>ne remplacent pas les
-        textes officiels</strong> ni un conseil juridique, et les fournisseurs cités ne sont{' '}
-        <strong>pas des recommandations</strong> — vérifie toujours la source avant toute décision.
-      </p>
+      <button
+        type="button"
+        className="veille-avertissement veille-avert-btn"
+        onClick={() => setAvertOuvert((o) => !o)}
+        aria-expanded={avertOuvert}
+      >
+        {avertOuvert ? (
+          <span>
+            ⚠️ <strong>Informations indicatives</strong>, générées automatiquement à partir
+            d’actualités publiques (légal, nouveaux produits, fournisseurs). Elles{' '}
+            <strong>ne remplacent pas les textes officiels</strong> ni un conseil juridique, et les
+            fournisseurs cités ne sont <strong>pas des recommandations</strong> — vérifie toujours la
+            source avant toute décision. <span className="chevron">▾</span>
+          </span>
+        ) : (
+          <span>
+            ⚠️ <strong>Informations indicatives</strong> — appuie pour lire l’avertissement{' '}
+            <span className="chevron">▸</span>
+          </span>
+        )}
+      </button>
 
       {msg && <p className="statut">{msg}</p>}
 
@@ -118,6 +135,19 @@ export default function Veille() {
             <p className="vide">Rien de notable sur cette période.</p>
           ) : (
             <>
+              <button
+                type="button"
+                className="veille-tiroir"
+                onClick={() => setArticlesOuvert((o) => !o)}
+                aria-expanded={articlesOuvert}
+              >
+                📂 {articlesOuvert ? 'Masquer' : 'Voir'} les {items.length} article
+                {items.length > 1 ? 's' : ''} &amp; sources{' '}
+                <span className="chevron">{articlesOuvert ? '▾' : '▸'}</span>
+              </button>
+
+              {articlesOuvert && (
+                <>
               <div className="bascule">
                 <button type="button" className={onglet === 'regl' ? 'actif' : ''} onClick={() => setOnglet('regl')}>
                   ⚖️ Réglementation ({itemsRegl.length})
@@ -155,6 +185,8 @@ export default function Veille() {
                     );
                   })}
                 </ul>
+              )}
+                </>
               )}
             </>
           )}
