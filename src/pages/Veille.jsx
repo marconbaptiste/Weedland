@@ -25,7 +25,7 @@ export default function Veille() {
   const charger = useCallback(async () => {
     const { data } = await supabase
       .from('veille')
-      .select('id, created_at, titre, intro, items')
+      .select('id, created_at, titre, intro, items, magasin_id')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -96,6 +96,9 @@ export default function Veille() {
             <strong>{bulletin.titre}</strong>
             <span className="chrome-heure">{formatDateFr(bulletin.created_at)}</span>
           </div>
+          {bulletin.magasin_id && (
+            <p className="statut">🎯 Ciblé sur les produits de ta boutique.</p>
+          )}
           {bulletin.intro && <p className="veille-intro">{bulletin.intro}</p>}
 
           {items.length === 0 ? (
