@@ -11,6 +11,8 @@ const CATEGORIES = {
   interdit: { emoji: '🔴', libelle: 'Devient interdit / restreint', classe: 'veille-interdit' },
   autorise: { emoji: '🟢', libelle: 'Autorisé / opportunité', classe: 'veille-autorise' },
   a_suivre: { emoji: '🟡', libelle: 'À suivre', classe: 'veille-suivre' },
+  produit: { emoji: '🆕', libelle: 'Nouveau produit / tendance', classe: 'veille-produit' },
+  fournisseur: { emoji: '🏭', libelle: 'Fournisseur / appro', classe: 'veille-fournisseur' },
 };
 
 export default function Veille() {
@@ -70,8 +72,9 @@ export default function Veille() {
 
       <p className="veille-avertissement">
         ⚠️ <strong>Informations indicatives</strong>, générées automatiquement à partir d’actualités
-        publiques. Elles <strong>ne remplacent pas les textes officiels</strong> ni un conseil
-        juridique — vérifie toujours la source avant toute décision.
+        publiques (légal, nouveaux produits, fournisseurs). Elles <strong>ne remplacent pas les
+        textes officiels</strong> ni un conseil juridique, et les fournisseurs cités ne sont{' '}
+        <strong>pas des recommandations</strong> — vérifie toujours la source avant toute décision.
       </p>
 
       {msg && <p className="statut">{msg}</p>}

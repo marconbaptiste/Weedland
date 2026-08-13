@@ -1203,6 +1203,12 @@ hr {
 .veille-item.veille-suivre {
   border-left-color: #ffc454;
 }
+.veille-item.veille-produit {
+  border-left-color: #6fb2ff;
+}
+.veille-item.veille-fournisseur {
+  border-left-color: #c58cff;
+}
 .veille-cat {
   font-size: 0.8rem;
   color: var(--texte-doux);
