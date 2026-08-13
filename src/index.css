@@ -1176,6 +1176,29 @@ hr {
   font-size: 0.9rem;
   color: var(--texte);
 }
+.veille-avert-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.veille-tiroir {
+  width: 100%;
+  text-align: left;
+  background: var(--fond-input);
+  border: 1px solid var(--bordure);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  margin: 0.4rem 0;
+  color: var(--texte);
+  cursor: pointer;
+  font-weight: 600;
+}
+.veille-tiroir:hover {
+  border-color: var(--bordure-forte);
+}
 .veille-intro {
   margin: 0.2rem 0 0.8rem;
 }

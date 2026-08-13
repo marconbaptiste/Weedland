@@ -199,9 +199,9 @@ export default function Profil() {
         </div>
       )}
 
+      {chromesJour.length > 0 && (
       <div className="card">
         <h2>Chromes du jour</h2>
-        {chromesJour.length === 0 && <p className="vide">Aucun chrome aujourd’hui.</p>}
         {avancesJour.length > 0 && (
           <div className="histo-bloc">
             <span className="histo-titre">Avances</span>
@@ -245,6 +245,7 @@ export default function Profil() {
           </div>
         )}
       </div>
+      )}
 
       <div className="bulles-accueil">
         {options.fidelite && (
