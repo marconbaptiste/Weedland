@@ -160,8 +160,12 @@ Deno.serve(async (req) => {
       return true;
     });
     const top = uniques.slice(0, 40);
-    const liste = top.length
-      ? top
+    // On ne passe qu'un extrait au modele : le RSS est surtout reglementaire et
+    // ancre trop l'IA sur le legal ; pour les nouveautes produits/fournisseurs
+    // c'est la recherche web qui doit primer.
+    const listeSrc = top.slice(0, 22);
+    const liste = listeSrc.length
+      ? listeSrc
           .map((t, i) => (i + 1) + ". [" + (t.date || "date inconnue") + "] " + t.titre + " — " + t.source + " — " + t.lien)
           .join(NL)
       : "(aucun titre RSS recupere ce coup-ci — appuie-toi sur tes recherches web)";
@@ -173,26 +177,26 @@ Deno.serve(async (req) => {
       "HHC, HHCP, HHCPO, HHCH, THCP, THCPO, THCJD, THCH, THCB, THCV, THCA, H4CBD, H2CBD, " +
       "CBN, CBG, CBC, CBDV, CBDP, 10-OH-HHC, delta-8 THC, delta-10 THC, delta-6a10a, CBD9, CBDA";
     const prompt =
-      "Tu es analyste de veille pour des GERANTS de boutiques de CBD en France. Objectif : leur donner une longueur d'avance concrete. " +
+      "Tu es analyste de veille pour des GERANTS de boutiques de CBD en France. Objectif : leur donner une longueur d'avance COMMERCIALE concrete (produits a mettre en rayon, fournisseurs a contacter), pas seulement de la reglementation. " +
       "Nous sommes le " + aujourdhui + ". " +
       contexteStock +
-      "FAIS DE VRAIES RECHERCHES WEB (outil web_search) pour trouver l'actualite la plus RECENTE et PRECISE sur le secteur cannabis/CBD/chanvre, en francais ET en anglais. " +
-      "Cherche activement, en plusieurs requetes ciblees, ces trois axes : " +
-      "(A) NOUVELLES MOLECULES / CANNABINOIDES (naturels, semi-synthetiques, de synthese) qui sortent ou montent — par ex. " + molecules + " ; leur statut legal en France/UE, ce qui devient interdit ou reste autorise. " +
-      "(B) NOUVEAUX PRODUITS DERIVES vendables en boutique (fleurs, resines, huiles, vapes/puffs, e-liquides, infusions, boissons, gummies/comestibles, cosmetiques, champignons/adaptogenes, accessoires) et les TENDANCES qui marchent. " +
-      "(C) FOURNISSEURS / GROSSISTES / MARQUES / SALONS PROFESSIONNELS et approvisionnement (nouveaux acteurs, nouvelles gammes annoncees). " +
-      "Croise avec ces titres RSS recents (date entre crochets — titre — source — lien) comme point de depart, SANS t'y limiter :" + NL + liste + NL +
+      "Tu DOIS utiliser l'outil web_search en plusieurs requetes ciblees (francais ET anglais). Couvre OBLIGATOIREMENT ces trois axes, avec PRIORITE aux axes B et C : " +
+      "(A) MOLECULES / CANNABINOIDES : ce qui sort ou change de statut legal en France/UE (interdiction, autorisation, zone grise) — ex. " + molecules + ". " +
+      "(B) NOUVEAUX PRODUITS a vendre en boutique : lancements CONCRETS de marques — nouveau puff/vape, nouveau e-liquide, nouvelle fleur/resine/hash, nouvelle huile, boisson, gummies, nouveau gout, nouvelle molecule integree a un produit, nouveau format/pipette, edition limitee. Donne des exemples PRECIS et RECENTS (marque + produit + nouveaute). " +
+      "(C) FOURNISSEURS / GROSSISTES / MARQUES / SALONS : grossistes qui sortent une nouvelle gamme, nouveaux distributeurs, nouveautes annoncees sur des salons pro chanvre/CBD, catalogues qui s'etoffent. " +
+      "Pour B et C, NE te contente PAS des titres RSS ci-dessous (surtout reglementaires) : lance de VRAIES recherches web (sites de marques, grossistes, boutiques, presse specialisee, salons) et privilegie l'actualite des 90 derniers jours. " +
+      "Exemples du NIVEAU DE DETAIL attendu (a produire UNIQUEMENT si une source reelle l'atteste, sinon ne rien inventer) : 'La marque X lance un puff 9000 taffs gout pasteque au CBD', 'Le grossiste Y ajoute une gamme de resines H4CBD a son catalogue', 'Le CBC gagne en popularite, propose en huile par la marque Z'. " +
+      "Titres RSS recents (surtout reglementaires — point de depart, PAS une limite) [date — titre — source — lien] :" + NL + liste + NL +
       "Regles STRICTES : " +
-      "0) Ce bulletin est PRIVE et propre a CETTE boutique. Appuie-toi UNIQUEMENT sur des sources PUBLIQUES (web, presse, RSS). N'invente aucun 'deal', tarif ou accord fournisseur, et ne suppose rien sur les fournisseurs ou secrets commerciaux d'autres boutiques : tu n'as aucune information privee, seulement le web public. " +
-      "1) N'INVENTE RIEN. Chaque item doit venir d'une source web reelle que tu as consultee ; recopie fidelement l'URL (source_url) et le nom du media (source_nom), et la date de publication si tu la vois (sinon laisse date vide). " +
-      "2) Privilegie les infos des 60 derniers jours ; ecarte le vieux et le hors-sujet. " +
-      "3) Pour la categorie fournisseur : cite seulement ceux mentionnes dans une source, NE CLASSE PAS et NE RECOMMANDE PAS de toi-meme un 'meilleur'. " +
-      "4) Sois precis et factuel (nom de molecule, nom de produit, nom du texte reglementaire, nom du fournisseur). " +
-      "Rends UNIQUEMENT un JSON strict, sans aucun texte autour, de la forme : " +
-      '{"intro":"une a deux phrases de synthese en francais","items":[{"categorie":"interdit|autorise|a_suivre|produit|fournisseur|opportunite","texte":"phrase claire et factuelle en francais","date":"AAAA-MM-JJ","source_nom":"nom du media","source_url":"lien"}]}. ' +
-      "Vise 8 a 12 items pertinents et varies (couvre les 3 axes A/B/C si la matiere le permet ; max 12). Si vraiment rien, renvoie items vide.";
+      "0) Ce bulletin est PRIVE et propre a CETTE boutique. Sources PUBLIQUES uniquement (web, presse, RSS). N'invente aucun 'deal', tarif ou accord fournisseur, et ne suppose rien sur les secrets d'autres boutiques : tu n'as que le web public. " +
+      "1) N'INVENTE RIEN : chaque item vient d'une source web reelle consultee ; recopie fidelement l'URL (source_url), le media (source_nom) et la date si visible (sinon laisse vide). " +
+      "2) EQUILIBRE OBLIGATOIRE : vise 8 a 12 items, dont AU MOINS LA MOITIE de type 'produit' ou 'fournisseur' (nouveautes commerciales concretes) si le web en fournit. N'empile PAS des news reglementaires etrangeres ou de cannabis medical peu actionnables. " +
+      "3) Categories : 'produit' = un produit/gamme precis qui sort (vendable en boutique) ; 'fournisseur' = grossiste/marque/distributeur/salon avec une nouveaute ; 'opportunite' = molecule/produit qui monte et que la boutique ne vend pas encore ; 'interdit'/'autorise'/'a_suivre' = reglementaire. Pour 'fournisseur', cite seulement ceux d'une source, sans classer ni recommander un 'meilleur'. " +
+      "4) Sois precis et factuel (marque, nom de produit, molecule, gout, format, texte reglementaire). " +
+      "Rends UNIQUEMENT un JSON strict, sans texte autour : " +
+      '{"intro":"une a deux phrases de synthese en francais, en mentionnant les nouveautes produits marquantes","items":[{"categorie":"interdit|autorise|a_suivre|produit|fournisseur|opportunite","texte":"phrase claire et factuelle en francais","date":"AAAA-MM-JJ","source_nom":"nom du media","source_url":"lien"}]}.';
 
-    const tools = [{ type: "web_search_20260209", name: "web_search", max_uses: 8 }];
+    const tools = [{ type: "web_search_20260209", name: "web_search", max_uses: 12 }];
     const messages: { role: string; content: unknown }[] = [{ role: "user", content: prompt }];
     let data: Record<string, unknown> | null = null;
     let restarts = 0;
@@ -202,7 +206,7 @@ Deno.serve(async (req) => {
         headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-5",
-          max_tokens: 4000,
+          max_tokens: 4500,
           tools,
           messages,
         }),

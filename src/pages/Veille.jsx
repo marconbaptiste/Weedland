@@ -3,10 +3,14 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { formatDateFr } from '../lib/format';
 
-// Page — Veille réglementaire CBD (bulletin généré automatiquement par l'IA à
-// partir de flux d'actualités). Informations INDICATIVES : bandeau permanent +
-// lien source sous chaque point. Lecture pour tous les membres ; génération
-// manuelle réservée à l'admin (l'automatique passe par une tâche planifiée).
+// Page — News CBD (bulletin généré automatiquement par l'IA : flux d'actualités
+// + recherche web active). Informations INDICATIVES : bandeau permanent + lien
+// source sous chaque point. Lecture pour tous les membres ; génération manuelle
+// réservée à l'admin (l'automatique passe par une tâche planifiée).
+//
+// Les NOUVEAUTÉS produits / fournisseurs (produit, fournisseur, opportunite) sont
+// affichées EN PREMIER et visibles par défaut — c'est ce que le comptoir veut voir.
+// La partie réglementaire (interdit, autorise, a_suivre) est repliée dans un tiroir.
 const CATEGORIES = {
   interdit: { emoji: '🔴', libelle: 'Devient interdit / restreint', classe: 'veille-interdit' },
   autorise: { emoji: '🟢', libelle: 'Autorisé / opportunité', classe: 'veille-autorise' },
@@ -16,8 +20,28 @@ const CATEGORIES = {
   opportunite: { emoji: '💡', libelle: 'Opportunité — à ajouter au catalogue', classe: 'veille-opportunite' },
 };
 
-const REGL = ['interdit', 'autorise', 'a_suivre'];
-const PROD = ['produit', 'fournisseur', 'opportunite'];
+const PROD = ['produit', 'fournisseur', 'opportunite']; // nouveautés commerciales
+const REGL = ['interdit', 'autorise', 'a_suivre']; // réglementaire / légal
+
+function ItemLi({ it }) {
+  const cat = CATEGORIES[it.categorie] ?? CATEGORIES.a_suivre;
+  return (
+    <li className={`veille-item ${cat.classe}`}>
+      <div className="veille-item-tete">
+        <span className="veille-cat">
+          {cat.emoji} {cat.libelle}
+        </span>
+        {it.date && <span className="veille-date">🗓️ {formatDateFr(it.date)}</span>}
+      </div>
+      <p className="veille-texte">{it.texte}</p>
+      {it.source_url && (
+        <a href={it.source_url} target="_blank" rel="noopener noreferrer" className="veille-source">
+          🔗 {it.source_nom || 'Lire la source'}
+        </a>
+      )}
+    </li>
+  );
+}
 
 export default function Veille() {
   const { estAdmin } = useAuth();
@@ -25,9 +49,8 @@ export default function Veille() {
   const [charge, setCharge] = useState(false);
   const [gen, setGen] = useState(false);
   const [msg, setMsg] = useState('');
-  const [onglet, setOnglet] = useState('regl'); // 'regl' | 'produits'
   const [avertOuvert, setAvertOuvert] = useState(false); // bandeau « indicatif » replié
-  const [articlesOuvert, setArticlesOuvert] = useState(false); // tiroir des articles
+  const [reglOuvert, setReglOuvert] = useState(false); // tiroir réglementation
 
   const charger = useCallback(async () => {
     const { data } = await supabase
@@ -66,9 +89,8 @@ export default function Veille() {
 
   const items = bulletin?.items ?? [];
   const parDate = (a, b) => (b.date || '').localeCompare(a.date || '');
-  const itemsRegl = items.filter((i) => REGL.includes(i.categorie)).sort(parDate);
   const itemsProd = items.filter((i) => PROD.includes(i.categorie)).sort(parDate);
-  const affiches = onglet === 'produits' ? itemsProd : itemsRegl;
+  const itemsRegl = items.filter((i) => REGL.includes(i.categorie)).sort(parDate);
 
   return (
     <div className="page">
@@ -135,57 +157,41 @@ export default function Veille() {
             <p className="vide">Rien de notable sur cette période.</p>
           ) : (
             <>
-              <button
-                type="button"
-                className="veille-tiroir"
-                onClick={() => setArticlesOuvert((o) => !o)}
-                aria-expanded={articlesOuvert}
-              >
-                📂 {articlesOuvert ? 'Masquer' : 'Voir'} les {items.length} article
-                {items.length > 1 ? 's' : ''} &amp; sources{' '}
-                <span className="chevron">{articlesOuvert ? '▾' : '▸'}</span>
-              </button>
-
-              {articlesOuvert && (
-                <>
-              <div className="bascule">
-                <button type="button" className={onglet === 'regl' ? 'actif' : ''} onClick={() => setOnglet('regl')}>
-                  ⚖️ Réglementation ({itemsRegl.length})
-                </button>
-                <button type="button" className={onglet === 'produits' ? 'actif' : ''} onClick={() => setOnglet('produits')}>
-                  🆕 Produits & nouveautés ({itemsProd.length})
-                </button>
-              </div>
-
-              {affiches.length === 0 ? (
-                <p className="vide">
-                  {onglet === 'produits'
-                    ? 'Aucune nouveauté produit repérée ce coup-ci.'
-                    : 'Rien côté réglementation ce coup-ci.'}
+              {/* Nouveautés produits / fournisseurs — visibles par défaut */}
+              <h3 className="veille-section-titre">🆕 Nouveautés, produits &amp; fournisseurs</h3>
+              {itemsProd.length === 0 ? (
+                <p className="statut">
+                  Pas de nouveauté produit repérée ce coup-ci. Relance « Générer maintenant » ou
+                  reviens plus tard — l’IA scrute les lancements de marques, goûts et gammes
+                  fournisseurs.
                 </p>
               ) : (
                 <ul className="veille-liste">
-                  {affiches.map((it, i) => {
-                    const cat = CATEGORIES[it.categorie] ?? CATEGORIES.a_suivre;
-                    return (
-                      <li key={i} className={`veille-item ${cat.classe}`}>
-                        <div className="veille-item-tete">
-                          <span className="veille-cat">
-                            {cat.emoji} {cat.libelle}
-                          </span>
-                          {it.date && <span className="veille-date">🗓️ {formatDateFr(it.date)}</span>}
-                        </div>
-                        <p className="veille-texte">{it.texte}</p>
-                        {it.source_url && (
-                          <a href={it.source_url} target="_blank" rel="noopener noreferrer" className="veille-source">
-                            🔗 {it.source_nom || 'Lire la source'}
-                          </a>
-                        )}
-                      </li>
-                    );
-                  })}
+                  {itemsProd.map((it, i) => (
+                    <ItemLi key={i} it={it} />
+                  ))}
                 </ul>
               )}
+
+              {/* Réglementation & légal — replié dans un tiroir */}
+              {itemsRegl.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    className="veille-tiroir"
+                    onClick={() => setReglOuvert((o) => !o)}
+                    aria-expanded={reglOuvert}
+                  >
+                    ⚖️ {reglOuvert ? 'Masquer' : 'Voir'} la réglementation &amp; le légal (
+                    {itemsRegl.length}) <span className="chevron">{reglOuvert ? '▾' : '▸'}</span>
+                  </button>
+                  {reglOuvert && (
+                    <ul className="veille-liste">
+                      {itemsRegl.map((it, i) => (
+                        <ItemLi key={i} it={it} />
+                      ))}
+                    </ul>
+                  )}
                 </>
               )}
             </>
