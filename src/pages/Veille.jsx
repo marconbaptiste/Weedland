@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { formatDateFr } from '../lib/format';
@@ -8,9 +8,9 @@ import { formatDateFr } from '../lib/format';
 // source sous chaque point. Lecture pour tous les membres ; génération manuelle
 // réservée à l'admin (l'automatique passe par une tâche planifiée).
 //
-// Les NOUVEAUTÉS produits / fournisseurs (produit, fournisseur, opportunite) sont
-// affichées EN PREMIER et visibles par défaut — c'est ce que le comptoir veut voir.
-// La partie réglementaire (interdit, autorise, a_suivre) est repliée dans un tiroir.
+// Mise en page : on affiche 3 SYNTHÈSES courtes écrites par l'IA (synthèse du
+// jour + nouveautés produits/fournisseurs + réglementation), et le DÉTAIL des
+// articles (avec sources) est caché dans des tiroirs par section. Gain de place.
 const CATEGORIES = {
   interdit: { emoji: '🔴', libelle: 'Devient interdit / restreint', classe: 'veille-interdit' },
   autorise: { emoji: '🟢', libelle: 'Autorisé / opportunité', classe: 'veille-autorise' },
@@ -22,6 +22,7 @@ const CATEGORIES = {
 
 const PROD = ['produit', 'fournisseur', 'opportunite']; // nouveautés commerciales
 const REGL = ['interdit', 'autorise', 'a_suivre']; // réglementaire / légal
+const COLS = 'id, created_at, titre, intro, synthese_produits, synthese_reglementation, items, magasin_id';
 
 function ItemLi({ it }) {
   const cat = CATEGORIES[it.categorie] ?? CATEGORIES.a_suivre;
@@ -43,6 +44,41 @@ function ItemLi({ it }) {
   );
 }
 
+// Une section = un titre + la synthèse IA (visible) + un tiroir qui déplie le
+// détail des articles/sources. Rien à afficher si aucune synthèse ni article.
+function SectionTiroir({ titre, synthese, items, ouvert, onToggle, videTexte }) {
+  if (!synthese && items.length === 0) {
+    return videTexte ? (
+      <>
+        <h3 className="veille-section-titre">{titre}</h3>
+        <p className="statut">{videTexte}</p>
+      </>
+    ) : null;
+  }
+  return (
+    <>
+      <h3 className="veille-section-titre">{titre}</h3>
+      {synthese && <p className="veille-synthese">{synthese}</p>}
+      {items.length > 0 && (
+        <>
+          <button type="button" className="veille-tiroir" onClick={onToggle} aria-expanded={ouvert}>
+            📂 {ouvert ? 'Masquer' : 'Voir'} le détail — {items.length} article
+            {items.length > 1 ? 's' : ''} &amp; source{items.length > 1 ? 's' : ''}{' '}
+            <span className="chevron">{ouvert ? '▾' : '▸'}</span>
+          </button>
+          {ouvert && (
+            <ul className="veille-liste">
+              {items.map((it, i) => (
+                <ItemLi key={i} it={it} />
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 export default function Veille() {
   const { estAdmin } = useAuth();
   const [bulletin, setBulletin] = useState(null);
@@ -50,28 +86,75 @@ export default function Veille() {
   const [gen, setGen] = useState(false);
   const [msg, setMsg] = useState('');
   const [avertOuvert, setAvertOuvert] = useState(false); // bandeau « indicatif » replié
+  const [prodOuvert, setProdOuvert] = useState(false); // tiroir nouveautés produits
   const [reglOuvert, setReglOuvert] = useState(false); // tiroir réglementation
+  const monteRef = useRef(true); // évite les setState après démontage
+  const pollRef = useRef(null); // id du timer de surveillance
 
   const charger = useCallback(async () => {
     const { data } = await supabase
       .from('veille')
-      .select('id, created_at, titre, intro, items, magasin_id')
+      .select(COLS)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+    if (!monteRef.current) return null;
     setBulletin(data ?? null);
     setCharge(true);
+    return data ?? null;
   }, []);
 
   useEffect(() => {
+    monteRef.current = true;
     charger();
+    return () => {
+      monteRef.current = false;
+      if (pollRef.current) clearTimeout(pollRef.current);
+    };
   }, [charger]);
 
+  // La génération tourne EN TÂCHE DE FOND côté serveur (elle continue même si on
+  // ferme l'app). On surveille l'arrivée d'un bulletin plus récent que celui
+  // affiché avant le clic, puis on l'affiche automatiquement.
+  const surveiller = useCallback(
+    (avantId, essai = 0) => {
+      const MAX = 24; // ~4 min à 10 s
+      pollRef.current = setTimeout(async () => {
+        if (!monteRef.current) return;
+        const { data } = await supabase
+          .from('veille')
+          .select(COLS)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!monteRef.current) return;
+        if (data && data.id !== avantId) {
+          setBulletin(data);
+          setGen(false);
+          setMsg(`Bulletin mis à jour ✅ (${(data.items ?? []).length} info(s)).`);
+          return;
+        }
+        if (essai >= MAX) {
+          setGen(false);
+          setMsg(
+            "La recherche prend plus de temps que prévu, ou rien de neuf n'est ressorti. " +
+              'Le bulletin s’affichera ici dès qu’il est prêt — reviens dans un moment ou réessaie.'
+          );
+          return;
+        }
+        surveiller(avantId, essai + 1);
+      }, 10000);
+    },
+    []
+  );
+
   async function genererMaintenant() {
+    if (pollRef.current) clearTimeout(pollRef.current);
     setGen(true);
     setMsg('');
+    const avantId = bulletin?.id ?? null;
     const { data, error } = await supabase.functions.invoke('veille-cbd', { body: {} });
-    setGen(false);
+    // Erreur immédiate (non autorisé, clé IA manquante…) → on s'arrête là.
     if (error || data?.error) {
       let m = data?.error ?? 'Génération impossible pour le moment.';
       try {
@@ -80,11 +163,16 @@ export default function Veille() {
       } catch {
         /* message générique */
       }
+      setGen(false);
       setMsg(m);
       return;
     }
-    setMsg(`Bulletin mis à jour ✅ (${data?.nb ?? 0} info(s)).`);
-    charger();
+    // La recherche est lancée côté serveur : on surveille son résultat.
+    setMsg(
+      '🔎 Recherche en cours… Ça peut prendre 1 à 2 minutes. Tu peux fermer l’app : ' +
+        'le bulletin s’affichera ici dès qu’il est prêt.'
+    );
+    surveiller(avantId);
   }
 
   const items = bulletin?.items ?? [];
@@ -98,7 +186,13 @@ export default function Veille() {
         <h1>📰 News</h1>
         {estAdmin && (
           <button type="button" className="btn btn-compact" onClick={genererMaintenant} disabled={gen}>
-            {gen ? 'Recherche…' : '🔄 Générer maintenant'}
+            {gen ? (
+              <>
+                <span className="spinner-inline" aria-hidden="true" /> Recherche…
+              </>
+            ) : (
+              '🔄 Générer maintenant'
+            )}
           </button>
         )}
       </div>
@@ -119,12 +213,17 @@ export default function Veille() {
           </span>
         ) : (
           <span>
-            ⚠️ <strong>Informations indicatives</strong> — appuie pour lire l’avertissement{' '}
-            <span className="chevron">▸</span>
+            ⚠️ <strong>Informations indicatives</strong> <span className="chevron">▸</span>
           </span>
         )}
       </button>
 
+      {gen && (
+        <div className="veille-recherche">
+          <span className="spinner-inline spinner-lg" aria-hidden="true" />
+          <span>Recherche en cours…</span>
+        </div>
+      )}
       {msg && <p className="statut">{msg}</p>}
 
       {!charge ? (
@@ -151,49 +250,35 @@ export default function Veille() {
               (indicatif, pas une garantie de vente).
             </p>
           )}
+          {/* Synthèse du jour (toujours visible) */}
           {bulletin.intro && <p className="veille-intro">{bulletin.intro}</p>}
 
-          {items.length === 0 ? (
+          {items.length === 0 && !bulletin.synthese_produits && !bulletin.synthese_reglementation ? (
             <p className="vide">Rien de notable sur cette période.</p>
           ) : (
             <>
-              {/* Nouveautés produits / fournisseurs — visibles par défaut */}
-              <h3 className="veille-section-titre">🆕 Nouveautés, produits &amp; fournisseurs</h3>
-              {itemsProd.length === 0 ? (
-                <p className="statut">
-                  Pas de nouveauté produit repérée ce coup-ci. Relance « Générer maintenant » ou
-                  reviens plus tard — l’IA scrute les lancements de marques, goûts et gammes
-                  fournisseurs.
-                </p>
-              ) : (
-                <ul className="veille-liste">
-                  {itemsProd.map((it, i) => (
-                    <ItemLi key={i} it={it} />
-                  ))}
-                </ul>
-              )}
+              {/* Nouveautés produits & fournisseurs : synthèse + tiroir de détail */}
+              <SectionTiroir
+                titre="🆕 Nouveautés, produits & fournisseurs"
+                synthese={bulletin.synthese_produits}
+                items={itemsProd}
+                ouvert={prodOuvert}
+                onToggle={() => setProdOuvert((o) => !o)}
+                videTexte={
+                  !bulletin.synthese_produits && itemsProd.length === 0
+                    ? 'Pas de nouveauté produit repérée ce coup-ci — l’IA scrute les lancements de marques, goûts et gammes fournisseurs.'
+                    : null
+                }
+              />
 
-              {/* Réglementation & légal — replié dans un tiroir */}
-              {itemsRegl.length > 0 && (
-                <>
-                  <button
-                    type="button"
-                    className="veille-tiroir"
-                    onClick={() => setReglOuvert((o) => !o)}
-                    aria-expanded={reglOuvert}
-                  >
-                    ⚖️ {reglOuvert ? 'Masquer' : 'Voir'} la réglementation &amp; le légal (
-                    {itemsRegl.length}) <span className="chevron">{reglOuvert ? '▾' : '▸'}</span>
-                  </button>
-                  {reglOuvert && (
-                    <ul className="veille-liste">
-                      {itemsRegl.map((it, i) => (
-                        <ItemLi key={i} it={it} />
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )}
+              {/* Réglementation & légal : synthèse + tiroir de détail */}
+              <SectionTiroir
+                titre="⚖️ Réglementation & légal"
+                synthese={bulletin.synthese_reglementation}
+                items={itemsRegl}
+                ouvert={reglOuvert}
+                onToggle={() => setReglOuvert((o) => !o)}
+              />
             </>
           )}
         </div>
