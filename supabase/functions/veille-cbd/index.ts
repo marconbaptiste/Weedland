@@ -319,46 +319,63 @@ async function genererEtInserer(svc: SupabaseClient, magasinId: string | null, p
   if (error) console.error("veille insert", error);
   else console.log("veille insert OK via=" + via + " nb=" + items.length + " magasin=" + (magasinId ?? "global"));
 
-  // Mise a jour de la reference molecules (uniquement via la recherche web fiable).
-  // Reference GLOBALE : upsert par service_role.
-  // SECURITE (anti prompt-injection) : la recherche web lit des pages non fiables.
-  // On (1) NORMALISE le code (majuscules, sans espaces) pour eviter les doublons
-  // 'hhc'/'HHC', (2) n'ASSOUPLIT JAMAIS le statut d'une molecule existante depuis du
-  // web (une page piegee ne peut pas passer 'interdit'->'autorise' pour tous les
-  // magasins) : seule une maj IDENTIQUE ou PLUS RESTRICTIVE est appliquee ; les
-  // codes inconnus sont inseres. Un desserrement reel de la loi devra passer par le
-  // seed/migration (revue humaine).
+  // Molecules : VALIDATION HUMAINE. L'IA n'ecrit plus JAMAIS dans la reference
+  // globale `molecules` : chaque nouveaute / changement de statut detecte par la
+  // recherche web devient une PROPOSITION (molecules_propositions), que le
+  // superadmin approuve ou rejette dans la page News. Ferme le vecteur
+  // prompt-injection : une page piegee ne peut plus alterer le statut legal
+  // affiche a tous les magasins sans un humain dans la boucle.
   if (via === "web" && Array.isArray(parsed.molecules_maj) && parsed.molecules_maj.length) {
     const stOk = new Set(["autorise", "gris", "interdit"]);
-    const rang: Record<string, number> = { autorise: 0, gris: 1, interdit: 2 };
     const normCode = (c: string) => c.toUpperCase().replace(/\s+/g, "").slice(0, 40);
     const actuel = new Map((molRef ?? []).map((m) => [normCode(String(m.code)), String(m.statut)]));
+    // Anti-doublon : pas de nouvelle proposition pour un code deja en attente.
+    const { data: attente } = await svc.from("molecules_propositions").select("code").eq("etat", "en_attente");
+    const dejaPropose = new Set((attente ?? []).map((p) => String(p.code)));
     const rows = parsed.molecules_maj
       .filter((m: Record<string, unknown>) => m && typeof m.code === "string" && String(m.code).trim() && stOk.has(String(m.statut)))
       .map((m: Record<string, unknown>) => ({
         code: normCode(String(m.code)),
         nom: String(m.nom ?? m.code).slice(0, 120),
-        statut: String(m.statut),
+        statut_actuel: null as string | null,
+        statut_propose: String(m.statut),
         profil: m.profil ? String(m.profil).slice(0, 400) : null,
         avis: m.avis ? String(m.avis).slice(0, 400) : null,
         a_noter: m.a_noter ? String(m.a_noter).slice(0, 400) : null,
-        updated_at: new Date().toISOString(),
       }))
       .filter((r) => {
+        if (dejaPropose.has(r.code)) return false;
         const anc = actuel.get(r.code);
-        if (anc === undefined) return true; // nouvelle molecule : insertion OK
-        if (rang[r.statut] < rang[anc]) {
-          console.log("molecules: maj refusee (assouplissement) " + r.code + " " + anc + "->" + r.statut);
-          return false;
-        }
+        if (anc === r.statut_propose) return false; // rien ne change -> pas de bruit
+        r.statut_actuel = anc ?? null;
         return true;
       })
       .slice(0, 20);
     if (rows.length) {
-      const { error: eMol } = await svc.from("molecules").upsert(rows, { onConflict: "code" });
-      if (eMol) console.error("molecules upsert", eMol);
-      else console.log("molecules maj " + rows.length + " (" + rows.map((r) => r.code).join(",") + ")");
+      const { error: eProp } = await svc.from("molecules_propositions").insert(rows);
+      if (eProp) console.error("molecules propositions", eProp);
+      else console.log("molecules propositions " + rows.length + " (" + rows.map((r) => r.code).join(",") + ")");
     }
+  }
+
+  // Purge : la table `veille` ne doit pas grossir sans fin. On garde les 10
+  // derniers bulletins du perimetre genere (ce magasin, ou le global pour le
+  // cron), et on nettoie les propositions traitees de plus de 60 jours.
+  try {
+    const derniersQ = svc.from("veille").select("created_at").order("created_at", { ascending: false }).limit(10);
+    const { data: derniers } = magasinId
+      ? await derniersQ.eq("magasin_id", magasinId)
+      : await derniersQ.is("magasin_id", null);
+    if (derniers && derniers.length === 10) {
+      const seuil = derniers[derniers.length - 1].created_at;
+      const delQ = svc.from("veille").delete().lt("created_at", seuil);
+      const { error: ePurge } = magasinId ? await delQ.eq("magasin_id", magasinId) : await delQ.is("magasin_id", null);
+      if (ePurge) console.error("veille purge", ePurge);
+    }
+    const ilY60j = new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString();
+    await svc.from("molecules_propositions").delete().neq("etat", "en_attente").lt("created_at", ilY60j);
+  } catch (e) {
+    console.error("purge", e);
   }
 }
 

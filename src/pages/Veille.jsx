@@ -165,12 +165,71 @@ function MoleculesTiroir({ molecules, ouvert, onToggle }) {
   );
 }
 
+// Propositions de mise à jour de la fiche molécules, détectées par l'IA lors de
+// la recherche web. RIEN ne s'applique tout seul : le superadmin valide ou
+// rejette chaque proposition (garde-fou humain contre les fausses infos du web).
+function PropositionsMolecules({ propositions, onTraiter, occupe }) {
+  if (!propositions || propositions.length === 0) return null;
+  return (
+    <div className="card mol-prop-card">
+      <h3 className="veille-section-titre">
+        🧬 {propositions.length} proposition{propositions.length > 1 ? 's' : ''} de l’IA à valider
+      </h3>
+      <p className="statut">
+        Détectées par la recherche web. Rien ne change dans la fiche molécules tant que tu n’as pas
+        validé — vérifie la source officielle avant d’accepter.
+      </p>
+      <ul className="mol-liste">
+        {propositions.map((p) => {
+          const avant = STATUTS_MOL[p.statut_actuel]?.libelle;
+          const apres = STATUTS_MOL[p.statut_propose]?.libelle ?? p.statut_propose;
+          return (
+            <li key={p.id} className={`mol-item ${STATUTS_MOL[p.statut_propose]?.classe ?? 'mol-gris'}`}>
+              <div className="mol-item-tete">
+                <span className="mol-code">{p.code}</span>
+                <span className={`mol-pill ${STATUTS_MOL[p.statut_propose]?.classe ?? 'mol-gris'}`}>
+                  {avant ? `${avant} → ${apres}` : `Nouvelle — ${apres}`}
+                </span>
+              </div>
+              {p.nom && <div className="mol-nom">{p.nom}</div>}
+              {p.a_noter && (
+                <p className="mol-ligne">
+                  <b>À noter</b> {p.a_noter}
+                </p>
+              )}
+              <div className="mol-prop-actions">
+                <button
+                  type="button"
+                  className="btn btn-compact"
+                  disabled={occupe}
+                  onClick={() => onTraiter(p.id, true)}
+                >
+                  ✅ Valider
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-compact btn-secondaire"
+                  disabled={occupe}
+                  onClick={() => onTraiter(p.id, false)}
+                >
+                  ❌ Rejeter
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export default function Veille() {
-  const { estAdmin, profil } = useAuth();
+  const { estAdmin, estSuperadmin, profil } = useAuth();
   const monMag = profil?.magasin_id ?? null;
   const [bulletin, setBulletin] = useState(null);
   const [molecules, setMolecules] = useState([]);
   const [molOuvert, setMolOuvert] = useState(false);
+  const [propositions, setPropositions] = useState([]); // à valider (superadmin)
   const [charge, setCharge] = useState(false);
   const [gen, setGen] = useState(false);
   const [msg, setMsg] = useState('');
@@ -214,6 +273,15 @@ export default function Veille() {
         )
       );
     }
+    // Propositions de l'IA à valider — visibles du superadmin seulement (RLS).
+    if (estSuperadmin) {
+      const { data: props } = await supabase
+        .from('molecules_propositions')
+        .select('id, code, nom, statut_actuel, statut_propose, profil, avis, a_noter, created_at')
+        .eq('etat', 'en_attente')
+        .order('created_at', { ascending: true });
+      if (monteRef.current) setPropositions(Array.isArray(props) ? props : []);
+    }
     if (attenduRef.current !== undefined && data && data.id !== attenduRef.current) {
       attenduRef.current = undefined;
       if (pollRef.current) clearTimeout(pollRef.current);
@@ -221,7 +289,7 @@ export default function Veille() {
       setMsg(`Bulletin mis à jour ✅ (${(data.items ?? []).length} info(s)).`);
     }
     return data;
-  }, [monMag]);
+  }, [monMag, estSuperadmin]);
 
   useEffect(() => {
     monteRef.current = true;
@@ -292,6 +360,22 @@ export default function Veille() {
     surveiller(0);
   }
 
+  const [traiteEnCours, setTraiteEnCours] = useState(false);
+  async function traiterProposition(id, accepter) {
+    setTraiteEnCours(true);
+    const { error } = await supabase.rpc('molecule_proposition_traiter', {
+      p_id: id,
+      p_accepter: accepter,
+    });
+    setTraiteEnCours(false);
+    if (error) {
+      setMsg('Traitement impossible : ' + (error.message ?? 'réessaie.'));
+      return;
+    }
+    setMsg(accepter ? 'Fiche molécules mise à jour ✅' : 'Proposition rejetée.');
+    charger();
+  }
+
   const items = bulletin?.items ?? [];
   const parDate = (a, b) => (b.date || '').localeCompare(a.date || '');
   const itemsProd = items.filter((i) => PROD.includes(i.categorie)).sort(parDate);
@@ -345,6 +429,15 @@ export default function Veille() {
         </div>
       )}
       {!gen && msg && <p className="statut">{msg}</p>}
+
+      {/* Validation humaine des mises à jour molécules (superadmin) */}
+      {estSuperadmin && (
+        <PropositionsMolecules
+          propositions={propositions}
+          onTraiter={traiterProposition}
+          occupe={traiteEnCours}
+        />
+      )}
 
       {!charge ? (
         <p className="statut">Chargement…</p>
