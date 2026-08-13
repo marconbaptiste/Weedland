@@ -1213,10 +1213,22 @@ hr {
   border-left-color: #4fd08a;
   background: rgba(79, 208, 138, 0.08);
 }
+.veille-item-tete {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
 .veille-cat {
   font-size: 0.8rem;
   color: var(--texte-doux);
   font-weight: 600;
+}
+.veille-date {
+  font-size: 0.78rem;
+  color: var(--texte-doux);
+  white-space: nowrap;
 }
 .veille-texte {
   margin: 0.25rem 0 0.35rem;

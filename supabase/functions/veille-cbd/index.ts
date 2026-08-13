@@ -24,6 +24,7 @@ const FEEDS: { url: string; source: string }[] = [
   { url: "https://www.newsweed.fr/feed/", source: "Newsweed" },
   { url: gnews("CBD OR chanvre OR cannabinoide reglementation France"), source: "" },
   { url: gnews("HHC OR THCP OR H4CBD OR CBN cannabinoide interdit OR legal"), source: "" },
+  { url: gnews("CBD OR chanvre OR cannabis arrete OR decret Journal Officiel OR Legifrance"), source: "" },
   { url: gnews("nouveau produit CBD OR boutique CBD tendance"), source: "" },
   { url: gnews("grossiste CBD OR fournisseur CBD OR salon professionnel chanvre"), source: "" },
 ];
@@ -39,9 +40,18 @@ function texteEntre(s: string, a: string, b: string): string {
 function nettoie(s: string): string {
   return s.split("<![CDATA[").join("").split("]]>").join("").trim();
 }
+// pubDate RSS ("Wed, 13 May 2026 08:00:00 GMT") -> "2026-05-13" (ou "" si illisible).
+function dateISO(s: string): string {
+  const raw = nettoie(s);
+  if (!raw) return "";
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
+}
+type Article = { titre: string; lien: string; source: string; date: string };
 // Parse RSS sans expression reguliere (evite tout souci d'echappement).
-function parseRss(xml: string) {
-  const items: { titre: string; lien: string; source: string }[] = [];
+function parseRss(xml: string): Article[] {
+  const items: Article[] = [];
   const blocs = xml.split("<item").slice(1);
   for (const brut of blocs) {
     const b = brut.slice(brut.indexOf(">") + 1);
@@ -49,7 +59,8 @@ function parseRss(xml: string) {
     const lien = nettoie(texteEntre(b, "<link>", "</link>"));
     const srcBrut = texteEntre(b, "<source", "</source>");
     const source = nettoie(srcBrut.indexOf(">") >= 0 ? srcBrut.slice(srcBrut.indexOf(">") + 1) : srcBrut);
-    if (titre && lien) items.push({ titre, lien, source });
+    const date = dateISO(texteEntre(b, "<pubDate>", "</pubDate>"));
+    if (titre && lien) items.push({ titre, lien, source, date });
   }
   return items;
 }
@@ -111,7 +122,7 @@ Deno.serve(async (req) => {
     }
 
     // 1) Collecte RSS
-    const bruts: { titre: string; lien: string; source: string }[] = [];
+    const bruts: Article[] = [];
     const diag: string[] = [];
     for (const feed of [...FEEDS, ...feedsSup]) {
       const nom = feed.source || "gnews";
@@ -140,18 +151,21 @@ Deno.serve(async (req) => {
     const top = uniques.slice(0, 55);
     if (top.length === 0) return json({ error: "Aucune actualite recuperee (" + diag.join(", ") + ")." }, 200);
 
-    // 2) Resume par l'IA
-    const liste = top.map((t, i) => (i + 1) + ". " + t.titre + " — " + t.source + " — " + t.lien).join(NL);
+    // 2) Resume par l'IA (la date est indiquee entre [ ] pour chaque titre)
+    const liste = top
+      .map((t, i) => (i + 1) + ". [" + (t.date || "date inconnue") + "] " + t.titre + " — " + t.source + " — " + t.lien)
+      .join(NL);
     const prompt =
       "Tu fais une veille pour des GERANTS de boutiques de CBD en France, pour qu'ils aient une longueur d'avance. " +
       contexteStock +
-      "Voici des titres d'actualites recentes (titre — source — lien). " +
+      "Voici des titres d'actualites recentes, chacun precede de sa DATE entre crochets (date — titre — source — lien). " +
       "Retiens tout ce qui aide concretement une boutique de CBD : (1) LEGALITE / REGLEMENTATION du CBD, chanvre, THC et cannabinoides de synthese (HHC, THCP, H4CBD, CBN, etc.) en France/Europe ; " +
       "(2) NOUVEAUX PRODUITS et TENDANCES vendables en boutique CBD (fleurs, resines, huiles, vapes/puffs, infusions, boissons, cosmetiques, comestibles, accessoires, champignons/adaptogenes, etc.) ; " +
       "(3) FOURNISSEURS / GROSSISTES / SALONS PROFESSIONNELS et approvisionnement. " +
       "Sois GENEREUX : garde tout ce qui touche de pres ou de loin au secteur CBD/chanvre/cannabis et peut interesser un gerant. Ne jette que le vraiment hors-sujet (faits divers sans lien, pub pure). " +
+      "Recopie fidelement le lien (source_url) et la date de l'article choisi. " +
       "Reponds en JSON STRICT, sans texte autour : " +
-      '{"intro":"une phrase de synthese en francais","items":[{"categorie":"interdit|autorise|a_suivre|produit|fournisseur|opportunite","texte":"phrase claire et factuelle en francais","source_nom":"nom du media","source_url":"lien"}]}. ' +
+      '{"intro":"une phrase de synthese en francais","items":[{"categorie":"interdit|autorise|a_suivre|produit|fournisseur|opportunite","texte":"phrase claire et factuelle en francais","date":"AAAA-MM-JJ","source_nom":"nom du media","source_url":"lien"}]}. ' +
       "Vise 6 a 10 items pertinents si la matiere le permet (max 10). N'INVENTE RIEN : n'ajoute que ce qui ressort d'un titre/source. " +
       "Pour la categorie fournisseur : cite seulement ceux mentionnes dans les sources, NE CLASSE PAS et NE RECOMMANDE PAS de toi-meme. Si rien de pertinent, renvoie items vide. " +
       "Titres :" + NL + liste;
@@ -175,15 +189,22 @@ Deno.serve(async (req) => {
     if (!parsed || !Array.isArray(parsed.items)) return json({ error: "Resume illisible." }, 200);
 
     const cats = new Set(["interdit", "autorise", "a_suivre", "produit", "fournisseur", "opportunite"]);
+    // Date fiable : celle du flux (pubDate) retrouvée par le lien ; sinon celle de l'IA.
+    const dateParLien = new Map(top.map((t) => [t.lien, t.date]));
     const items = parsed.items
       .filter((x: Record<string, unknown>) => x && typeof x.texte === "string")
       .slice(0, 10)
-      .map((x: Record<string, unknown>) => ({
-        categorie: cats.has(String(x.categorie)) ? x.categorie : "a_suivre",
-        texte: String(x.texte).slice(0, 400),
-        source_nom: String(x.source_nom ?? "").slice(0, 120),
-        source_url: String(x.source_url ?? "").slice(0, 500),
-      }));
+      .map((x: Record<string, unknown>) => {
+        const url = String(x.source_url ?? "").slice(0, 500);
+        const dateIa = typeof x.date === "string" ? x.date.slice(0, 20) : "";
+        return {
+          categorie: cats.has(String(x.categorie)) ? x.categorie : "a_suivre",
+          texte: String(x.texte).slice(0, 400),
+          date: dateParLien.get(url) || dateIa,
+          source_nom: String(x.source_nom ?? "").slice(0, 120),
+          source_url: url,
+        };
+      });
 
     // 3) Enregistrement
     const { error } = await svc.from("veille").insert({

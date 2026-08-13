@@ -16,12 +16,16 @@ const CATEGORIES = {
   opportunite: { emoji: '💡', libelle: 'Opportunité — à ajouter au catalogue', classe: 'veille-opportunite' },
 };
 
+const REGL = ['interdit', 'autorise', 'a_suivre'];
+const PROD = ['produit', 'fournisseur', 'opportunite'];
+
 export default function Veille() {
   const { estAdmin } = useAuth();
   const [bulletin, setBulletin] = useState(null);
   const [charge, setCharge] = useState(false);
   const [gen, setGen] = useState(false);
   const [msg, setMsg] = useState('');
+  const [onglet, setOnglet] = useState('regl'); // 'regl' | 'produits'
 
   const charger = useCallback(async () => {
     const { data } = await supabase
@@ -59,6 +63,10 @@ export default function Veille() {
   }
 
   const items = bulletin?.items ?? [];
+  const parDate = (a, b) => (b.date || '').localeCompare(a.date || '');
+  const itemsRegl = items.filter((i) => REGL.includes(i.categorie)).sort(parDate);
+  const itemsProd = items.filter((i) => PROD.includes(i.categorie)).sort(parDate);
+  const affiches = onglet === 'produits' ? itemsProd : itemsRegl;
 
   return (
     <div className="page">
@@ -109,24 +117,46 @@ export default function Veille() {
           {items.length === 0 ? (
             <p className="vide">Rien de notable sur cette période.</p>
           ) : (
-            <ul className="veille-liste">
-              {items.map((it, i) => {
-                const cat = CATEGORIES[it.categorie] ?? CATEGORIES.a_suivre;
-                return (
-                  <li key={i} className={`veille-item ${cat.classe}`}>
-                    <span className="veille-cat">
-                      {cat.emoji} {cat.libelle}
-                    </span>
-                    <p className="veille-texte">{it.texte}</p>
-                    {it.source_url && (
-                      <a href={it.source_url} target="_blank" rel="noopener noreferrer" className="veille-source">
-                        🔗 {it.source_nom || 'Lire la source'}
-                      </a>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+            <>
+              <div className="bascule">
+                <button type="button" className={onglet === 'regl' ? 'actif' : ''} onClick={() => setOnglet('regl')}>
+                  ⚖️ Réglementation ({itemsRegl.length})
+                </button>
+                <button type="button" className={onglet === 'produits' ? 'actif' : ''} onClick={() => setOnglet('produits')}>
+                  🆕 Produits & nouveautés ({itemsProd.length})
+                </button>
+              </div>
+
+              {affiches.length === 0 ? (
+                <p className="vide">
+                  {onglet === 'produits'
+                    ? 'Aucune nouveauté produit repérée ce coup-ci.'
+                    : 'Rien côté réglementation ce coup-ci.'}
+                </p>
+              ) : (
+                <ul className="veille-liste">
+                  {affiches.map((it, i) => {
+                    const cat = CATEGORIES[it.categorie] ?? CATEGORIES.a_suivre;
+                    return (
+                      <li key={i} className={`veille-item ${cat.classe}`}>
+                        <div className="veille-item-tete">
+                          <span className="veille-cat">
+                            {cat.emoji} {cat.libelle}
+                          </span>
+                          {it.date && <span className="veille-date">🗓️ {formatDateFr(it.date)}</span>}
+                        </div>
+                        <p className="veille-texte">{it.texte}</p>
+                        {it.source_url && (
+                          <a href={it.source_url} target="_blank" rel="noopener noreferrer" className="veille-source">
+                            🔗 {it.source_nom || 'Lire la source'}
+                          </a>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </>
           )}
         </div>
       )}
