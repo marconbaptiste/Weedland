@@ -2,7 +2,9 @@ import { formatEuros } from '../lib/format';
 
 // Liste éditable de montants (charges ou fournisseurs) : libellé + montant par
 // ligne, justificatif (photo de facture/ticket), total, ajout/suppression et
-// reprise du mois précédent.
+// reprise du mois précédent. `categories` (optionnel, charges uniquement) :
+// liste {id, libelle} → affiche un sélecteur de catégorie par ligne, persisté
+// via `onCategorie(id, valeur)`.
 export default function ListeMontants({
   titre,
   items,
@@ -14,6 +16,8 @@ export default function ListeMontants({
   onCopierPrecedent,
   onJustificatif,
   onVoirJustificatif,
+  categories,
+  onCategorie,
 }) {
   return (
     <div className="card">
@@ -34,6 +38,22 @@ export default function ListeMontants({
                   onBlur={() => onEnregistrer(it.id)}
                 />
               </td>
+              {categories && (
+                <td data-label="Catégorie">
+                  <select
+                    className="select-categorie"
+                    value={it.categorie ?? ''}
+                    onChange={(e) => onCategorie(it.id, e.target.value)}
+                  >
+                    <option value="">Catégorie…</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.libelle}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              )}
               <td className="droite" data-label="Montant">
                 <input
                   className="champ-pourcentage"
@@ -83,7 +103,7 @@ export default function ListeMontants({
           ))}
           {items.length === 0 && (
             <tr>
-              <td colSpan={4} className="vide">
+              <td colSpan={categories ? 5 : 4} className="vide">
                 Aucune ligne.
               </td>
             </tr>

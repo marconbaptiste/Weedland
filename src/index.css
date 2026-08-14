@@ -1331,6 +1331,14 @@ hr {
   border-radius: 999px;
   background: #5fbf8e;
 }
+.tres-barre > span.barre-attention {
+  background: #e3b341;
+}
+.select-categorie {
+  width: 100%;
+  max-width: 220px;
+  font-size: 0.85rem;
+}
 .recap-section {
   font-size: 0.72rem;
   text-transform: uppercase;
