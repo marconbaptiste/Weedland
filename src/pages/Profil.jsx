@@ -9,7 +9,6 @@ import GuideDemarrage from '../components/GuideDemarrage';
 import CalculatriceMonnaie from '../components/CalculatriceMonnaie';
 import ScannerFidelite from '../components/ScannerFidelite';
 import ListeCourses from '../components/ListeCourses';
-import CalendrierLecture from '../components/CalendrierLecture';
 
 // Accueil après connexion : profil + CA (jour/semaine) + une rangée de
 // raccourcis en bulles (scanner fidélité, liste de courses, rendu monnaie). La
@@ -28,6 +27,11 @@ export default function Profil() {
   const [coursesNouveau, setCoursesNouveau] = useState(false);
   const vusRef = useRef(null); // nb d'articles « déjà vus » (référence notif)
   const coursesOuvertRef = useRef(false);
+  // Raccourci Livraisons : pastille = nb de commandes en cours, qui pulse quand
+  // une NOUVELLE commande apparaît (même mécanisme que la liste de courses).
+  const [cmdNouveau, setCmdNouveau] = useState(false);
+  const cmdVusRef = useRef(null);
+  const cmdOuvertRef = useRef(false);
 
   // CA du jour de l'employé connecté (encaissements + avances − remboursements).
   useEffect(() => {
@@ -81,15 +85,7 @@ export default function Profil() {
         .eq('date', aujourdhuiISO())
         .order('created_at', { ascending: false })
         .then(({ data }) => setChromesJour(data ?? []));
-      // Livraisons pour le suivi en un clin d'œil : toutes les commandes encore
-      // « en cours » (la note reste affichée tant que pas traitée) + celles du
-      // jour déjà traitées/envoyées (pour voir ce qui a été fait aujourd'hui).
-      supabase
-        .from('commandes')
-        .select('id, montant, payee, statut, note, created_at, clients(surnom)')
-        .or(`statut.eq.en_cours,created_at.gte.${aujourdhuiISO()}`)
-        .order('created_at', { ascending: true })
-        .then(({ data }) => setLivraisons(data ?? []));
+      chargerLivraisons();
     };
     recharger();
     document.addEventListener('visibilitychange', recharger);
@@ -109,6 +105,28 @@ export default function Profil() {
       .limit(1)
       .maybeSingle()
       .then(({ data }) => setVeille(data ?? null));
+  }, []);
+
+  // Livraisons : toutes les commandes encore « en cours » (leur note reste
+  // affichée tant que pas traitées) + celles du jour déjà traitées/envoyées.
+  // Alimente le Suivi du jour ET la pastille du raccourci 🚚 (pulse quand un
+  // collègue crée une commande depuis la dernière ouverture du tiroir).
+  const chargerLivraisons = useCallback(async () => {
+    const { data } = await supabase
+      .from('commandes')
+      .select('id, montant, payee, statut, note, created_at, clients(surnom)')
+      .or(`statut.eq.en_cours,created_at.gte.${aujourdhuiISO()}`)
+      .order('created_at', { ascending: true });
+    const liste = data ?? [];
+    setLivraisons(liste);
+    const n = liste.filter((c) => c.statut === 'en_cours').length;
+    if (cmdVusRef.current === null) {
+      cmdVusRef.current = n;
+    } else if (n > cmdVusRef.current && !cmdOuvertRef.current) {
+      setCmdNouveau(true);
+    } else if (n < cmdVusRef.current) {
+      cmdVusRef.current = n;
+    }
   }, []);
 
   // Compteur de la liste de courses + notification quand un collègue ajoute.
@@ -131,19 +149,20 @@ export default function Profil() {
   useEffect(() => {
     chargerCourses();
     const surVisible = () => {
-      if (!document.hidden) chargerCourses();
+      if (!document.hidden) {
+        chargerCourses();
+        chargerLivraisons();
+      }
     };
     document.addEventListener('visibilitychange', surVisible);
-    window.addEventListener('focus', chargerCourses);
-    const it = setInterval(() => {
-      if (!document.hidden) chargerCourses();
-    }, 20000);
+    window.addEventListener('focus', surVisible);
+    const it = setInterval(surVisible, 20000);
     return () => {
       document.removeEventListener('visibilitychange', surVisible);
-      window.removeEventListener('focus', chargerCourses);
+      window.removeEventListener('focus', surVisible);
       clearInterval(it);
     };
-  }, [chargerCourses]);
+  }, [chargerCourses, chargerLivraisons]);
 
   function ouvrirCourses() {
     setOutil('courses');
@@ -152,15 +171,30 @@ export default function Profil() {
     setCoursesNouveau(false);
   }
 
+  // Tiroir des livraisons en cours : à l'ouverture on « marque comme vues »
+  // (la pastille arrête de pulser jusqu'à la prochaine nouveauté).
+  function ouvrirLivraisons() {
+    setOutil('livraisons');
+    cmdOuvertRef.current = true;
+    cmdVusRef.current = livraisons.filter((c) => c.statut === 'en_cours').length;
+    setCmdNouveau(false);
+  }
+
   function fermerOutil() {
     if (outil === 'courses') {
       coursesOuvertRef.current = false;
       chargerCourses();
     }
+    if (outil === 'livraisons') {
+      cmdOuvertRef.current = false;
+      chargerLivraisons();
+    }
     setOutil(null);
   }
 
   const prenom = (profil?.nom ?? '').split(' ')[0];
+  const cmdEnCoursListe = livraisons.filter((c) => c.statut === 'en_cours');
+  const nbCmdEnCours = cmdEnCoursListe.length;
   const avancesJour = chromesJour.filter((c) => c.type === 'avance');
   const remboursementsJour = chromesJour.filter((c) => c.type === 'remboursement');
   const autresJour = chromesJour.filter((c) => c.type === 'autre');
@@ -289,6 +323,15 @@ export default function Profil() {
       )}
 
       <div className="bulles-accueil">
+        <button type="button" className="bulle-raccourci" onClick={ouvrirLivraisons}>
+          <span className="bulle-rond">
+            🚚
+            {nbCmdEnCours > 0 && (
+              <span className={`fab-badge ${cmdNouveau ? 'nouveau' : ''}`}>{nbCmdEnCours}</span>
+            )}
+          </span>
+          <span className="bulle-label">Livraisons</span>
+        </button>
         {options.fidelite && (
           <button type="button" className="bulle-raccourci" onClick={() => setOutil('scanner')}>
             <span className="bulle-rond">🎟️</span>
@@ -317,8 +360,6 @@ export default function Profil() {
           </Link>
         )}
       </div>
-
-      {options.planning && <CalendrierLecture />}
 
       {veille && (
         <Link to="/veille" className="card banniere-config">
@@ -356,6 +397,39 @@ export default function Profil() {
               </button>
             </div>
             <ListeCourses embarque onMaj={chargerCourses} />
+          </div>
+        </div>
+      )}
+      {outil === 'livraisons' && (
+        <div className="aide-fond" role="dialog" aria-modal="true" aria-label="Livraisons en cours" onClick={fermerOutil}>
+          <div className="aide-modale" onClick={(e) => e.stopPropagation()}>
+            <div className="aide-tete">
+              <h2>🚚 Livraisons en cours</h2>
+              <button type="button" className="btn btn-discret" onClick={fermerOutil}>
+                Fermer
+              </button>
+            </div>
+            {cmdEnCoursListe.length === 0 ? (
+              <p className="vide">Aucune commande en cours 🎉</p>
+            ) : (
+              <div className="histo-bloc">
+                {cmdEnCoursListe.map((c) => (
+                  <div key={c.id} className="histo-chrome">
+                    <span>
+                      🕐 {c.clients?.surnom ?? 'Client'}
+                      {c.note && <span className="chrome-heure"> · 📝 {c.note}</span>}
+                    </span>
+                    <span className={c.payee ? 'solde-ok' : 'dette'}>
+                      {formatEuros(Number(c.montant))}
+                      {c.payee ? ' · payée' : ' · à encaisser'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Link to="/commandes" className="btn btn-primary" onClick={fermerOutil}>
+              📦 Ouvrir les commandes
+            </Link>
           </div>
         </div>
       )}
