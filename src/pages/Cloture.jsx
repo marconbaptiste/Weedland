@@ -399,10 +399,12 @@ export default function Cloture() {
           <span>Avances</span>
           <strong>{formatEuros(resume.avances)}</strong>
         </div>
-        <div className="recap-ligne">
-          <span>Remboursements</span>
-          <strong>{formatEuros(resume.remboursements)}</strong>
-        </div>
+        {resume.remboursements > 0 && (
+          <div className="recap-ligne">
+            <span>Remboursements de dettes <span className="recap-info">(sans effet sur le CA)</span></span>
+            <strong>{formatEuros(resume.remboursements)}</strong>
+          </div>
+        )}
         {resume.autres > 0 && (
           <div className="recap-ligne">
             <span>Autres encaissements</span>
@@ -426,7 +428,10 @@ export default function Cloture() {
             <span className="recap-valeur">{formatEuros(resume.encaissements)}</span>
           </div>
         </div>
-        <p className="statut">CA = CB + espèces + virements + avances − remboursements + autres.</p>
+        <p className="statut">
+          CA = ventes du jour (CB, espèces, virements, hors remboursements de dettes) + avances +
+          autres. Un remboursement récupère une dette déjà comptée au CA le jour de l’avance.
+        </p>
         <hr />
         <div className="recap-ligne">
           <span>

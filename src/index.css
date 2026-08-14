@@ -1450,6 +1450,11 @@ hr {
   align-items: center;
   gap: 0.5rem;
 }
+.recap-info {
+  font-size: 0.75rem;
+  opacity: 0.65;
+  font-weight: 400;
+}
 .lien-livraisons {
   text-decoration: none;
   color: inherit;
