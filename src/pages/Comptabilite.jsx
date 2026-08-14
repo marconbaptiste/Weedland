@@ -15,6 +15,9 @@ import { compresserImage } from '../lib/image';
 import { lireMontant } from '../lib/ocr';
 import ListeMontants from '../components/ListeMontants';
 import { Courbe, Barres, Camembert } from '../components/Graphiques';
+import { CATEGORIES_CHARGES, libelleCategorie, tvaRecuperable } from '../lib/categoriesCharges';
+
+const TAUX_TVA = 20; // taux normal (produits CBD) — les prix saisis sont TTC.
 
 const moisCourt = (ym) =>
   new Intl.DateTimeFormat('fr-FR', { month: 'short' }).format(new Date(`${ym}-01T00:00:00`));
@@ -78,8 +81,8 @@ export default function Comptabilite() {
   const charger = useCallback(async () => {
     const [anneeDebut, anneeFin] = intervalleAnnee(debut);
     const reqCharges = enMois
-      ? supabase.from('charges').select('id, libelle, montant, justificatif').eq('mois', mois).order('created_at')
-      : supabase.from('charges').select('id, libelle, montant, mois').gte('mois', premierDuMois(debut)).lte('mois', fin).order('mois');
+      ? supabase.from('charges').select('id, libelle, montant, categorie, justificatif').eq('mois', mois).order('created_at')
+      : supabase.from('charges').select('id, libelle, montant, categorie, mois').gte('mois', premierDuMois(debut)).lte('mois', fin).order('mois');
     const reqFourn = enMois
       ? supabase.from('fournisseurs').select('id, libelle, montant, justificatif').eq('mois', mois).order('created_at')
       : supabase.from('fournisseurs').select('id, libelle, montant, mois').gte('mois', premierDuMois(debut)).lte('mois', fin).order('mois');
@@ -214,13 +217,31 @@ export default function Comptabilite() {
   }
   async function copierPrecedent(table) {
     const precedent = moisPrecedent(mois);
-    const { data } = await supabase.from(table).select('libelle, montant').eq('mois', precedent);
+    const avecCat = table === 'charges';
+    const { data } = await supabase
+      .from(table)
+      .select(avecCat ? 'libelle, montant, categorie' : 'libelle, montant')
+      .eq('mois', precedent);
     if (!data || data.length === 0) return;
     const { data: inserts } = await supabase
       .from(table)
-      .insert(data.map((d) => ({ libelle: d.libelle, montant: d.montant, mois })))
+      .insert(
+        data.map((d) => ({
+          libelle: d.libelle,
+          montant: d.montant,
+          mois,
+          ...(avecCat ? { categorie: d.categorie ?? null } : {}),
+        }))
+      )
       .select();
     setteur[table]((prev) => [...prev, ...(inserts ?? [])]);
+  }
+
+  // Catégorie d'une charge : maj locale + persistance immédiate (un select n'a
+  // pas de blur fiable sur mobile, on écrit la valeur reçue directement).
+  async function majCategorie(id, categorie) {
+    majLigne('charges', id, 'categorie', categorie);
+    await supabase.from('charges').update({ categorie: categorie || null }).eq('id', id);
   }
 
   async function ajouterJustificatif(table, id, file) {
@@ -315,6 +336,33 @@ export default function Comptabilite() {
     ['💠 Autres (chromes)', autresChromes],
   ];
 
+  // TVA — ESTIMATION indicative (taux normal, prix TTC). Collectée sur le CA ;
+  // déductible sur les fournisseurs + les charges dont la catégorie porte en
+  // général de la TVA récupérable (salaires, assurances, banque, impôts et
+  // loyer nu exclus). À valider avec un comptable.
+  const partTva = TAUX_TVA / (100 + TAUX_TVA);
+  const tvaCollectee = caPeriode > 0 ? caPeriode * partTva : 0;
+  const chargesAvecTva = somme(
+    charges.filter((c) => tvaRecuperable(c.categorie)).map((c) => parseMontant(c.montant))
+  );
+  const tvaDeductible = somme([chargesAvecTva, totalFournisseurs]) * partTva;
+  const tvaAReverser = tvaCollectee - tvaDeductible;
+
+  // Performance : seuil de rentabilité (couvrir les dépenses), CA moyen par
+  // jour d'activité, meilleur jour de la période.
+  const pctRentabilite = totalDepenses > 0 ? (caPeriode / totalDepenses) * 100 : null;
+  const dateRentabilite = (() => {
+    if (totalDepenses <= 0 || caPeriode < totalDepenses) return null;
+    let cumul = 0;
+    for (const d of jours) {
+      cumul = somme([cumul, d.ca]);
+      if (cumul >= totalDepenses) return d.date;
+    }
+    return null;
+  })();
+  const caMoyenJour = jours.length > 0 ? caPeriode / jours.length : 0;
+  const meilleurJour = jours.reduce((m, d) => (m == null || d.ca > m.ca ? d : m), null);
+
   // Grille « Résultat par mois » (modes Année / Période) — le tableau mensuel
   // classique des logiciels de compta : CA / dépenses / résultat par mois.
   const grilleMois = (() => {
@@ -353,7 +401,18 @@ export default function Comptabilite() {
   const barres = enMois
     ? semaines.map((s) => ({ label: `S${s.n}`, valeur: s.ca }))
     : parMois.map((m) => ({ label: moisCourt(m.mois), valeur: m.ca }));
-  const partsCharges = charges.map((c) => ({ label: c.libelle, valeur: parseMontant(c.montant) }));
+  // Charges regroupées PAR CATÉGORIE (camembert + sous-totaux, style logiciel de compta).
+  const chargesParCategorie = (() => {
+    const map = {};
+    charges.forEach((c) => {
+      const k = libelleCategorie(c.categorie);
+      map[k] = somme([map[k] || 0, parseMontant(c.montant)]);
+    });
+    return Object.entries(map)
+      .map(([label, valeur]) => ({ label, valeur }))
+      .sort((a, b) => b.valeur - a.valeur);
+  })();
+  const partsCharges = chargesParCategorie;
   const partsDepenses = [
     ...charges.map((c) => ({ label: c.libelle || 'Charge', valeur: parseMontant(c.montant) })),
     ...fournisseurs.map((f) => ({ label: f.libelle || 'Fournisseur', valeur: parseMontant(f.montant) })),
@@ -443,6 +502,9 @@ export default function Comptabilite() {
         ['Marge nette', margeNette != null ? pct1(margeNette) : '—'],
         ['Évolution CA vs période préc.', prevTot?.ca ? formatEuros(prevTot.ca) : '—'],
         ['Créances clients (à ce jour)', `${formatEuros(creances.total)} (${creances.nb} client${creances.nb > 1 ? 's' : ''})`],
+        ['TVA à reverser (estimation)', formatEuros(tvaAReverser)],
+        ['Seuil de rentabilité', pctRentabilite != null ? pct1(Math.min(999, pctRentabilite)) : '—'],
+        ['CA moyen / jour d’activité', formatEuros(caMoyenJour)],
         [`CA cumulé ${debut.slice(0, 4)}`, formatEuros(caAnnee)],
         ['Intéressement', formatEuros(totalInteressement)],
         ['Heures travaillées', `${formatNombre(totalHeures)} h`],
@@ -467,6 +529,24 @@ export default function Comptabilite() {
           titre: 'Trésorerie — encaissements par moyen de paiement',
           entetes: ['Moyen', 'Montant'],
           lignes: modesPaiement.map(([lib, val]) => [lib.replace(/^\S+\s/, ''), formatEuros(val)]),
+        },
+        {
+          titre: 'Charges par catégorie',
+          entetes: ['Catégorie', 'Montant', 'Part'],
+          lignes: chargesParCategorie.map((c) => [
+            c.label.replace(/^\S+\s/, ''),
+            formatEuros(c.valeur),
+            totalCharges > 0 ? pct1((c.valeur / totalCharges) * 100) : '—',
+          ]),
+        },
+        {
+          titre: 'TVA (estimation indicative)',
+          entetes: ['Poste', 'Montant'],
+          lignes: [
+            [`TVA collectée (${TAUX_TVA} % TTC)`, formatEuros(tvaCollectee)],
+            ['− TVA déductible (achats + charges éligibles)', formatEuros(tvaDeductible)],
+            ['= TVA à reverser (estimée)', formatEuros(tvaAReverser)],
+          ],
         },
         enMois
           ? { titre: 'CA par semaine', entetes: ['Semaine', 'CA'], lignes: semaines.map((s) => [`Semaine ${s.n}`, formatEuros(s.ca)]) }
@@ -583,6 +663,69 @@ export default function Comptabilite() {
         </div>
       </div>
 
+      {/* Performance : seuil de rentabilité + moyennes */}
+      <div className="card">
+        <h2>📈 Performance</h2>
+        <div className="tres-ligne">
+          <span className="tres-lib">Seuil de rentabilité (couvrir les dépenses)</span>
+          <span className="tres-val">
+            {pctRentabilite != null ? pct1(Math.min(999, pctRentabilite)) : '—'}
+          </span>
+          <span className="tres-barre" aria-hidden="true">
+            <span
+              className={pctRentabilite != null && pctRentabilite >= 100 ? '' : 'barre-attention'}
+              style={{ width: `${Math.min(100, Math.max(0, pctRentabilite ?? 0))}%` }}
+            />
+          </span>
+        </div>
+        {dateRentabilite && (
+          <p className="statut">
+            ✅ Dépenses couvertes depuis le <strong>{formatDateFr(dateRentabilite)}</strong> — tout le
+            CA au-delà est du résultat.
+          </p>
+        )}
+        {pctRentabilite != null && pctRentabilite < 100 && (
+          <p className="statut">
+            Il manque <strong>{formatEuros(somme([totalDepenses, -caPeriode]))}</strong> de CA pour
+            couvrir les dépenses de la période.
+          </p>
+        )}
+        <div className="cartes-kpi">
+          <div className="kpi">
+            <span className="kpi-label">CA moyen / jour d’activité</span>
+            <span className="kpi-valeur">{formatEuros(caMoyenJour)}</span>
+          </div>
+          <div className="kpi">
+            <span className="kpi-label">Meilleur jour</span>
+            <span className="kpi-valeur">
+              {meilleurJour ? formatEuros(meilleurJour.ca) : '—'}
+            </span>
+            {meilleurJour && <span className="kpi-evo evo-ref">{formatDateFr(meilleurJour.date)}</span>}
+          </div>
+          <div className="kpi">
+            <span className="kpi-label">Jours d’activité</span>
+            <span className="kpi-valeur">{jours.length}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* TVA — estimation indicative */}
+      <div className="card">
+        <h2>🧮 TVA (estimation)</h2>
+        <div className="recap-ligne"><span>TVA collectée sur les ventes ({TAUX_TVA} % TTC)</span><strong>{formatEuros(tvaCollectee)}</strong></div>
+        <div className="recap-ligne"><span>− TVA déductible (achats + charges éligibles)</span><strong>{formatEuros(tvaDeductible)}</strong></div>
+        <hr />
+        <div className="recap-ligne">
+          <span>= TVA à reverser (estimée)</span>
+          <strong className={tvaAReverser > 0 ? 'dette' : 'solde-ok'}>{formatEuros(tvaAReverser)}</strong>
+        </div>
+        <p className="statut">
+          ⚠️ Estimation indicative : taux normal {TAUX_TVA} % sur des prix TTC ; TVA non comptée sur
+          salaires, assurances, frais bancaires, impôts et loyer. Catégorise tes charges pour
+          affiner, et valide toujours avec ton comptable.
+        </p>
+      </div>
+
       {/* Résultat mois par mois (modes Année / Période) */}
       {!enMois && grilleMois.length > 0 && (
         <div className="card">
@@ -654,8 +797,23 @@ export default function Comptabilite() {
       </div>
 
       <div className="card">
-        <h2>Répartition des charges</h2>
+        <h2>Charges par catégorie</h2>
         <Camembert parts={partsCharges} />
+        {chargesParCategorie.length > 0 && (
+          <table className="tableau">
+            <tbody>
+              {chargesParCategorie.map((c) => (
+                <tr key={c.label}>
+                  <td>{c.label}</td>
+                  <td className="droite">{formatEuros(c.valeur)}</td>
+                  <td className="droite">
+                    {totalCharges > 0 ? pct1((c.valeur / totalCharges) * 100) : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="card">
@@ -678,6 +836,8 @@ export default function Comptabilite() {
             onCopierPrecedent={() => copierPrecedent('charges')}
             onJustificatif={(id, file) => ajouterJustificatif('charges', id, file)}
             onVoirJustificatif={voirJustificatif}
+            categories={CATEGORIES_CHARGES}
+            onCategorie={majCategorie}
           />
           <ListeMontants
             titre="Fournisseurs"
