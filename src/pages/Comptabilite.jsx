@@ -19,6 +19,22 @@ import { Courbe, Barres, Camembert } from '../components/Graphiques';
 const moisCourt = (ym) =>
   new Intl.DateTimeFormat('fr-FR', { month: 'short' }).format(new Date(`${ym}-01T00:00:00`));
 
+const pct1 = (v) => `${v.toFixed(1).replace('.', ',')} %`;
+
+// Badge d'évolution vs période précédente (le réflexe des logiciels de compta) :
+// ▲/▼ + %. `inverse` = une hausse est une mauvaise nouvelle (charges, dépenses).
+function Evolution({ actuel, precedent, inverse = false }) {
+  if (precedent == null || precedent === 0) return null;
+  const pctEvo = ((actuel - precedent) / Math.abs(precedent)) * 100;
+  const hausse = pctEvo >= 0;
+  const bon = inverse ? !hausse : hausse;
+  return (
+    <span className={`kpi-evo ${bon ? 'evo-bon' : 'evo-mauvais'}`}>
+      {hausse ? '▲' : '▼'} {pct1(Math.abs(pctEvo))} <span className="evo-ref">vs préc.</span>
+    </span>
+  );
+}
+
 // Module admin — Comptabilité : synthèse CA / charges / fournisseurs / bénéfice
 // sur un mois, une année, ou une période personnalisée. L'édition des charges
 // et fournisseurs se fait en mode « Mois ».
@@ -36,6 +52,10 @@ export default function Comptabilite() {
   const [charges, setCharges] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
   const [statutOcr, setStatutOcr] = useState('');
+  // Comparaison période précédente + trésorerie + créances (style logiciel de compta).
+  const [prevTot, setPrevTot] = useState(null); // { ca, charges, fournisseurs } de la période précédente
+  const [paiements, setPaiements] = useState({ cb: 0, especes: 0, virements: 0 }); // encaissements des clôtures par moyen
+  const [creances, setCreances] = useState({ total: 0, nb: 0 }); // dettes clients en cours (à ce jour)
   // Section « Équipe » (rapatriée de l'ancien Dashboard) : intéressement /
   // heures par employé, filtrable par employé, + total des paiements.
   const [employes, setEmployes] = useState([]);
@@ -59,23 +79,47 @@ export default function Comptabilite() {
     const [anneeDebut, anneeFin] = intervalleAnnee(debut);
     const reqCharges = enMois
       ? supabase.from('charges').select('id, libelle, montant, justificatif').eq('mois', mois).order('created_at')
-      : supabase.from('charges').select('id, libelle, montant').gte('mois', premierDuMois(debut)).lte('mois', fin).order('mois');
+      : supabase.from('charges').select('id, libelle, montant, mois').gte('mois', premierDuMois(debut)).lte('mois', fin).order('mois');
     const reqFourn = enMois
       ? supabase.from('fournisseurs').select('id, libelle, montant, justificatif').eq('mois', mois).order('created_at')
-      : supabase.from('fournisseurs').select('id, libelle, montant').gte('mois', premierDuMois(debut)).lte('mois', fin).order('mois');
+      : supabase.from('fournisseurs').select('id, libelle, montant, mois').gte('mois', premierDuMois(debut)).lte('mois', fin).order('mois');
+
+    // Période PRÉCÉDENTE pour la comparaison (mois précédent, année précédente,
+    // ou même durée juste avant pour une période personnalisée).
+    const [prevDebut, prevFin] = (() => {
+      if (periode === 'mois') return intervallePeriode('mois', moisPrecedent(mois));
+      if (periode === 'annee') return intervalleAnnee(`${Number(debut.slice(0, 4)) - 1}${debut.slice(4)}`);
+      const d0 = new Date(`${debut}T00:00:00Z`);
+      const f0 = new Date(`${fin}T00:00:00Z`);
+      const span = Math.round((f0 - d0) / 86400000) + 1;
+      const pf = new Date(d0.getTime() - 86400000);
+      const pd = new Date(pf.getTime() - (span - 1) * 86400000);
+      const iso = (x) => x.toISOString().slice(0, 10);
+      return [iso(pd), iso(pf)];
+    })();
 
     // CA = ventes directes (clôtures) + avances − remboursements + autres (TOUS
     // les chromes de la période, même ceux saisis un jour sans clôture). On part de
     // ventes_directes (CB+espèces, hors virement) et on ajoute les autres depuis
     // `chromes` : pas de double comptage (v_ca_jour.encaissements inclut déjà les
     // autres), et les autres des jours SANS clôture sont bien pris en compte.
-    const [enc, an, chr, anChr, ch, fo] = await Promise.all([
+    const [enc, an, chr, anChr, ch, fo, pEnc, pChr, pCh, pFo, cj, sc] = await Promise.all([
       supabase.from('v_ca_jour').select('date, ventes_directes').gte('date', debut).lte('date', fin),
       supabase.from('v_ca_jour').select('ventes_directes').gte('date', anneeDebut).lte('date', anneeFin),
       supabase.from('chromes').select('date, type, montant').gte('date', debut).lte('date', fin),
       supabase.from('chromes').select('type, montant').gte('date', anneeDebut).lte('date', anneeFin),
       reqCharges,
       reqFourn,
+      // Période précédente (comparaison) :
+      supabase.from('v_ca_jour').select('ventes_directes').gte('date', prevDebut).lte('date', prevFin),
+      supabase.from('chromes').select('type, montant').gte('date', prevDebut).lte('date', prevFin),
+      supabase.from('charges').select('montant').gte('mois', premierDuMois(prevDebut)).lte('mois', prevFin),
+      supabase.from('fournisseurs').select('montant').gte('mois', premierDuMois(prevDebut)).lte('mois', prevFin),
+      // Encaissements par moyen de paiement (clôtures de la période — page admin,
+      // la RLS laisse l'admin lire toutes les clôtures de SON magasin) :
+      supabase.from('caisse_jour').select('cb, especes, virements').gte('date', debut).lte('date', fin),
+      // Créances clients (dettes chromes en cours, à ce jour) :
+      supabase.from('v_solde_client').select('solde'),
     ]);
     setEncRows(enc.data ?? []);
     setChromesRows(chr.data ?? []);
@@ -86,7 +130,20 @@ export default function Comptabilite() {
     setCaAnnee(somme([anVd, av(anChr.data), vir(anChr.data), -rb(anChr.data)]));
     setCharges(ch.data ?? []);
     setFournisseurs(fo.data ?? []);
-  }, [debut, fin, mois, enMois]);
+    const pVd = somme((pEnc.data ?? []).map((r) => r.ventes_directes));
+    setPrevTot({
+      ca: somme([pVd, av(pChr.data), vir(pChr.data), -rb(pChr.data)]),
+      charges: somme((pCh.data ?? []).map((c) => parseMontant(c.montant))),
+      fournisseurs: somme((pFo.data ?? []).map((f) => parseMontant(f.montant))),
+    });
+    setPaiements({
+      cb: somme((cj.data ?? []).map((r) => r.cb)),
+      especes: somme((cj.data ?? []).map((r) => r.especes)),
+      virements: somme((cj.data ?? []).map((r) => r.virements)),
+    });
+    const soldesPositifs = (sc.data ?? []).map((s) => s.solde).filter((s) => s > 0);
+    setCreances({ total: somme(soldesPositifs), nb: soldesPositifs.length });
+  }, [debut, fin, mois, enMois, periode]);
 
   useEffect(() => {
     charger();
@@ -244,6 +301,40 @@ export default function Comptabilite() {
   const totalDepenses = somme([totalCharges, totalFournisseurs]);
   const benefice = somme([caPeriode, -totalCharges, -totalFournisseurs]);
 
+  // Compte de résultat + comparaison période précédente + trésorerie.
+  const totalAvances = somme(chromesRows.filter((c) => c.type === 'avance').map((c) => c.montant));
+  const totalRemboursements = somme(chromesRows.filter((c) => c.type === 'remboursement').map((c) => c.montant));
+  const autresChromes = somme(chromesRows.filter((c) => c.type === 'autre').map((c) => c.montant));
+  const prevDepenses = prevTot ? somme([prevTot.charges, prevTot.fournisseurs]) : null;
+  const beneficePrev = prevTot ? somme([prevTot.ca, -prevTot.charges, -prevTot.fournisseurs]) : null;
+  const margeNette = caPeriode > 0 ? (benefice / caPeriode) * 100 : null;
+  const modesPaiement = [
+    ['💳 Carte bancaire', paiements.cb],
+    ['💵 Espèces', paiements.especes],
+    ['🏦 Virements', paiements.virements],
+    ['💠 Autres (chromes)', autresChromes],
+  ];
+
+  // Grille « Résultat par mois » (modes Année / Période) — le tableau mensuel
+  // classique des logiciels de compta : CA / dépenses / résultat par mois.
+  const grilleMois = (() => {
+    if (enMois) return [];
+    const map = {};
+    const g = (k) => (map[k] ??= { ca: 0, dep: 0 });
+    jours.forEach((d) => {
+      const k = d.date.slice(0, 7);
+      g(k).ca = somme([g(k).ca, d.ca]);
+    });
+    [...charges, ...fournisseurs].forEach((l) => {
+      if (!l.mois) return;
+      const k = l.mois.slice(0, 7);
+      g(k).dep = somme([g(k).dep, parseMontant(l.montant)]);
+    });
+    return Object.keys(map)
+      .sort()
+      .map((k) => ({ mois: k, ...map[k], res: somme([map[k].ca, -map[k].dep]) }));
+  })();
+
   // Répartition CA : par semaine (mois) ou par mois (année/période).
   const semaines = [1, 2, 3, 4, 5].map((n) => ({
     n,
@@ -348,16 +439,42 @@ export default function Comptabilite() {
         ['Encaissements', formatEuros(encaissements)],
         ['Charges', formatEuros(totalCharges)],
         ['Fournisseurs', formatEuros(totalFournisseurs)],
-        ['Bénéfice', formatEuros(benefice)],
+        ['Résultat net', formatEuros(benefice)],
+        ['Marge nette', margeNette != null ? pct1(margeNette) : '—'],
+        ['Évolution CA vs période préc.', prevTot?.ca ? formatEuros(prevTot.ca) : '—'],
+        ['Créances clients (à ce jour)', `${formatEuros(creances.total)} (${creances.nb} client${creances.nb > 1 ? 's' : ''})`],
         [`CA cumulé ${debut.slice(0, 4)}`, formatEuros(caAnnee)],
         ['Intéressement', formatEuros(totalInteressement)],
         ['Heures travaillées', `${formatNombre(totalHeures)} h`],
         ['Paiements employés', formatEuros(totalPaiements)],
       ],
       sections: [
+        {
+          titre: 'Compte de résultat',
+          entetes: ['Poste', 'Montant'],
+          lignes: [
+            ['Ventes encaissées (CB, espèces, virements…)', formatEuros(encaissements)],
+            ['+ Avances clients (chromes)', formatEuros(totalAvances)],
+            ['− Remboursements clients', formatEuros(totalRemboursements)],
+            ['= Chiffre d’affaires', formatEuros(caPeriode)],
+            ['− Charges fixes', formatEuros(totalCharges)],
+            ['− Achats fournisseurs', formatEuros(totalFournisseurs)],
+            ['= Résultat net', formatEuros(benefice)],
+            ['Marge nette', margeNette != null ? pct1(margeNette) : '—'],
+          ],
+        },
+        {
+          titre: 'Trésorerie — encaissements par moyen de paiement',
+          entetes: ['Moyen', 'Montant'],
+          lignes: modesPaiement.map(([lib, val]) => [lib.replace(/^\S+\s/, ''), formatEuros(val)]),
+        },
         enMois
           ? { titre: 'CA par semaine', entetes: ['Semaine', 'CA'], lignes: semaines.map((s) => [`Semaine ${s.n}`, formatEuros(s.ca)]) }
-          : { titre: 'CA par mois', entetes: ['Mois', 'CA'], lignes: parMois.map((m) => [m.mois, formatEuros(m.ca)]) },
+          : {
+              titre: 'Résultat par mois',
+              entetes: ['Mois', 'CA', 'Dépenses', 'Résultat'],
+              lignes: grilleMois.map((m) => [m.mois, formatEuros(m.ca), formatEuros(m.dep), formatEuros(m.res)]),
+            },
         { titre: 'Charges', entetes: ['Libellé', 'Montant'], lignes: charges.map((c) => [c.libelle || '—', formatEuros(parseMontant(c.montant))]) },
         { titre: 'Fournisseurs', entetes: ['Libellé', 'Montant'], lignes: fournisseurs.map((f) => [f.libelle || '—', formatEuros(parseMontant(f.montant))]) },
         {
@@ -411,13 +528,95 @@ export default function Comptabilite() {
       </div>
 
       <div className="cartes-kpi">
-        <div className="kpi"><span className="kpi-label">CA</span><span className="kpi-valeur">{formatEuros(caPeriode)}</span></div>
-        <div className="kpi"><span className="kpi-label">Encaissements</span><span className="kpi-valeur">{formatEuros(encaissements)}</span></div>
-        <div className="kpi"><span className="kpi-label">Charges</span><span className="kpi-valeur">{formatEuros(totalCharges)}</span></div>
-        <div className="kpi"><span className="kpi-label">Fournisseurs</span><span className="kpi-valeur">{formatEuros(totalFournisseurs)}</span></div>
-        <div className="kpi"><span className="kpi-label">Bénéfice</span><span className={`kpi-valeur ${benefice >= 0 ? 'solde-ok' : 'dette'}`}>{formatEuros(benefice)}</span></div>
+        <div className="kpi">
+          <span className="kpi-label">CA</span>
+          <span className="kpi-valeur">{formatEuros(caPeriode)}</span>
+          <Evolution actuel={caPeriode} precedent={prevTot?.ca} />
+        </div>
+        <div className="kpi">
+          <span className="kpi-label">Encaissements</span>
+          <span className="kpi-valeur">{formatEuros(encaissements)}</span>
+        </div>
+        <div className="kpi">
+          <span className="kpi-label">Dépenses</span>
+          <span className="kpi-valeur">{formatEuros(totalDepenses)}</span>
+          <Evolution actuel={totalDepenses} precedent={prevDepenses} inverse />
+        </div>
+        <div className="kpi">
+          <span className="kpi-label">Résultat net</span>
+          <span className={`kpi-valeur ${benefice >= 0 ? 'solde-ok' : 'dette'}`}>{formatEuros(benefice)}</span>
+          <Evolution actuel={benefice} precedent={beneficePrev} />
+        </div>
+        <div className="kpi">
+          <span className="kpi-label">Marge nette</span>
+          <span className={`kpi-valeur ${margeNette != null && margeNette < 0 ? 'dette' : ''}`}>
+            {margeNette != null ? pct1(margeNette) : '—'}
+          </span>
+        </div>
         <div className="kpi"><span className="kpi-label">CA cumulé {debut.slice(0, 4)}</span><span className="kpi-valeur">{formatEuros(caAnnee)}</span></div>
       </div>
+
+      {/* Trésorerie (encaissements par moyen de paiement) + créances clients */}
+      <div className="card">
+        <h2>💰 Trésorerie</h2>
+        {modesPaiement.map(([lib, val]) => {
+          const part = encaissements > 0 ? (val / encaissements) * 100 : 0;
+          return (
+            <div key={lib} className="tres-ligne">
+              <span className="tres-lib">{lib}</span>
+              <span className="tres-val">
+                {formatEuros(val)} <span className="tres-part">{encaissements > 0 ? pct1(part) : ''}</span>
+              </span>
+              <span className="tres-barre" aria-hidden="true">
+                <span style={{ width: `${Math.min(100, Math.max(0, part))}%` }} />
+              </span>
+            </div>
+          );
+        })}
+        <hr />
+        <div className="recap-ligne">
+          <span>Créances clients (dettes en cours, à ce jour)</span>
+          <strong className={creances.total > 0 ? 'dette' : 'solde-ok'}>
+            {formatEuros(creances.total)}
+            {creances.nb > 0 ? ` · ${creances.nb} client${creances.nb > 1 ? 's' : ''}` : ''}
+          </strong>
+        </div>
+      </div>
+
+      {/* Résultat mois par mois (modes Année / Période) */}
+      {!enMois && grilleMois.length > 0 && (
+        <div className="card">
+          <h2>📅 Résultat par mois</h2>
+          <div className="table-scroll">
+            <table className="tableau">
+              <thead>
+                <tr>
+                  <th>Mois</th>
+                  <th className="droite">CA</th>
+                  <th className="droite">Dépenses</th>
+                  <th className="droite">Résultat</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grilleMois.map((m) => (
+                  <tr key={m.mois}>
+                    <td>{moisCourt(m.mois)} {m.mois.slice(0, 4)}</td>
+                    <td className="droite">{formatEuros(m.ca)}</td>
+                    <td className="droite">{formatEuros(m.dep)}</td>
+                    <td className={`droite ${m.res >= 0 ? 'solde-ok' : 'dette'}`}>{formatEuros(m.res)}</td>
+                  </tr>
+                ))}
+                <tr className="ligne-total">
+                  <td><strong>Total</strong></td>
+                  <td className="droite"><strong>{formatEuros(caPeriode)}</strong></td>
+                  <td className="droite"><strong>{formatEuros(totalDepenses)}</strong></td>
+                  <td className={`droite ${benefice >= 0 ? 'solde-ok' : 'dette'}`}><strong>{formatEuros(benefice)}</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <button
@@ -569,14 +768,32 @@ export default function Comptabilite() {
       </div>
 
       <div className="card recap">
-        <div className="recap-ligne"><span>CA</span><strong>{formatEuros(caPeriode)}</strong></div>
-        <div className="recap-ligne"><span>− Charges</span><strong>{formatEuros(totalCharges)}</strong></div>
-        <div className="recap-ligne"><span>− Fournisseurs</span><strong>{formatEuros(totalFournisseurs)}</strong></div>
+        <h2>🧾 Compte de résultat</h2>
+        <p className="periode-info">{formatDateFr(debut)} → {formatDateFr(fin)}</p>
+        <div className="recap-section">Produits</div>
+        <div className="recap-ligne"><span>Ventes encaissées (CB, espèces, virements…)</span><strong>{formatEuros(encaissements)}</strong></div>
+        <div className="recap-ligne"><span>+ Avances clients (chromes)</span><strong>{formatEuros(totalAvances)}</strong></div>
+        <div className="recap-ligne"><span>− Remboursements clients</span><strong>{formatEuros(totalRemboursements)}</strong></div>
+        <div className="recap-ligne recap-soustotal"><span>= Chiffre d’affaires</span><strong>{formatEuros(caPeriode)}</strong></div>
+        <div className="recap-section">Charges</div>
+        <div className="recap-ligne"><span>− Charges fixes</span><strong>{formatEuros(totalCharges)}</strong></div>
+        <div className="recap-ligne"><span>− Achats fournisseurs</span><strong>{formatEuros(totalFournisseurs)}</strong></div>
+        <div className="recap-ligne recap-soustotal"><span>= Total dépenses</span><strong>{formatEuros(totalDepenses)}</strong></div>
         <hr />
-        <div className="recap-ligne">
-          <span>= Bénéfice</span>
+        <div className="recap-ligne recap-resultat">
+          <span>= Résultat net</span>
           <strong className={benefice >= 0 ? 'solde-ok' : 'dette'}>{formatEuros(benefice)}</strong>
         </div>
+        <div className="recap-ligne">
+          <span>Marge nette</span>
+          <strong>{margeNette != null ? pct1(margeNette) : '—'}</strong>
+        </div>
+        {beneficePrev != null && beneficePrev !== 0 && (
+          <p className="statut">
+            Période précédente : {formatEuros(beneficePrev)}{' '}
+            <Evolution actuel={benefice} precedent={beneficePrev} />
+          </p>
+        )}
       </div>
     </div>
   );

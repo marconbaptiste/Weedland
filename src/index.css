@@ -1280,6 +1280,76 @@ hr {
   color: #f08b86;
   background: rgba(232, 116, 110, 0.22);
 }
+/* Comptabilité — évolution vs période précédente, trésorerie, compte de résultat */
+.kpi-evo {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-top: 0.15rem;
+}
+.kpi-evo.evo-bon {
+  color: #7fd3a6;
+}
+.kpi-evo.evo-mauvais {
+  color: #f08b86;
+}
+.kpi-evo .evo-ref {
+  font-weight: 400;
+  opacity: 0.65;
+}
+.tres-ligne {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 0.6rem;
+  align-items: baseline;
+  padding: 0.35rem 0;
+}
+.tres-lib {
+  font-size: 0.9rem;
+}
+.tres-val {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.tres-part {
+  font-weight: 400;
+  font-size: 0.78rem;
+  opacity: 0.7;
+}
+.tres-barre {
+  grid-column: 1 / -1;
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--fond-input);
+  overflow: hidden;
+}
+.tres-barre > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #5fbf8e;
+}
+.recap-section {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  opacity: 0.65;
+  margin: 0.7rem 0 0.2rem;
+}
+.recap-soustotal {
+  border-top: 1px dashed var(--bordure);
+  padding-top: 0.3rem;
+}
+.recap-resultat strong {
+  font-size: 1.15rem;
+}
+.ligne-total td {
+  border-top: 2px solid var(--bordure-forte);
+}
+
 /* Bons de commande (livraisons) */
 .cmd-liste {
   list-style: none;
