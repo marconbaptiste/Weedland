@@ -14,6 +14,7 @@ import Caisse from './pages/Caisse';
 import Cloture from './pages/Cloture';
 import Historique from './pages/Historique';
 import Chromes from './pages/Chromes';
+import Commandes from './pages/Commandes';
 import Fidelite from './pages/Fidelite';
 import Stocks from './pages/Stocks';
 import Gestion from './pages/Gestion';
@@ -67,6 +68,7 @@ export default function App() {
           <Route path="caisse/cloture" element={<Cloture />} />
           <Route path="caisse/historique" element={<Historique />} />
           <Route path="chromes" element={<Chromes />} />
+          <Route path="commandes" element={<Commandes />} />
           <Route path="veille" element={<Veille />} />
           <Route path="support" element={<Support />} />
 

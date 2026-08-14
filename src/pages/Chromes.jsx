@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatDateFr } from '../lib/format';
 import { aujourdhuiISO } from '../lib/dates';
+import { urlPlan } from '../lib/plan';
 import { soldeClient, statutSolde, somme } from '../lib/comptabilite';
 import ChampMontant from '../components/ChampMontant';
 import { useInvite } from '../components/ModalePrompt';
@@ -46,7 +48,7 @@ export default function Chromes() {
   const [inscriptionsOuvertes, setInscriptionsOuvertes] = useState(true);
   const [faveurs, setFaveurs] = useState([]); // raccourcis de faveurs du magasin
 
-  const [nouveau, setNouveau] = useState({ surnom: '', description: '', telephone: '' });
+  const [nouveau, setNouveau] = useState({ surnom: '', description: '', telephone: '', adresse: '' });
   const [creationOuverte, setCreationOuverte] = useState(false);
 
   // Fenêtre client scindée en 3 onglets-boutons : Fiche / Chromes / Note.
@@ -67,7 +69,7 @@ export default function Chromes() {
     const [{ data }, { data: pr }] = await Promise.all([
       supabase
         .from('v_solde_client')
-        .select('client_id, surnom, description, telephone, solde')
+        .select('client_id, surnom, description, telephone, adresse, solde')
         .order('surnom'),
       supabase.from('promos').select('client_id'),
     ]);
@@ -184,11 +186,12 @@ export default function Chromes() {
         surnom,
         description: nouveau.description.trim() || null,
         telephone: nouveau.telephone.trim() || null,
+        adresse: nouveau.adresse.trim() || null,
       })
       .select()
       .single();
     if (!error && data) {
-      setNouveau({ surnom: '', description: '', telephone: '' });
+      setNouveau({ surnom: '', description: '', telephone: '', adresse: '' });
       setCreationOuverte(false);
       await chargerClients();
       ouvrirClient({
@@ -196,6 +199,7 @@ export default function Chromes() {
         surnom: data.surnom,
         description: data.description,
         telephone: data.telephone,
+        adresse: data.adresse,
         solde: 0,
       });
       // Affiche tout de suite le QR en grand : le client le prend en photo.
@@ -203,16 +207,40 @@ export default function Chromes() {
     }
   }
 
-  // Édition partagée de la fiche (surnom / téléphone / note) via la fonction
-  // SECURITY DEFINER `client_maj` : tout membre du magasin peut corriger une
-  // fiche, sans pouvoir toucher aux colonnes sensibles (fidélité, magasin…).
-  async function majFiche({ surnom, telephone, description }) {
+  // Édition partagée de la fiche (surnom / téléphone / note / adresse) via la
+  // fonction SECURITY DEFINER `client_maj` : tout membre du magasin peut corriger
+  // une fiche, sans toucher aux colonnes sensibles (fidélité, magasin…).
+  async function majFiche({ surnom, telephone, description, adresse = clientSel.adresse }) {
     return supabase.rpc('client_maj', {
       p_client: clientSel.client_id,
       p_surnom: surnom,
       p_telephone: telephone,
       p_note: description,
+      p_adresse: adresse,
     });
+  }
+
+  async function modifierAdresse() {
+    const saisie = await invite({
+      titre: 'Adresse de livraison',
+      label: 'Adresse (laisser vide pour effacer)',
+      valeurInitiale: clientSel.adresse ?? '',
+    });
+    if (saisie == null) return;
+    const adresse = saisie.trim() || null;
+    const { error } = await majFiche({
+      surnom: clientSel.surnom,
+      telephone: clientSel.telephone,
+      description: clientSel.description,
+      adresse,
+    });
+    if (error) {
+      setMsgClient(`Modification impossible : ${error.message}`);
+      return;
+    }
+    setClientSel((c) => ({ ...c, adresse }));
+    setMsgClient('Adresse mise à jour ✅');
+    chargerClients();
   }
 
   async function renommerClient() {
@@ -554,6 +582,14 @@ export default function Chromes() {
                 />
               </label>
               <label className="field">
+                <span>Adresse de livraison (facultatif)</span>
+                <input
+                  value={nouveau.adresse}
+                  onChange={(e) => setNouveau((n) => ({ ...n, adresse: e.target.value }))}
+                  placeholder="ex. 12 rue des Lilas, 75011 Paris (avec l'accord du client)"
+                />
+              </label>
+              <label className="field">
                 <span>Description (interne)</span>
                 <textarea
                   rows={2}
@@ -576,6 +612,9 @@ export default function Chromes() {
               <button className="btn btn-primary btn-compact" onClick={() => setCreationOuverte(true)}>
                 + Nouvelle fiche
               </button>
+              <Link to="/commandes" className="btn btn-compact">
+                📦 Commandes
+              </Link>
               {options.fidelite && (
                 <button
                   type="button"
@@ -651,6 +690,14 @@ export default function Chromes() {
                   📞 <a href={`tel:${clientSel.telephone.replace(/\s/g, '')}`}>{clientSel.telephone}</a>
                 </p>
               )}
+              {ongletClient === 'fiche' && clientSel.adresse && (
+                <p className="telephone-client">
+                  📍{' '}
+                  <a href={urlPlan(clientSel.adresse)} target="_blank" rel="noopener noreferrer">
+                    {clientSel.adresse}
+                  </a>
+                </p>
+              )}
               {ongletClient === 'fiche' && (
                 <div className="form-inline">
                   <button type="button" className="btn" onClick={renommerClient}>
@@ -658,6 +705,9 @@ export default function Chromes() {
                   </button>
                   <button type="button" className="btn" onClick={modifierTelephone}>
                     {clientSel.telephone ? 'Modifier le téléphone' : 'Ajouter un téléphone'}
+                  </button>
+                  <button type="button" className="btn" onClick={modifierAdresse}>
+                    {clientSel.adresse ? 'Modifier l’adresse' : 'Ajouter une adresse'}
                   </button>
                   {options.fidelite && (
                     <button

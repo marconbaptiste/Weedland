@@ -21,6 +21,7 @@ export default function Profil() {
   const [stats, setStats] = useState({ caJour: 0 });
   const [statsPerso, setStatsPerso] = useState({ intMois: 0, intAnnee: 0 });
   const [chromesJour, setChromesJour] = useState([]); // chromes du jour du magasin (tout le monde)
+  const [commandesEnCours, setCommandesEnCours] = useState([]); // bons de commande non traités
   const [outil, setOutil] = useState(null); // 'monnaie' | 'scanner' | 'courses' | null
   const [veille, setVeille] = useState(null); // dernier bulletin de veille réglementaire
   const [nbCourses, setNbCourses] = useState(0);
@@ -80,6 +81,14 @@ export default function Profil() {
         .eq('date', aujourdhuiISO())
         .order('created_at', { ascending: false })
         .then(({ data }) => setChromesJour(data ?? []));
+      // Bons de commande non traités : la note reste affichée sur l'accueil
+      // tant que la commande est « en cours » (registre partagé du magasin).
+      supabase
+        .from('commandes')
+        .select('id, montant, payee, mode_paiement, note, adresse_livraison, created_at, clients(surnom)')
+        .eq('statut', 'en_cours')
+        .order('created_at', { ascending: true })
+        .then(({ data }) => setCommandesEnCours(data ?? []));
     };
     recharger();
     document.addEventListener('visibilitychange', recharger);
@@ -197,6 +206,29 @@ export default function Profil() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Bons de commande à traiter : chaque note reste ici tant que la
+          commande n'est pas marquée « traitée » (page Commandes). */}
+      {commandesEnCours.length > 0 && (
+        <Link to="/commandes" className="card carte-commandes">
+          <h2>
+            📦 {commandesEnCours.length} commande{commandesEnCours.length > 1 ? 's' : ''} à traiter
+          </h2>
+          {commandesEnCours.map((c) => (
+            <div key={c.id} className="histo-chrome">
+              <span>
+                {c.clients?.surnom ?? 'Client'}
+                {c.note && <span className="chrome-heure"> · 📝 {c.note}</span>}
+              </span>
+              <span className={c.payee ? 'solde-ok' : 'dette'}>
+                {formatEuros(Number(c.montant))}
+                {c.payee ? ' · payée' : ' · à encaisser'}
+              </span>
+            </div>
+          ))}
+          <span className="statut">Appuie pour ouvrir les commandes →</span>
+        </Link>
       )}
 
       {chromesJour.length > 0 && (
