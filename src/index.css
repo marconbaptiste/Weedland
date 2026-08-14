@@ -1306,6 +1306,10 @@ hr {
   border-left-color: var(--bordure-forte);
   opacity: 0.75;
 }
+.cmd-item.cmd-annulee {
+  border-left-color: #e8746e;
+  opacity: 0.65;
+}
 .cmd-tete {
   display: flex;
   justify-content: space-between;
@@ -1346,6 +1350,10 @@ hr {
 .cmd-badge.cmd-envoyee {
   color: var(--texte);
   background: var(--fond-input);
+}
+.cmd-badge.cmd-annulee {
+  color: #f08b86;
+  background: rgba(232, 116, 110, 0.22);
 }
 .cmd-badge.cmd-paye {
   color: #7fd3a6;
