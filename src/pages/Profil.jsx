@@ -291,16 +291,19 @@ export default function Profil() {
             ))}
           </div>
         )}
+        {/* Remboursements du jour : info de suivi UNIQUEMENT — sans signe « − »,
+            un remboursement n'apparaît pas comme un impact sur le CA (la vente a
+            été comptée le jour de l'avance). */}
         {remboursementsJour.length > 0 && (
           <div className="histo-bloc">
-            <span className="histo-titre">Remboursements</span>
+            <span className="histo-titre">Remboursements du jour</span>
             {remboursementsJour.map((r, i) => (
               <div key={`r${i}`} className="histo-chrome">
                 <span>
                   {r.clients?.surnom ?? 'client'}
                   <span className="chrome-heure"> · {r.users?.nom ?? '—'}</span>
                 </span>
-                <span className="solde-ok">− {formatEuros(r.montant)}</span>
+                <span className="solde-ok">{formatEuros(r.montant)}</span>
               </div>
             ))}
           </div>

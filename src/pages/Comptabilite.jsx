@@ -515,9 +515,9 @@ export default function Comptabilite() {
           titre: 'Compte de résultat',
           entetes: ['Poste', 'Montant'],
           lignes: [
-            ['Ventes encaissées (CB, espèces, virements…)', formatEuros(encaissements)],
+            ['Ventes encaissées (hors remboursements de dettes)', formatEuros(somme([encaissements, -totalRemboursements]))],
             ['+ Avances clients (chromes)', formatEuros(totalAvances)],
-            ['− Remboursements clients', formatEuros(totalRemboursements)],
+            ['Remboursements de dettes encaissés (sans effet CA)', formatEuros(totalRemboursements)],
             ['= Chiffre d’affaires', formatEuros(caPeriode)],
             ['− Charges fixes', formatEuros(totalCharges)],
             ['− Achats fournisseurs', formatEuros(totalFournisseurs)],
@@ -653,6 +653,12 @@ export default function Comptabilite() {
             </div>
           );
         })}
+        {totalRemboursements > 0 && (
+          <p className="statut">
+            dont remboursements de dettes récupérés : {formatEuros(totalRemboursements)} (déjà
+            comptés au CA le jour de l’avance)
+          </p>
+        )}
         <hr />
         <div className="recap-ligne">
           <span>Créances clients (dettes en cours, à ce jour)</span>
@@ -931,10 +937,15 @@ export default function Comptabilite() {
         <h2>🧾 Compte de résultat</h2>
         <p className="periode-info">{formatDateFr(debut)} → {formatDateFr(fin)}</p>
         <div className="recap-section">Produits</div>
-        <div className="recap-ligne"><span>Ventes encaissées (CB, espèces, virements…)</span><strong>{formatEuros(encaissements)}</strong></div>
+        <div className="recap-ligne"><span>Ventes encaissées (hors remboursements de dettes)</span><strong>{formatEuros(somme([encaissements, -totalRemboursements]))}</strong></div>
         <div className="recap-ligne"><span>+ Avances clients (chromes)</span><strong>{formatEuros(totalAvances)}</strong></div>
-        <div className="recap-ligne"><span>− Remboursements clients</span><strong>{formatEuros(totalRemboursements)}</strong></div>
         <div className="recap-ligne recap-soustotal"><span>= Chiffre d’affaires</span><strong>{formatEuros(caPeriode)}</strong></div>
+        {totalRemboursements > 0 && (
+          <p className="statut">
+            ℹ️ Remboursements de dettes encaissés sur la période : {formatEuros(totalRemboursements)} —
+            sans effet sur le CA (la vente a été comptée le jour de l’avance).
+          </p>
+        )}
         <div className="recap-section">Charges</div>
         <div className="recap-ligne"><span>− Charges fixes</span><strong>{formatEuros(totalCharges)}</strong></div>
         <div className="recap-ligne"><span>− Achats fournisseurs</span><strong>{formatEuros(totalFournisseurs)}</strong></div>
