@@ -427,9 +427,14 @@ export default function Profil() {
                 ))}
               </div>
             )}
-            <Link to="/commandes" className="btn btn-primary" onClick={fermerOutil}>
-              📦 Ouvrir les commandes
-            </Link>
+            <div className="form-inline">
+              <Link to="/commandes?nouvelle=1" className="btn btn-primary" onClick={fermerOutil}>
+                + Nouvelle commande
+              </Link>
+              <Link to="/commandes" className="btn" onClick={fermerOutil}>
+                📦 Ouvrir les commandes
+              </Link>
+            </div>
           </div>
         </div>
       )}

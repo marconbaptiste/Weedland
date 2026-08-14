@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { parseMontant, formatEuros, formatDateFr } from '../lib/format';
 import { urlPlan } from '../lib/plan';
@@ -27,7 +28,9 @@ export default function Commandes() {
   const [clients, setClients] = useState([]);
   const [charge, setCharge] = useState(false);
   const [msg, setMsg] = useState('');
-  const [creationOuverte, setCreationOuverte] = useState(false);
+  // ?nouvelle=1 (raccourci de l'accueil) → formulaire de création ouvert d'emblée.
+  const [searchParams] = useSearchParams();
+  const [creationOuverte, setCreationOuverte] = useState(searchParams.get('nouvelle') === '1');
   const [form, setForm] = useState(FORM_VIDE);
   const [paiementPour, setPaiementPour] = useState(null); // id de la commande en cours d'encaissement
   const { invite, elementInvite } = useInvite();
