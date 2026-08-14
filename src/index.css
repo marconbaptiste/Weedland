@@ -1364,15 +1364,13 @@ hr {
   align-items: center;
   gap: 0.5rem;
 }
-.carte-commandes {
-  display: block;
+.lien-livraisons {
   text-decoration: none;
   color: inherit;
-  border-left: 4px solid #e3b341;
+  cursor: pointer;
 }
-.carte-commandes .statut {
-  display: block;
-  margin-top: 0.4rem;
+.lien-livraisons:hover {
+  text-decoration: underline;
 }
 
 /* Propositions IA à valider (superadmin) */

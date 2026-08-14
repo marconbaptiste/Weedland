@@ -21,7 +21,7 @@ export default function Profil() {
   const [stats, setStats] = useState({ caJour: 0 });
   const [statsPerso, setStatsPerso] = useState({ intMois: 0, intAnnee: 0 });
   const [chromesJour, setChromesJour] = useState([]); // chromes du jour du magasin (tout le monde)
-  const [commandesEnCours, setCommandesEnCours] = useState([]); // bons de commande non traités
+  const [livraisons, setLivraisons] = useState([]); // commandes en cours + celles du jour (suivi)
   const [outil, setOutil] = useState(null); // 'monnaie' | 'scanner' | 'courses' | null
   const [veille, setVeille] = useState(null); // dernier bulletin de veille réglementaire
   const [nbCourses, setNbCourses] = useState(0);
@@ -81,14 +81,15 @@ export default function Profil() {
         .eq('date', aujourdhuiISO())
         .order('created_at', { ascending: false })
         .then(({ data }) => setChromesJour(data ?? []));
-      // Bons de commande non traités : la note reste affichée sur l'accueil
-      // tant que la commande est « en cours » (registre partagé du magasin).
+      // Livraisons pour le suivi en un clin d'œil : toutes les commandes encore
+      // « en cours » (la note reste affichée tant que pas traitée) + celles du
+      // jour déjà traitées/envoyées (pour voir ce qui a été fait aujourd'hui).
       supabase
         .from('commandes')
-        .select('id, montant, payee, mode_paiement, note, adresse_livraison, created_at, clients(surnom)')
-        .eq('statut', 'en_cours')
+        .select('id, montant, payee, statut, note, created_at, clients(surnom)')
+        .or(`statut.eq.en_cours,created_at.gte.${aujourdhuiISO()}`)
         .order('created_at', { ascending: true })
-        .then(({ data }) => setCommandesEnCours(data ?? []));
+        .then(({ data }) => setLivraisons(data ?? []));
     };
     recharger();
     document.addEventListener('visibilitychange', recharger);
@@ -208,32 +209,34 @@ export default function Profil() {
         </div>
       )}
 
-      {/* Bons de commande à traiter : chaque note reste ici tant que la
-          commande n'est pas marquée « traitée » (page Commandes). */}
-      {commandesEnCours.length > 0 && (
-        <Link to="/commandes" className="card carte-commandes">
-          <h2>
-            📦 {commandesEnCours.length} commande{commandesEnCours.length > 1 ? 's' : ''} à traiter
-          </h2>
-          {commandesEnCours.map((c) => (
-            <div key={c.id} className="histo-chrome">
-              <span>
-                {c.clients?.surnom ?? 'Client'}
-                {c.note && <span className="chrome-heure"> · 📝 {c.note}</span>}
-              </span>
-              <span className={c.payee ? 'solde-ok' : 'dette'}>
-                {formatEuros(Number(c.montant))}
-                {c.payee ? ' · payée' : ' · à encaisser'}
-              </span>
-            </div>
-          ))}
-          <span className="statut">Appuie pour ouvrir les commandes →</span>
-        </Link>
-      )}
-
-      {chromesJour.length > 0 && (
+      {/* Suivi du jour en un clin d'œil : livraisons (les « en cours » restent
+          affichées avec leur note tant qu'elles ne sont pas traitées, celles du
+          jour déjà traitées/envoyées restent visibles), chromes et remboursements. */}
+      {(chromesJour.length > 0 || livraisons.length > 0) && (
       <div className="card">
-        <h2>Chromes du jour</h2>
+        <h2>Suivi du jour</h2>
+        {livraisons.length > 0 && (
+          <div className="histo-bloc">
+            <Link to="/commandes" className="histo-titre lien-livraisons">
+              🚚 Livraisons →
+            </Link>
+            {livraisons.map((c) => (
+              <div key={c.id} className="histo-chrome">
+                <span>
+                  {c.statut === 'en_cours' ? '🕐' : c.statut === 'traitee' ? '✅' : '📦'}{' '}
+                  {c.clients?.surnom ?? 'Client'}
+                  {c.note && c.statut === 'en_cours' && (
+                    <span className="chrome-heure"> · 📝 {c.note}</span>
+                  )}
+                </span>
+                <span className={c.payee ? 'solde-ok' : 'dette'}>
+                  {formatEuros(Number(c.montant))}
+                  {c.payee ? ' · payée' : ' · à encaisser'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         {avancesJour.length > 0 && (
           <div className="histo-bloc">
             <span className="histo-titre">Avances</span>
