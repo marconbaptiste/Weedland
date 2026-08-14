@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { parseMontant, formatEuros, formatDateFr } from '../lib/format';
 import { urlPlan } from '../lib/plan';
 import ChampMontant from '../components/ChampMontant';
+import { useInvite } from '../components/ModalePrompt';
 
 // Page — Bons de commande (livraisons). Registre PARTAGÉ du magasin (comme les
 // chromes) : tout membre crée, encaisse, fait avancer et supprime une commande —
@@ -28,6 +29,7 @@ export default function Commandes() {
   const [creationOuverte, setCreationOuverte] = useState(false);
   const [form, setForm] = useState(FORM_VIDE);
   const [paiementPour, setPaiementPour] = useState(null); // id de la commande en cours d'encaissement
+  const { invite, elementInvite } = useInvite();
 
   const charger = useCallback(async () => {
     const [{ data: cmds }, { data: cls }] = await Promise.all([
@@ -102,6 +104,21 @@ export default function Commandes() {
     else charger();
   }
 
+  // Adresse ÉPHÉMÈRE de la commande (vacances, lieu de travail…) : modifier ici
+  // ne touche QUE cette commande, jamais l'adresse de la fiche client.
+  async function modifierAdresseCommande(c) {
+    const saisie = await invite({
+      titre: 'Adresse de livraison (cette commande)',
+      label: 'Adresse ponctuelle — la fiche client reste inchangée',
+      valeurInitiale: c.adresse_livraison ?? '',
+    });
+    if (saisie == null) return;
+    const adresse = saisie.trim() || null;
+    const { error } = await supabase.from('commandes').update({ adresse_livraison: adresse }).eq('id', c.id);
+    if (error) setMsg(`Modification impossible : ${error.message}`);
+    else charger();
+  }
+
   async function supprimer(id) {
     if (!window.confirm('Supprimer cette commande ?')) return;
     const { error } = await supabase.from('commandes').delete().eq('id', id);
@@ -143,11 +160,11 @@ export default function Commandes() {
               <ChampMontant value={form.montant} onChange={(v) => setForm((f) => ({ ...f, montant: v }))} />
             </label>
             <label className="field">
-              <span>Adresse de livraison</span>
+              <span>Adresse de livraison (pour cette commande)</span>
               <input
                 value={form.adresse}
                 onChange={(e) => setForm((f) => ({ ...f, adresse: e.target.value }))}
-                placeholder="Pré-remplie depuis la fiche client"
+                placeholder="Pré-remplie depuis la fiche — modifiable (vacances, travail…)"
               />
             </label>
             <label className="field cmd-payee-ligne">
@@ -277,6 +294,15 @@ export default function Commandes() {
                           📦 Marquer envoyée
                         </button>
                       )}
+                      {c.statut === 'en_cours' && (
+                        <button
+                          type="button"
+                          className="btn btn-compact btn-discret"
+                          onClick={() => modifierAdresseCommande(c)}
+                        >
+                          ✏️ Adresse
+                        </button>
+                      )}
                       {c.statut !== 'en_cours' && (
                         <button
                           type="button"
@@ -297,6 +323,7 @@ export default function Commandes() {
           </ul>
         </>
       )}
+      {elementInvite}
     </div>
   );
 }
