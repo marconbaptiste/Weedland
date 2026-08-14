@@ -1280,6 +1280,101 @@ hr {
   color: #f08b86;
   background: rgba(232, 116, 110, 0.22);
 }
+/* Bons de commande (livraisons) */
+.cmd-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.cmd-item {
+  border: 1px solid var(--bordure);
+  border-left: 4px solid var(--bordure-forte);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  background: var(--fond-carte, transparent);
+}
+.cmd-item.cmd-encours {
+  border-left-color: #e3b341;
+}
+.cmd-item.cmd-traitee {
+  border-left-color: #5fbf8e;
+}
+.cmd-item.cmd-envoyee {
+  border-left-color: var(--bordure-forte);
+  opacity: 0.75;
+}
+.cmd-tete {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.cmd-client {
+  font-weight: 700;
+}
+.cmd-montant {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.cmd-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.3rem 0;
+}
+.cmd-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.18em 0.65em;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.cmd-badge.cmd-encours {
+  color: #ecc35f;
+  background: rgba(227, 179, 65, 0.22);
+}
+.cmd-badge.cmd-traitee {
+  color: #7fd3a6;
+  background: rgba(95, 191, 142, 0.22);
+}
+.cmd-badge.cmd-envoyee {
+  color: var(--texte);
+  background: var(--fond-input);
+}
+.cmd-badge.cmd-paye {
+  color: #7fd3a6;
+  background: rgba(95, 191, 142, 0.22);
+}
+.cmd-badge.cmd-impaye {
+  color: #f08b86;
+  background: rgba(232, 116, 110, 0.22);
+}
+.cmd-note {
+  margin: 0.15rem 0;
+  font-size: 0.9rem;
+}
+.cmd-payee-ligne {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+.carte-commandes {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border-left: 4px solid #e3b341;
+}
+.carte-commandes .statut {
+  display: block;
+  margin-top: 0.4rem;
+}
+
 /* Propositions IA à valider (superadmin) */
 .mol-prop-card {
   margin-top: 0.6rem;
