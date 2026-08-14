@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import Logo, { FeuilleKanabiz } from '../components/Logo';
+import { SOCLE, OPTIONS_TARIFS } from '../lib/tarifs';
 
 // Page publique de présentation (commercialisation). Accessible aux visiteurs
 // non connectés. Thème Liquid Glass, marque Kanabiz.
@@ -11,6 +12,32 @@ const ATOUTS = [
   { emoji: '📈', titre: 'Pilotage & bénéfice', texte: 'CA jour / semaine / mois, charges, fournisseurs, bénéfice calculé. Exports CSV & PDF.' },
   { emoji: '🏪', titre: 'Multi-magasin', texte: 'Plusieurs boutiques, chacune totalement cloisonnée. Bascule en un clic.' },
   { emoji: '🔒', titre: 'Sécurisé & privé', texte: 'Connexion Google ou mot de passe, accès par autorisation, données protégées (RLS).' },
+];
+
+// Tarifs (HT / mois / magasin). Les prix viennent de src/lib/tarifs.js —
+// la même grille que l'écran « Abonnement & options » dans l'app.
+const PACKS_LANDING = [
+  {
+    nom: 'Comptoir',
+    prix: SOCLE,
+    accroche: 'L’essentiel du comptoir',
+    inclus: ['Caisse & clôtures en 1 minute', 'Dettes clients (avances / remboursements)', 'Fiches clients & journal d’activité', 'Comptes équipe & intéressement', 'Multi-employés, mobile-first'],
+    mis_en_avant: false,
+  },
+  {
+    nom: 'Boutique',
+    prix: 45,
+    accroche: 'Socle + Stocks + Fidélité',
+    inclus: ['Tout Comptoir', 'Stocks & achats (alertes, import facture)', 'Fidélité & promos (carte QR anti-triche)'],
+    mis_en_avant: false,
+  },
+  {
+    nom: 'Premium',
+    prix: 69,
+    accroche: 'Tout, IA incluse',
+    inclus: ['Tout Boutique', 'Commandes & livraisons', 'Planning & horaires', 'Compta Pro (TVA, compte de résultat)', 'News IA ciblée sur ta boutique'],
+    mis_en_avant: true,
+  },
 ];
 
 const ETAPES = [
@@ -66,6 +93,40 @@ export default function Landing() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="landing-tarifs">
+        <h2>Des tarifs simples, à la carte</h2>
+        <p className="landing-sous">
+          Un socle accessible, des options que tu actives quand tu en as besoin — sans engagement,
+          essai 14 jours. Prix HT / mois / magasin.
+        </p>
+        <div className="tarifs-grille">
+          {PACKS_LANDING.map((p) => (
+            <div key={p.nom} className={`card tarif-card ${p.mis_en_avant ? 'tarif-star' : ''}`}>
+              {p.mis_en_avant && <span className="tarif-badge">Le plus choisi</span>}
+              <h3>{p.nom}</h3>
+              <div className="tarif-prix">
+                {p.prix} €<span className="tarif-mois">/mois</span>
+              </div>
+              <p className="tarif-accroche">{p.accroche}</p>
+              <ul className="tarif-liste">
+                {p.inclus.map((l) => (
+                  <li key={l}>✓ {l}</li>
+                ))}
+              </ul>
+              <Link to="/inscription" className={`btn ${p.mis_en_avant ? 'btn-primary' : ''}`}>
+                Commencer
+              </Link>
+            </div>
+          ))}
+        </div>
+        <p className="tarif-note">
+          Options à la carte :{' '}
+          {OPTIONS_TARIFS.map((o) => `${o.nom.replace(/^\S+\s/, '')} +${o.prix} €`).join(' · ')}.
+          <br />
+          Pack Pro (tout sauf IA) : 59 € · Abonnement annuel : 2 mois offerts · 2ᵉ magasin : −20 %.
+        </p>
       </section>
 
       <section className="landing-cta card">

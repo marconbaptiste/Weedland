@@ -101,7 +101,7 @@ export default function Profil() {
       document.removeEventListener('visibilitychange', recharger);
       window.removeEventListener('focus', recharger);
     };
-  }, []);
+  }, [chargerLivraisons]);
 
   // Dernier bulletin de veille réglementaire (aperçu sur l'accueil).
   useEffect(() => {
@@ -119,6 +119,7 @@ export default function Profil() {
   // Alimente le Suivi du jour ET la pastille du raccourci 🚚 (pulse quand un
   // collègue crée une commande depuis la dernière ouverture du tiroir).
   const chargerLivraisons = useCallback(async () => {
+    if (!options.livraisons) return; // module Commandes & livraisons non actif
     const { data } = await supabase
       .from('commandes')
       .select('id, montant, payee, statut, note, created_at, clients(surnom)')
@@ -134,7 +135,7 @@ export default function Profil() {
     } else if (n < cmdVusRef.current) {
       cmdVusRef.current = n;
     }
-  }, []);
+  }, [options.livraisons]);
 
   // Compteur de la liste de courses + notification quand un collègue ajoute.
   const chargerCourses = useCallback(async () => {
@@ -253,10 +254,10 @@ export default function Profil() {
       {/* Suivi du jour en un clin d'œil : livraisons (les « en cours » restent
           affichées avec leur note tant qu'elles ne sont pas traitées, celles du
           jour déjà traitées/envoyées restent visibles), chromes et remboursements. */}
-      {(chromesJour.length > 0 || livraisons.length > 0) && (
+      {(chromesJour.length > 0 || (options.livraisons && livraisons.length > 0)) && (
       <div className="card">
         <h2>Suivi du jour</h2>
-        {livraisons.length > 0 && (
+        {options.livraisons && livraisons.length > 0 && (
           <div className="histo-bloc">
             <Link to="/commandes" className="histo-titre lien-livraisons">
               🚚 Livraisons →
@@ -333,15 +334,17 @@ export default function Profil() {
       )}
 
       <div className="bulles-accueil">
-        <button type="button" className="bulle-raccourci" onClick={ouvrirLivraisons}>
-          <span className="bulle-rond">
-            🚚
-            {nbCmdEnCours > 0 && (
-              <span className={`fab-badge ${cmdNouveau ? 'nouveau' : ''}`}>{nbCmdEnCours}</span>
-            )}
-          </span>
-          <span className="bulle-label">Livraisons</span>
-        </button>
+        {options.livraisons && (
+          <button type="button" className="bulle-raccourci" onClick={ouvrirLivraisons}>
+            <span className="bulle-rond">
+              🚚
+              {nbCmdEnCours > 0 && (
+                <span className={`fab-badge ${cmdNouveau ? 'nouveau' : ''}`}>{nbCmdEnCours}</span>
+              )}
+            </span>
+            <span className="bulle-label">Livraisons</span>
+          </button>
+        )}
         {options.fidelite && (
           <button type="button" className="bulle-raccourci" onClick={() => setOutil('scanner')}>
             <span className="bulle-rond">🎟️</span>

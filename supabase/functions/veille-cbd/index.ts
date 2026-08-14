@@ -389,6 +389,7 @@ Deno.serve(async (req) => {
     const parCron = Boolean(cronSecret) && egalConstant(headerSecret, cronSecret);
     let autorise = parCron;
     let magasinId: string | null = null;
+    let roleAppelant: string | null = null;
     if (!autorise) {
       const auth = createClient(env("SUPABASE_URL"), env("SUPABASE_ANON_KEY"), {
         global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
@@ -398,6 +399,7 @@ Deno.serve(async (req) => {
         const { data: profil } = await svc.from("users").select("role, magasin_id").eq("id", u.user.id).single();
         if (profil?.role === "admin" || profil?.role === "superadmin") {
           autorise = true;
+          roleAppelant = profil.role;
           magasinId = profil.magasin_id ?? null;
         }
       }
@@ -407,6 +409,16 @@ Deno.serve(async (req) => {
     // Generation manuelle : exiger un magasin (sinon un profil sans magasin publierait
     // un bulletin GLOBAL visible par tous). Le bulletin global reste reserve au cron.
     if (!parCron && !magasinId) return json({ error: "Profil sans magasin — generation impossible." }, 400);
+
+    // Monetisation : la generation personnalisee est une option payante (opt_news).
+    // Verification COTE SERVEUR (le bouton masque dans le front n'est pas une
+    // securite) — passent : cron, superadmin, magasin `gratuit` ou opt_news actif.
+    if (!parCron && roleAppelant !== "superadmin") {
+      const { data: mag } = await svc.from("magasins").select("gratuit, opt_news").eq("id", magasinId).single();
+      if (!mag?.gratuit && !mag?.opt_news) {
+        return json({ error: "Option News IA non active pour ce magasin — active-la dans Gestion → Abonnement." }, 403);
+      }
+    }
 
     if (!env("ANTHROPIC_API_KEY")) return json({ error: "IA non configuree (ANTHROPIC_API_KEY manquante)." }, 503);
 

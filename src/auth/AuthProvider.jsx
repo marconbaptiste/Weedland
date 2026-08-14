@@ -89,7 +89,9 @@ export function AuthProvider({ children }) {
     }
     const { data } = await supabase
       .from('magasins')
-      .select('nom, abonnement, essai_fin, logo, gratuit, stripe_subscription_id, opt_planning, opt_stock, opt_fidelite')
+      .select(
+        'nom, abonnement, essai_fin, logo, gratuit, stripe_subscription_id, opt_planning, opt_stock, opt_fidelite, opt_livraisons, opt_compta, opt_news'
+      )
       .eq('id', profil.magasin_id)
       .single();
     setMagasinInfo(data ?? null);
@@ -105,11 +107,14 @@ export function AuthProvider({ children }) {
   // (exploitant) n'est jamais bridé ; un magasin `gratuit` (ex. le magasin
   // originel Weedland) a toujours toutes les options, sans facturation.
   const options = estSuperadmin || magasinInfo?.gratuit
-    ? { planning: true, stock: true, fidelite: true }
+    ? { planning: true, stock: true, fidelite: true, livraisons: true, compta: true, news: true }
     : {
         planning: magasinInfo?.opt_planning ?? false,
         stock: magasinInfo?.opt_stock ?? false,
         fidelite: magasinInfo?.opt_fidelite ?? false,
+        livraisons: magasinInfo?.opt_livraisons ?? false,
+        compta: magasinInfo?.opt_compta ?? false,
+        news: magasinInfo?.opt_news ?? false,
       };
   // Blocage d'abonnement : c'est STRIPE qui fait autorité. On ne bloque un
   // magasin QUE s'il est réellement sur un abonnement Stripe suspendu (impayé /
