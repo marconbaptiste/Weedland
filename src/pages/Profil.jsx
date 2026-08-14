@@ -223,16 +223,22 @@ export default function Profil() {
             {livraisons.map((c) => (
               <div key={c.id} className="histo-chrome">
                 <span>
-                  {c.statut === 'en_cours' ? '🕐' : c.statut === 'traitee' ? '✅' : '📦'}{' '}
+                  {c.statut === 'en_cours' ? '🕐' : c.statut === 'traitee' ? '✅' : c.statut === 'annulee' ? '🚫' : '📦'}{' '}
                   {c.clients?.surnom ?? 'Client'}
                   {c.note && c.statut === 'en_cours' && (
                     <span className="chrome-heure"> · 📝 {c.note}</span>
                   )}
                 </span>
-                <span className={c.payee ? 'solde-ok' : 'dette'}>
-                  {formatEuros(Number(c.montant))}
-                  {c.payee ? ' · payée' : ' · à encaisser'}
-                </span>
+                {c.statut === 'annulee' ? (
+                  <span className="chrome-heure">
+                    {formatEuros(Number(c.montant))} · annulée{c.payee ? ' · à rembourser' : ''}
+                  </span>
+                ) : (
+                  <span className={c.payee ? 'solde-ok' : 'dette'}>
+                    {formatEuros(Number(c.montant))}
+                    {c.payee ? ' · payée' : ' · à encaisser'}
+                  </span>
+                )}
               </div>
             ))}
           </div>

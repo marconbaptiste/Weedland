@@ -15,9 +15,10 @@ const STATUTS = {
   en_cours: { emoji: '🕐', libelle: 'En cours', classe: 'cmd-encours' },
   traitee: { emoji: '✅', libelle: 'Traitée', classe: 'cmd-traitee' },
   envoyee: { emoji: '📦', libelle: 'Envoyée', classe: 'cmd-envoyee' },
+  annulee: { emoji: '🚫', libelle: 'Annulée', classe: 'cmd-annulee' },
 };
 const MODES = { cb: '💳 CB', especes: '💵 Espèces', virement: '🏦 Virement', autre: '💠 Autre' };
-const ORDRE_STATUT = { en_cours: 0, traitee: 1, envoyee: 2 };
+const ORDRE_STATUT = { en_cours: 0, traitee: 1, envoyee: 2, annulee: 3 };
 
 const FORM_VIDE = { client_id: '', montant: '', payee: false, mode_paiement: 'cb', adresse: '', note: '' };
 
@@ -243,12 +244,13 @@ export default function Commandes() {
                       {st.emoji} {st.libelle}
                     </span>
                     {c.payee ? (
-                      <span className="cmd-badge cmd-paye">
+                      <span className={`cmd-badge ${c.statut === 'annulee' ? 'cmd-impaye' : 'cmd-paye'}`}>
                         💰 Payée{c.mode_paiement ? ` · ${MODES[c.mode_paiement] ?? c.mode_paiement}` : ''}
+                        {c.statut === 'annulee' ? ' — à rembourser' : ''}
                       </span>
-                    ) : (
+                    ) : c.statut !== 'annulee' ? (
                       <span className="cmd-badge cmd-impaye">⏳ À encaisser</span>
-                    )}
+                    ) : null}
                     <span className="chrome-heure">{formatDateFr(c.created_at)}</span>
                   </div>
                   {c.note && <p className="cmd-note">📝 {c.note}</p>}
@@ -279,7 +281,7 @@ export default function Commandes() {
                     </div>
                   ) : (
                     <div className="form-inline">
-                      {!c.payee && (
+                      {!c.payee && c.statut !== 'annulee' && (
                         <button type="button" className="btn btn-compact" onClick={() => setPaiementPour(c.id)}>
                           💶 Encaisser
                         </button>
@@ -303,13 +305,22 @@ export default function Commandes() {
                           ✏️ Adresse
                         </button>
                       )}
+                      {(c.statut === 'en_cours' || c.statut === 'traitee') && (
+                        <button
+                          type="button"
+                          className="btn btn-compact btn-discret"
+                          onClick={() => changerStatut(c.id, 'annulee')}
+                        >
+                          🚫 Annuler
+                        </button>
+                      )}
                       {c.statut !== 'en_cours' && (
                         <button
                           type="button"
                           className="btn btn-compact btn-discret"
                           onClick={() => changerStatut(c.id, c.statut === 'envoyee' ? 'traitee' : 'en_cours')}
                         >
-                          ↩︎ Revenir
+                          ↩︎ {c.statut === 'annulee' ? 'Rouvrir' : 'Revenir'}
                         </button>
                       )}
                       <button type="button" className="btn btn-compact btn-discret" onClick={() => supprimer(c.id)}>
