@@ -41,13 +41,20 @@ export default function Profil() {
         supabase.from('v_ca_jour').select('ventes_directes').eq('employe_id', utilisateur.id).eq('date', today),
         supabase.from('chromes').select('type, montant').eq('employe_id', utilisateur.id).eq('date', today),
       ]);
-      // CA = ventes directes (CB+espèces de la clôture) + avances − remboursements
-      // + autres. On somme depuis `chromes` (pas depuis v_ca_jour.encaissements,
-      // qui inclut déjà les autres) pour éviter tout double comptage, et pour
-      // couvrir aussi les jours SANS clôture.
+      // CA affiché = ventes directes (clôture) + avances + autres. On somme
+      // depuis `chromes` (pas v_ca_jour.encaissements qui inclut déjà les
+      // autres) pour éviter tout double comptage, et couvrir les jours SANS
+      // clôture. Remboursements : SANS clôture aujourd'hui, on ne déduit RIEN
+      // (l'argent remboursé n'est pas encore compté → un remboursement ne doit
+      // jamais faire baisser le CA affiché de l'employé) ; AVEC clôture, on
+      // déduit pour neutraliser le cash remboursé présent dans la caisse
+      // (une dette récupérée n'est pas une vente — comptée le jour de l'avance).
+      const aCloture = (cl ?? []).length > 0;
       const vd = somme((cl ?? []).map((r) => r.ventes_directes));
       const av = somme((chr ?? []).filter((c) => c.type === 'avance').map((c) => c.montant));
-      const rb = somme((chr ?? []).filter((c) => c.type === 'remboursement').map((c) => c.montant));
+      const rb = aCloture
+        ? somme((chr ?? []).filter((c) => c.type === 'remboursement').map((c) => c.montant))
+        : 0;
       const vir = somme((chr ?? []).filter((c) => c.type === 'autre').map((c) => c.montant));
       setStats({ caJour: somme([vd, av, vir, -rb]) });
     })();
