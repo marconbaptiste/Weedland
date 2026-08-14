@@ -5,9 +5,11 @@
 // dès que toutes les options d'un pack sont actives, un coupon Stripe
 // « pack-remise-<centimes> » (créé à la volée, réutilisé ensuite) ramène la
 // facture au prix du pack. Réservé à l'admin/superadmin du magasin.
-// Secrets : STRIPE_SECRET_KEY, STRIPE_PRICE_PLANNING, STRIPE_PRICE_STOCK,
-//           STRIPE_PRICE_FIDELITE, STRIPE_PRICE_LIVRAISONS, STRIPE_PRICE_COMPTA,
-//           STRIPE_PRICE_NEWS.
+// Secrets : STRIPE_SECRET_KEY uniquement. AUCUN produit/prix à créer dans le
+// Dashboard : chaque option est provisionnée automatiquement par lookup_key
+// (`kanabiz_<option>`) au premier besoin. Les anciens secrets STRIPE_PRICE_*
+// ne servent plus qu'à retrouver (pour les retirer) les lignes d'abonnement
+// posées avec l'ancienne grille.
 import Stripe from "npm:stripe@17";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -23,15 +25,16 @@ const env = (n: string) => {
 const json = (o: unknown, status = 200) =>
   new Response(JSON.stringify(o), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-// option → (secret du prix Stripe, colonne du drapeau, prix HT/mois).
+// option → (colonne du drapeau, prix HT/mois, nom du produit Stripe,
+// ancien secret de prix — legacy, pour retirer les lignes de l'ancienne grille).
 // ⚠️ Grille répliquée depuis src/lib/tarifs.js — garder les DEUX cohérentes.
-const OPTS: Record<string, { secret: string; col: string; prix: number }> = {
-  stock: { secret: "STRIPE_PRICE_STOCK", col: "opt_stock", prix: 10 },
-  fidelite: { secret: "STRIPE_PRICE_FIDELITE", col: "opt_fidelite", prix: 12 },
-  livraisons: { secret: "STRIPE_PRICE_LIVRAISONS", col: "opt_livraisons", prix: 8 },
-  planning: { secret: "STRIPE_PRICE_PLANNING", col: "opt_planning", prix: 8 },
-  compta: { secret: "STRIPE_PRICE_COMPTA", col: "opt_compta", prix: 12 },
-  news: { secret: "STRIPE_PRICE_NEWS", col: "opt_news", prix: 9 },
+const OPTS: Record<string, { col: string; prix: number; nom: string; ancienSecret?: string }> = {
+  stock: { col: "opt_stock", prix: 10, nom: "Kanabiz — Option Stocks & achats", ancienSecret: "STRIPE_PRICE_STOCK" },
+  fidelite: { col: "opt_fidelite", prix: 12, nom: "Kanabiz — Option Fidélité & promos", ancienSecret: "STRIPE_PRICE_FIDELITE" },
+  livraisons: { col: "opt_livraisons", prix: 8, nom: "Kanabiz — Option Commandes & livraisons" },
+  planning: { col: "opt_planning", prix: 8, nom: "Kanabiz — Option Planning & horaires", ancienSecret: "STRIPE_PRICE_PLANNING" },
+  compta: { col: "opt_compta", prix: 12, nom: "Kanabiz — Option Compta Pro" },
+  news: { col: "opt_news", prix: 9, nom: "Kanabiz — Option News IA" },
 };
 const SOCLE = 29;
 // Packs (plafonds), du plus complet au plus simple — même table que tarifs.js.
@@ -54,6 +57,27 @@ function remisePack(actives: Set<string>): number {
     break;
   }
   return plein - total;
+}
+
+// Retrouve — ou CRÉE — le prix Stripe d'une option par lookup_key. Idempotent :
+// au premier appel le produit + prix sont créés, ensuite ils sont retrouvés.
+// Si le montant de la grille change, un nouveau prix est créé et récupère la
+// lookup_key (transfer_lookup_key) sans toucher les abonnés existants.
+async function prixParCle(stripe: Stripe, cle: string, montantCts: number, nom: string): Promise<string> {
+  const l = await stripe.prices.list({ lookup_keys: [cle], limit: 1 });
+  const actuel = l.data[0];
+  if (actuel && actuel.active && actuel.unit_amount === montantCts) return actuel.id;
+  const cree = await stripe.prices.create({
+    lookup_key: cle,
+    transfer_lookup_key: true,
+    unit_amount: montantCts,
+    currency: "eur",
+    recurring: { interval: "month" },
+    ...(actuel && typeof actuel.product === "string"
+      ? { product: actuel.product }
+      : { product_data: { name: nom } }),
+  });
+  return cree.id;
 }
 
 // Coupon Stripe réutilisable « pack-remise-<centimes> » (créé au premier besoin).
@@ -105,9 +129,17 @@ Deno.serve(async (req) => {
     if (!mag.stripe_subscription_id) return json({ error: "Abonne-toi d'abord à l'offre de base." }, 400);
 
     const stripe = new Stripe(env("STRIPE_SECRET_KEY"), { httpClient: Stripe.createFetchHttpClient() });
-    const priceId = env(conf.secret);
+    const priceId = await prixParCle(stripe, `kanabiz_${option}`, conf.prix * 100, conf.nom);
     const sub = await stripe.subscriptions.retrieve(mag.stripe_subscription_id);
-    const item = sub.items.data.find((it) => it.price.id === priceId);
+    // Retrouve la ligne de cette option : prix courant, lookup_key (ancien prix
+    // remplacé par un changement de grille) ou prix legacy des anciens secrets.
+    const ancienPrix = conf.ancienSecret ? Deno.env.get(conf.ancienSecret) : undefined;
+    const item = sub.items.data.find(
+      (it) =>
+        it.price.id === priceId ||
+        it.price.lookup_key === `kanabiz_${option}` ||
+        (ancienPrix && it.price.id === ancienPrix)
+    );
 
     if (actif && !item) {
       await stripe.subscriptionItems.create({ subscription: sub.id, price: priceId, quantity: 1 });

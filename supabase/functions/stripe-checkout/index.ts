@@ -1,7 +1,10 @@
 // Edge Function — stripe-checkout
-// Crée une session Stripe Checkout (abonnement, essai 14 jours) pour un magasin
-// et renvoie l'URL de paiement. Appelé par le superadmin ou l'admin du magasin.
-// Secrets : STRIPE_SECRET_KEY, STRIPE_PRICE_ID, APP_PUBLIC_URL.
+// Crée une session Stripe Checkout (abonnement au socle « Comptoir » 29 €,
+// essai 14 jours) pour un magasin et renvoie l'URL de paiement. Appelé par le
+// superadmin ou l'admin du magasin.
+// Secrets : STRIPE_SECRET_KEY, APP_PUBLIC_URL. AUCUN produit/prix à créer dans
+// le Dashboard : le prix du socle est provisionné automatiquement par
+// lookup_key (`kanabiz_socle`), comme les options dans stripe-options.
 import Stripe from "npm:stripe@17";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -16,6 +19,31 @@ const env = (n: string) => {
 };
 const json = (o: unknown, status = 200) =>
   new Response(JSON.stringify(o), { status, headers: { ...cors, "Content-Type": "application/json" } });
+
+// Prix du socle : 29 € HT/mois (grille src/lib/tarifs.js — garder cohérent).
+const SOCLE_CTS = 2900;
+const SOCLE_CLE = "kanabiz_socle";
+
+// Retrouve — ou CRÉE — le prix Stripe par lookup_key. Idempotent : au premier
+// appel le produit + prix sont créés dans Stripe, ensuite ils sont retrouvés.
+// Si le montant de la grille change, un nouveau prix est créé et récupère la
+// lookup_key (transfer_lookup_key) sans toucher les abonnés existants.
+async function prixParCle(stripe: Stripe, cle: string, montantCts: number, nom: string): Promise<string> {
+  const l = await stripe.prices.list({ lookup_keys: [cle], limit: 1 });
+  const actuel = l.data[0];
+  if (actuel && actuel.active && actuel.unit_amount === montantCts) return actuel.id;
+  const cree = await stripe.prices.create({
+    lookup_key: cle,
+    transfer_lookup_key: true,
+    unit_amount: montantCts,
+    currency: "eur",
+    recurring: { interval: "month" },
+    ...(actuel && typeof actuel.product === "string"
+      ? { product: actuel.product }
+      : { product_data: { name: nom } }),
+  });
+  return cree.id;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -52,10 +80,11 @@ Deno.serve(async (req) => {
     }
 
     const base = env("APP_PUBLIC_URL");
+    const prixSocle = await prixParCle(stripe, SOCLE_CLE, SOCLE_CTS, "Kanabiz — Socle Comptoir");
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: customerId,
-      line_items: [{ price: env("STRIPE_PRICE_ID"), quantity: 1 }],
+      line_items: [{ price: prixSocle, quantity: 1 }],
       subscription_data: { trial_period_days: 14, metadata: { magasin_id: mag.id } },
       allow_promotion_codes: true, // le client peut entrer un code promo (ex. premier magasin)
       success_url: `${base}/?abonnement=ok`,
