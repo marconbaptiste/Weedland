@@ -117,6 +117,11 @@ export default function Stocks() {
     charger();
   }, [charger]);
 
+  // Catégories réellement saisies (pour le sélecteur à la création/import).
+  const categoriesReelles = [...new Set(produits.map((p) => (p.categorie ?? '').trim()).filter(Boolean))].sort(
+    (a, b) => a.localeCompare(b),
+  );
+
   async function creer(e) {
     e.preventDefault();
     const nom = form.nom.trim();
@@ -260,11 +265,6 @@ export default function Stocks() {
   const enAlerte = (p) => Number(p.seuil_alerte) > 0 && Number(p.quantite) <= Number(p.seuil_alerte);
   const valeurStock = somme(produits.map((p) => arrondi(Number(p.quantite) * Number(p.prix_achat))));
   const nbAlertes = produits.filter(enAlerte).length;
-
-  // Catégories réellement saisies (pour le sélecteur à la création/import).
-  const categoriesReelles = [...new Set(produits.map((p) => (p.categorie ?? '').trim()).filter(Boolean))].sort(
-    (a, b) => a.localeCompare(b),
-  );
 
   // Regroupement par catégorie pour l'affichage.
   const parCategorie = {};

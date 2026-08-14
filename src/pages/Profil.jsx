@@ -81,6 +81,30 @@ export default function Profil() {
     })();
   }, [utilisateur.id, aInteressement]);
 
+  // Livraisons : toutes les commandes encore « en cours » (leur note reste
+  // affichée tant que pas traitées) + celles du jour déjà traitées/envoyées.
+  // Alimente le Suivi du jour ET la pastille du raccourci 🚚 (pulse quand un
+  // collègue crée une commande depuis la dernière ouverture du tiroir).
+  // ⚠️ Déclarée AVANT l'effet qui la référence dans ses dépendances (TDZ).
+  const chargerLivraisons = useCallback(async () => {
+    if (!options.livraisons) return; // module Commandes & livraisons non actif
+    const { data } = await supabase
+      .from('commandes')
+      .select('id, montant, payee, statut, note, created_at, clients(surnom)')
+      .or(`statut.eq.en_cours,created_at.gte.${aujourdhuiISO()}`)
+      .order('created_at', { ascending: true });
+    const liste = data ?? [];
+    setLivraisons(liste);
+    const n = liste.filter((c) => c.statut === 'en_cours').length;
+    if (cmdVusRef.current === null) {
+      cmdVusRef.current = n;
+    } else if (n > cmdVusRef.current && !cmdOuvertRef.current) {
+      setCmdNouveau(true);
+    } else if (n < cmdVusRef.current) {
+      cmdVusRef.current = n;
+    }
+  }, [options.livraisons]);
+
   // Chromes du jour de TOUT le magasin (registre partagé) — visible par tous,
   // employés inclus. Rechargé au retour sur l'onglet/la page.
   useEffect(() => {
@@ -113,29 +137,6 @@ export default function Profil() {
       .maybeSingle()
       .then(({ data }) => setVeille(data ?? null));
   }, []);
-
-  // Livraisons : toutes les commandes encore « en cours » (leur note reste
-  // affichée tant que pas traitées) + celles du jour déjà traitées/envoyées.
-  // Alimente le Suivi du jour ET la pastille du raccourci 🚚 (pulse quand un
-  // collègue crée une commande depuis la dernière ouverture du tiroir).
-  const chargerLivraisons = useCallback(async () => {
-    if (!options.livraisons) return; // module Commandes & livraisons non actif
-    const { data } = await supabase
-      .from('commandes')
-      .select('id, montant, payee, statut, note, created_at, clients(surnom)')
-      .or(`statut.eq.en_cours,created_at.gte.${aujourdhuiISO()}`)
-      .order('created_at', { ascending: true });
-    const liste = data ?? [];
-    setLivraisons(liste);
-    const n = liste.filter((c) => c.statut === 'en_cours').length;
-    if (cmdVusRef.current === null) {
-      cmdVusRef.current = n;
-    } else if (n > cmdVusRef.current && !cmdOuvertRef.current) {
-      setCmdNouveau(true);
-    } else if (n < cmdVusRef.current) {
-      cmdVusRef.current = n;
-    }
-  }, [options.livraisons]);
 
   // Compteur de la liste de courses + notification quand un collègue ajoute.
   const chargerCourses = useCallback(async () => {
