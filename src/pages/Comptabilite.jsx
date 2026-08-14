@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { parseMontant, formatEuros, formatNombre, formatDateFr } from '../lib/format';
 import {
@@ -42,7 +43,11 @@ function Evolution({ actuel, precedent, inverse = false }) {
 // sur un mois, une année, ou une période personnalisée. L'édition des charges
 // et fournisseurs se fait en mode « Mois ».
 export default function Comptabilite() {
-  const { magasinId, magasinNom } = useAuth();
+  const { magasinId, magasinNom, options } = useAuth();
+  // Option d'abonnement « Compta Pro » : trésorerie, compte de résultat, TVA,
+  // catégories de charges, résultat par mois. La compta de base (CA, charges,
+  // fournisseurs, bénéfice, exports) reste dans le socle.
+  const comptaPro = Boolean(options?.compta);
   const [periode, setPeriode] = useState('mois');
   const [mois, setMois] = useState(premierDuMois());
   const [perso, setPerso] = useState(() => {
@@ -499,18 +504,23 @@ export default function Comptabilite() {
         ['Charges', formatEuros(totalCharges)],
         ['Fournisseurs', formatEuros(totalFournisseurs)],
         ['Résultat net', formatEuros(benefice)],
-        ['Marge nette', margeNette != null ? pct1(margeNette) : '—'],
-        ['Évolution CA vs période préc.', prevTot?.ca ? formatEuros(prevTot.ca) : '—'],
-        ['Créances clients (à ce jour)', `${formatEuros(creances.total)} (${creances.nb} client${creances.nb > 1 ? 's' : ''})`],
-        ['TVA à reverser (estimation)', formatEuros(tvaAReverser)],
-        ['Seuil de rentabilité', pctRentabilite != null ? pct1(Math.min(999, pctRentabilite)) : '—'],
-        ['CA moyen / jour d’activité', formatEuros(caMoyenJour)],
+        ...(comptaPro
+          ? [
+              ['Marge nette', margeNette != null ? pct1(margeNette) : '—'],
+              ['Évolution CA vs période préc.', prevTot?.ca ? formatEuros(prevTot.ca) : '—'],
+              ['Créances clients (à ce jour)', `${formatEuros(creances.total)} (${creances.nb} client${creances.nb > 1 ? 's' : ''})`],
+              ['TVA à reverser (estimation)', formatEuros(tvaAReverser)],
+              ['Seuil de rentabilité', pctRentabilite != null ? pct1(Math.min(999, pctRentabilite)) : '—'],
+              ['CA moyen / jour d’activité', formatEuros(caMoyenJour)],
+            ]
+          : []),
         [`CA cumulé ${debut.slice(0, 4)}`, formatEuros(caAnnee)],
         ['Intéressement', formatEuros(totalInteressement)],
         ['Heures travaillées', `${formatNombre(totalHeures)} h`],
         ['Paiements employés', formatEuros(totalPaiements)],
       ],
       sections: [
+        ...(comptaPro ? [
         {
           titre: 'Compte de résultat',
           entetes: ['Poste', 'Montant'],
@@ -548,13 +558,20 @@ export default function Comptabilite() {
             ['= TVA à reverser (estimée)', formatEuros(tvaAReverser)],
           ],
         },
+        ] : []),
         enMois
           ? { titre: 'CA par semaine', entetes: ['Semaine', 'CA'], lignes: semaines.map((s) => [`Semaine ${s.n}`, formatEuros(s.ca)]) }
-          : {
-              titre: 'Résultat par mois',
-              entetes: ['Mois', 'CA', 'Dépenses', 'Résultat'],
-              lignes: grilleMois.map((m) => [m.mois, formatEuros(m.ca), formatEuros(m.dep), formatEuros(m.res)]),
-            },
+          : comptaPro
+            ? {
+                titre: 'Résultat par mois',
+                entetes: ['Mois', 'CA', 'Dépenses', 'Résultat'],
+                lignes: grilleMois.map((m) => [m.mois, formatEuros(m.ca), formatEuros(m.dep), formatEuros(m.res)]),
+              }
+            : {
+                titre: 'CA par mois',
+                entetes: ['Mois', 'CA'],
+                lignes: parMois.map((m) => [m.mois, formatEuros(m.ca)]),
+              },
         { titre: 'Charges', entetes: ['Libellé', 'Montant'], lignes: charges.map((c) => [c.libelle || '—', formatEuros(parseMontant(c.montant))]) },
         { titre: 'Fournisseurs', entetes: ['Libellé', 'Montant'], lignes: fournisseurs.map((f) => [f.libelle || '—', formatEuros(parseMontant(f.montant))]) },
         {
@@ -636,6 +653,22 @@ export default function Comptabilite() {
         <div className="kpi"><span className="kpi-label">CA cumulé {debut.slice(0, 4)}</span><span className="kpi-valeur">{formatEuros(caAnnee)}</span></div>
       </div>
 
+      {!comptaPro && (
+        <Link to="/gestion" className="card banniere-config">
+          <span className="banniere-config-emoji">📊</span>
+          <span>
+            <strong>Compta Pro</strong>
+            <span className="statut">
+              Trésorerie, compte de résultat, TVA estimée, catégories de charges, résultat par
+              mois — active l’option dans Gestion → Abonnement.
+            </span>
+          </span>
+          <span className="banniere-config-fleche">→</span>
+        </Link>
+      )}
+
+      {comptaPro && (
+      <>
       {/* Trésorerie (encaissements par moyen de paiement) + créances clients */}
       <div className="card">
         <h2>💰 Trésorerie</h2>
@@ -766,6 +799,8 @@ export default function Comptabilite() {
           </div>
         </div>
       )}
+      </>
+      )}
 
       <div className="card">
         <button
@@ -802,6 +837,7 @@ export default function Comptabilite() {
         </table>
       </div>
 
+      {comptaPro && (
       <div className="card">
         <h2>Charges par catégorie</h2>
         <Camembert parts={partsCharges} />
@@ -821,6 +857,7 @@ export default function Comptabilite() {
           </table>
         )}
       </div>
+      )}
 
       <div className="card">
         <div className="entete-client"><h2>Dépenses totales</h2><strong>{formatEuros(totalDepenses)}</strong></div>
@@ -842,7 +879,7 @@ export default function Comptabilite() {
             onCopierPrecedent={() => copierPrecedent('charges')}
             onJustificatif={(id, file) => ajouterJustificatif('charges', id, file)}
             onVoirJustificatif={voirJustificatif}
-            categories={CATEGORIES_CHARGES}
+            categories={comptaPro ? CATEGORIES_CHARGES : null}
             onCategorie={majCategorie}
           />
           <ListeMontants
@@ -933,6 +970,7 @@ export default function Comptabilite() {
         )}
       </div>
 
+      {comptaPro && (
       <div className="card recap">
         <h2>🧾 Compte de résultat</h2>
         <p className="periode-info">{formatDateFr(debut)} → {formatDateFr(fin)}</p>
@@ -966,6 +1004,7 @@ export default function Comptabilite() {
           </p>
         )}
       </div>
+      )}
     </div>
   );
 }

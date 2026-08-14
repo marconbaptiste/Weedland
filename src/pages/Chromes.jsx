@@ -612,9 +612,11 @@ export default function Chromes() {
               <button className="btn btn-primary btn-compact" onClick={() => setCreationOuverte(true)}>
                 + Nouvelle fiche
               </button>
-              <Link to="/commandes" className="btn btn-compact">
-                📦 Commandes
-              </Link>
+              {options.livraisons && (
+                <Link to="/commandes" className="btn btn-compact">
+                  📦 Commandes
+                </Link>
+              )}
               {options.fidelite && (
                 <button
                   type="button"

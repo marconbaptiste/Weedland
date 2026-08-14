@@ -68,7 +68,6 @@ export default function App() {
           <Route path="caisse/cloture" element={<Cloture />} />
           <Route path="caisse/historique" element={<Historique />} />
           <Route path="chromes" element={<Chromes />} />
-          <Route path="commandes" element={<Commandes />} />
           <Route path="veille" element={<Veille />} />
           <Route path="support" element={<Support />} />
 
@@ -78,6 +77,9 @@ export default function App() {
           </Route>
           <Route element={<RequireOption option="fidelite" />}>
             <Route path="f/:clientId" element={<Fidelite />} />
+          </Route>
+          <Route element={<RequireOption option="livraisons" />}>
+            <Route path="commandes" element={<Commandes />} />
           </Route>
 
           {/* Réservé à l'admin */}

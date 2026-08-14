@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { formatDateFr } from '../lib/format';
@@ -224,7 +225,7 @@ function PropositionsMolecules({ propositions, onTraiter, occupe }) {
 }
 
 export default function Veille() {
-  const { estAdmin, estSuperadmin, profil } = useAuth();
+  const { estAdmin, estSuperadmin, profil, options } = useAuth();
   const monMag = profil?.magasin_id ?? null;
   const [bulletin, setBulletin] = useState(null);
   const [molecules, setMolecules] = useState([]);
@@ -385,7 +386,7 @@ export default function Veille() {
     <div className="page">
       <div className="entete-client">
         <h1>📰 News</h1>
-        {estAdmin && (
+        {estAdmin && options.news && (
           <button type="button" className="btn btn-compact" onClick={genererMaintenant} disabled={gen}>
             {gen ? (
               <>
@@ -395,6 +396,11 @@ export default function Veille() {
               '🔄 Générer maintenant'
             )}
           </button>
+        )}
+        {estAdmin && !options.news && (
+          <Link to="/gestion" className="btn btn-compact" title="Option News IA">
+            🔒 News IA — activer l’option
+          </Link>
         )}
       </div>
 
@@ -446,7 +452,9 @@ export default function Veille() {
           <p className="vide">Pas encore de bulletin.</p>
           <p className="statut">
             {estAdmin
-              ? 'Clique sur « Générer maintenant » (nécessite la clé IA côté serveur), ou attends la génération automatique hebdomadaire.'
+              ? options.news
+                ? 'Clique sur « Générer maintenant » (nécessite la clé IA côté serveur), ou attends la génération automatique hebdomadaire.'
+                : 'Le bulletin global arrive automatiquement chaque semaine. Avec l’option News IA, tu peux générer un bulletin personnalisé ciblé sur TON stock, quand tu veux.'
               : 'Le premier bulletin arrivera bientôt. La génération est lancée par le responsable, ou automatiquement chaque semaine.'}
           </p>
         </div>
