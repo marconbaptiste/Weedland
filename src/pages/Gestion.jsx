@@ -10,6 +10,9 @@ function sections(estSuperadmin, options) {
     {
       titre: 'Chiffres & pilotage',
       outils: [
+        ...(estSuperadmin
+          ? [{ to: '/magasins', emoji: '🏬', nom: 'Pilotage', desc: 'Magasins, abonnements, codes d’inscription et messages.' }]
+          : []),
         { to: '/comptabilite', emoji: '📈', nom: 'Comptabilité', desc: 'CA, bénéfice, intéressement/heures par employé, exports CSV/PDF.' },
         { to: '/journal', emoji: '🧾', nom: 'Journal', desc: 'Activité du comptoir : clôtures de caisse et chromes.' },
         { to: '/journal-chromes', emoji: '📒', nom: 'Journal chromes', desc: 'Modifications des chromes : qui, quand, quoi.' },

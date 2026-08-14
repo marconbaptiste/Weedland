@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import Aide from './Aide';
@@ -45,8 +45,6 @@ export default function Layout() {
   const { profil, estAdmin, estSuperadmin, magasins, magasinId, magasinNom, magasinLogo, options, changerMagasin, deconnexion } =
     useAuth();
   const logoUrl = urlLogo(magasinLogo);
-  const [plus, setPlus] = useState(false); // panneau « Plus » (mobile)
-  const fermerPlus = () => setPlus(false);
 
   // Marque blanche : dès qu'un magasin est actif, l'onglet, le raccourci écran
   // d'accueil et le manifeste PWA prennent SON nom et SON logo (au lieu de
@@ -63,12 +61,10 @@ export default function Layout() {
     { to: '/chromes', label: 'Clients', icone: IconeClients },
     ...(options.stock ? [{ to: '/stocks', label: 'Stocks', icone: IconeStocks }] : []),
   ];
-  // Destinations secondaires (admin / superadmin) → nav ordinateur + panneau « Plus ».
-  const secondaires = [
-    ...(estAdmin ? [{ to: '/gestion', label: 'Gestion' }] : []),
-    ...(estSuperadmin ? [{ to: '/magasins', label: 'Pilotage' }] : []),
-    ...(estSuperadmin ? [{ to: '/pilote', label: 'Changer de magasin' }] : []),
-  ];
+  // Destination secondaire (admin) : Gestion — accès DIRECT depuis la barre
+  // d'onglets (plus de panneau « Plus » intermédiaire). Le Pilotage vit en carte
+  // dans Gestion, et le changement de magasin passe par le sélecteur d'en-tête.
+  const secondaires = [...(estAdmin ? [{ to: '/gestion', label: 'Gestion' }] : [])];
 
   return (
     <div className="app">
@@ -134,39 +130,13 @@ export default function Layout() {
             <span className="tab-label">{label}</span>
           </NavLink>
         ))}
-        {secondaires.length > 0 && (
-          <button
-            type="button"
-            className={`tabbar-item ${plus ? 'actif' : ''}`}
-            onClick={() => setPlus(true)}
-            aria-haspopup="dialog"
-            aria-expanded={plus}
-          >
+        {estAdmin && (
+          <NavLink to="/gestion" className={tabActif}>
             <IconePlus />
-            <span className="tab-label">Plus</span>
-          </button>
+            <span className="tab-label">Gestion</span>
+          </NavLink>
         )}
       </nav>
-
-      {/* Panneau « Plus » : destinations admin/superadmin (mobile). */}
-      {plus && (
-        <div className="plus-overlay" onClick={fermerPlus} role="dialog" aria-modal="true" aria-label="Plus d'options">
-          <div className="plus-sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="plus-grip" />
-            <div className="plus-title">Plus</div>
-            {secondaires.map((l) => (
-              <NavLink
-                key={l.to}
-                to={l.to}
-                className={({ isActive }) => (isActive ? 'actif' : undefined)}
-                onClick={fermerPlus}
-              >
-                {l.label}
-              </NavLink>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
