@@ -121,7 +121,8 @@ export default function Chromes() {
       const [{ data: chr }, { data: pr }, { data: evt }] = await Promise.all([
         supabase
           .from('chromes')
-          .select('id, type, montant, date, created_at, employe_id, users(nom)')
+          // ⚠️ deux FK chromes→users : embed désambiguïsé (sinon requête vide).
+          .select('id, type, montant, date, created_at, employe_id, users!chromes_employe_id_fkey(nom)')
           .eq('client_id', client.client_id)
           .order('date', { ascending: false })
           .order('created_at', { ascending: false }),

@@ -112,7 +112,9 @@ export default function Profil() {
       if (document.hidden) return;
       supabase
         .from('chromes')
-        .select('type, montant, created_at, clients(surnom), users(nom)')
+        // ⚠️ `chromes` a DEUX FK vers users (employe_id + modifie_par) : l'embed
+        // doit être désambiguïsé, sinon PostgREST échoue en silence (liste vide).
+        .select('type, montant, created_at, clients(surnom), users!chromes_employe_id_fkey(nom)')
         .eq('date', aujourdhuiISO())
         .order('created_at', { ascending: false })
         .then(({ data }) => setChromesJour(data ?? []));
