@@ -286,9 +286,14 @@ export default function Profil() {
             ))}
           </div>
         )}
+        {/* Chromes du jour : présentation PETITE et discrète (demande équipe) —
+            seuls les montants ressortent, avances en rouge, remboursements en
+            vert, avec le total du jour dans le titre de chaque section. */}
         {avancesJour.length > 0 && (
-          <div className="histo-bloc">
-            <span className="histo-titre">Avances</span>
+          <div className="histo-bloc suivi-discret">
+            <span className="histo-titre">
+              Avances · <span className="dette">+ {formatEuros(somme(avancesJour.map((c) => c.montant)))}</span>
+            </span>
             {avancesJour.map((a, i) => (
               <div key={`a${i}`} className="histo-chrome">
                 <span>
@@ -304,8 +309,11 @@ export default function Profil() {
             un remboursement n'apparaît pas comme un impact sur le CA (la vente a
             été comptée le jour de l'avance). */}
         {remboursementsJour.length > 0 && (
-          <div className="histo-bloc">
-            <span className="histo-titre">Remboursements du jour</span>
+          <div className="histo-bloc suivi-discret">
+            <span className="histo-titre">
+              Remboursements du jour ·{' '}
+              <span className="solde-ok">{formatEuros(somme(remboursementsJour.map((c) => c.montant)))}</span>
+            </span>
             {remboursementsJour.map((r, i) => (
               <div key={`r${i}`} className="histo-chrome">
                 <span>
@@ -318,8 +326,10 @@ export default function Profil() {
           </div>
         )}
         {autresJour.length > 0 && (
-          <div className="histo-bloc">
-            <span className="histo-titre">Autres</span>
+          <div className="histo-bloc suivi-discret">
+            <span className="histo-titre">
+              Autres · {formatEuros(somme(autresJour.map((c) => c.montant)))}
+            </span>
             {autresJour.map((v, i) => (
               <div key={`v${i}`} className="histo-chrome">
                 <span>
