@@ -1984,6 +1984,15 @@ details > summary {
   justify-content: space-between;
   flex-wrap: wrap;
 }
+/* Version compacte et discrète (chromes du jour sur l'accueil) : petites
+   lignes atténuées, seuls les montants ressortent en rouge/vert. */
+.suivi-discret .histo-chrome {
+  font-size: 0.8rem;
+  color: var(--texte-doux);
+}
+.suivi-discret .histo-titre {
+  font-size: 0.78rem;
+}
 .histo-modif {
   flex-basis: 100%;
   font-size: 0.72rem;
