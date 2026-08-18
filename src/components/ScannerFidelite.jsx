@@ -39,13 +39,38 @@ export default function ScannerFidelite({ onClose }) {
     } catch {
       /* ignore */
     }
-    const m = String(texte).match(/\/(?:carte|f)\/([^/?#\s]+)/);
-    const id = m ? m[1] : String(texte).trim();
+    // On extrait l'UUID client ET le token à usage unique (?t=…) du QR. Sans QR
+    // valide (id UUID + token), on refuse : le token est consommé au scan.
+    const m = String(texte).match(/\/(?:carte|f)\/([0-9a-f-]{36})/i);
+    const id = m ? m[1] : null;
+    let token = null;
+    try {
+      token = new URL(texte).searchParams.get('t');
+    } catch {
+      /* texte non-URL */
+    }
     const palier = palierRef.current;
 
-    const { data: nb, error } = await supabase.rpc('fidelite_ajouter', { p_client: id });
+    if (!id || !token) {
+      setResultat({ erreur: true, message: 'QR fidélité non reconnu. Demande au client de rafraîchir sa carte.' });
+      setTimeout(() => {
+        setResultat(null);
+        occupeRef.current = false;
+        try {
+          scannerRef.current?.resume();
+        } catch {
+          /* ignore */
+        }
+      }, 4000);
+      return;
+    }
+
+    const { data: nb, error } = await supabase.rpc('fidelite_scanner', { p_client: id, p_token: token });
     if (error) {
-      setResultat({ erreur: true, message: error.message });
+      const message = error.message?.includes('TOKEN_PERIME')
+        ? 'QR périmé : demande au client de rafraîchir sa carte avant de rescanner.'
+        : 'QR invalide.';
+      setResultat({ erreur: true, message });
     } else {
       const { data: cli } = await supabase.from('clients').select('surnom').eq('id', id).single();
       let tampons = nb;

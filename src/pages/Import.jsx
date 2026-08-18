@@ -1,16 +1,44 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
-import { formatEuros, formatDateFr } from '../lib/format';
+import { formatEuros, formatDateFr, formatNombre } from '../lib/format';
 import { somme } from '../lib/comptabilite';
 import { cleEntete } from '../lib/csv';
-import { analyserFichiers, analyserChromes } from '../lib/importHistorique';
+import { analyserFichiers, analyserChromes, analyserStocks } from '../lib/importHistorique';
+import { journaliserMouvement } from '../lib/mouvementsStock';
+import { telechargerCSV } from '../lib/export';
+
+const UNITES = ['g', 'kg', 'mg', 'ml', 'pièce'];
+
+// Modèles CSV téléchargeables : un exemple par type d'import, pour que
+// l'utilisateur voie exactement le format attendu (colonnes + une ligne).
+const MODELES = {
+  caisse: {
+    fichier: 'modele-caisse.csv',
+    entetes: ['date', 'ca', 'cb', 'especes', 'virements'],
+    exemple: ['2026-01-15', '250,00', '180,00', '70,00', '0'],
+  },
+  chromes: {
+    fichier: 'modele-dettes-clients.csv',
+    entetes: ['date', 'client', 'type', 'montant_eur'],
+    exemple: ['2026-01-15', 'Le Grand', 'avance', '20,00'],
+  },
+  stocks: {
+    fichier: 'modele-stocks.csv',
+    entetes: ['categorie', 'produit', 'quantite'],
+    exemple: ['Fleurs', 'Amnesia', '50'],
+  },
+};
+const telechargerModele = (cle) => {
+  const m = MODELES[cle];
+  telechargerCSV(m.fichier, m.entetes, [m.exemple]);
+};
 
 // Outil admin — Import de l'historique.
 // - Tableur : dépose les CSV exportés (caisse/charges/fournisseurs), dispatch auto.
 // - Chromes : un CSV détaillé de dettes clients (rattaché par surnom, sans doublon).
 export default function Import() {
-  const { utilisateur } = useAuth();
+  const { utilisateur, magasinId } = useAuth();
   const [mode, setMode] = useState('tableur');
   const [employes, setEmployes] = useState([]);
   const [employeId, setEmployeId] = useState(utilisateur.id);
@@ -19,10 +47,18 @@ export default function Import() {
   const [remplacer, setRemplacer] = useState(false);
   const [statut, setStatut] = useState('');
   const [enCours, setEnCours] = useState(false);
+  // Import stocks (CSV catégorie / produit / quantité)
+  const [stocks, setStocks] = useState(null);
+  const [catForcee, setCatForcee] = useState('');
+  const [uniteDefaut, setUniteDefaut] = useState('g');
+  const [ajouterQte, setAjouterQte] = useState(true);
 
   useEffect(() => {
-    supabase.from('users').select('id, nom').order('nom').then(({ data }) => setEmployes(data ?? []));
-  }, []);
+    if (!magasinId) return;
+    // Cloisonné au magasin actif (évite d'affecter un import à un employé d'un
+    // autre magasin quand c'est un superadmin qui importe).
+    supabase.from('users').select('id, nom').eq('magasin_id', magasinId).order('nom').then(({ data }) => setEmployes(data ?? []));
+  }, [magasinId]);
 
   // ----- Tableur (caisse / charges / fournisseurs) -----
   async function choisirFichiers(e) {
@@ -41,21 +77,21 @@ export default function Import() {
     const erreurs = [];
     if (resultat.caisse.length) {
       const rows = resultat.caisse.map((c) => ({
-        employe_id: employeId, date: c.date, ventes_directes: c.ventes_directes, cb: c.cb, especes: c.especes,
+        employe_id: employeId, date: c.date, ventes_directes: c.ventes_directes, cb: c.cb, especes: c.especes, virements: c.virements ?? 0,
       }));
       const { error } = await supabase.from('caisse_jour').upsert(rows, { onConflict: 'employe_id,date' });
-      if (error) erreurs.push(`Caisse : ${error.message}`);
+      if (error) { console.error('Import caisse:', error); erreurs.push('caisse'); }
     }
     if (resultat.charges.length) {
       const { error } = await supabase.from('charges').insert(resultat.charges);
-      if (error) erreurs.push(`Charges : ${error.message}`);
+      if (error) { console.error('Import charges:', error); erreurs.push('charges'); }
     }
     if (resultat.fournisseurs.length) {
       const { error } = await supabase.from('fournisseurs').insert(resultat.fournisseurs);
-      if (error) erreurs.push(`Fournisseurs : ${error.message}`);
+      if (error) { console.error('Import fournisseurs:', error); erreurs.push('fournisseurs'); }
     }
     setEnCours(false);
-    if (erreurs.length) { setStatut(`Erreur — ${erreurs.join(' · ')}`); return; }
+    if (erreurs.length) { setStatut(`Import impossible pour : ${erreurs.join(', ')}. Vérifie le fichier et réessaie.`); return; }
     setStatut(`Import réussi : ${resultat.caisse.length} journée(s), ${resultat.charges.length} charge(s), ${resultat.fournisseurs.length} fournisseur(s).`);
     setResultat(null);
   }
@@ -71,12 +107,20 @@ export default function Import() {
 
   async function importerChromes() {
     if (!chromes || chromes.length === 0) return;
+    if (
+      remplacer &&
+      !window.confirm(
+        'ATTENTION : « Repartir de zéro » va SUPPRIMER TOUS les chromes (avances/dettes) existants avant l\'import. Cette action est irréversible. Continuer ?',
+      )
+    ) {
+      return;
+    }
     setEnCours(true);
     setStatut('');
 
     if (remplacer) {
       const { error } = await supabase.from('chromes').delete().not('id', 'is', null);
-      if (error) { setEnCours(false); setStatut(`Erreur suppression : ${error.message}`); return; }
+      if (error) { console.error('Import chromes — purge:', error); setEnCours(false); setStatut('Impossible de repartir de zéro. Réessaie.'); return; }
     }
 
     // Rattachement des clients par surnom (réutilise l'existant, crée les manquants).
@@ -85,7 +129,7 @@ export default function Import() {
     const manquants = [...new Set(chromes.map((l) => l.surnom))].filter((s) => !map.has(cleEntete(s)));
     if (manquants.length) {
       const { data: crees, error } = await supabase.from('clients').insert(manquants.map((surnom) => ({ surnom }))).select('id, surnom');
-      if (error) { setEnCours(false); setStatut(`Erreur création clients : ${error.message}`); return; }
+      if (error) { console.error('Import chromes — clients:', error); setEnCours(false); setStatut('Impossible de créer les fiches clients manquantes. Réessaie.'); return; }
       (crees ?? []).forEach((c) => map.set(cleEntete(c.surnom), c.id));
     }
 
@@ -94,9 +138,82 @@ export default function Import() {
     }));
     const { error } = await supabase.from('chromes').insert(rows);
     setEnCours(false);
-    if (error) { setStatut(`Erreur : ${error.message}`); return; }
+    if (error) { console.error('Import chromes:', error); setStatut('Import impossible. Vérifie le fichier et réessaie.'); return; }
     setStatut(`${rows.length} ligne(s) de chromes importée(s) pour ${manquants.length} nouveau(x) client(s).`);
     setChromes(null);
+  }
+
+  // ----- Stocks (catégorie / produit / quantité) -----
+  async function choisirStocks(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setStatut('');
+    setStocks(analyserStocks(await file.text()));
+  }
+
+  async function importerStocks() {
+    if (!stocks || stocks.length === 0) return;
+    setEnCours(true);
+    setStatut('');
+    // Rapproche par nom (insensible casse/accents) : réappro si existant, sinon création.
+    const { data: existants } = await supabase.from('stocks').select('id, nom, quantite');
+    const map = new Map((existants ?? []).map((s) => [cleEntete(s.nom), s]));
+    const cat = catForcee.trim();
+    const aInserer = [];
+    const aMaj = [];
+    for (const l of stocks) {
+      const ex = map.get(cleEntete(l.nom));
+      if (ex) {
+        const q = ajouterQte ? Number(ex.quantite) + l.quantite : l.quantite;
+        aMaj.push({ id: ex.id, nom: ex.nom, quantite: q, delta: q - Number(ex.quantite) });
+      } else {
+        aInserer.push({
+          categorie: cat || l.categorie || null,
+          nom: l.nom,
+          quantite: l.quantite,
+          unite: uniteDefaut,
+          seuil_alerte: 0,
+          prix_achat: 0,
+          prix_vente: 0,
+        });
+      }
+    }
+    const erreurs = [];
+    if (aInserer.length) {
+      const { data: crees, error } = await supabase.from('stocks').insert(aInserer).select('id, nom, quantite');
+      if (error) { console.error('Import stocks — création:', error); erreurs.push('création'); }
+      // Trace chaque nouveau produit importé (mouvement d'entrée, motif import).
+      for (const c of crees ?? []) {
+        if (Number(c.quantite) > 0) {
+          await journaliserMouvement({
+            stock_id: c.id,
+            produit: c.nom,
+            delta: Number(c.quantite),
+            quantite_apres: Number(c.quantite),
+            motif: 'import',
+          });
+        }
+      }
+    }
+    for (const u of aMaj) {
+      const { error } = await supabase.from('stocks').update({ quantite: u.quantite }).eq('id', u.id);
+      if (error) { console.error('Import stocks — réappro:', error); erreurs.push('réappro'); break; }
+      // Trace la variation apportée par l'import (delta = ce qui a été ajouté).
+      if (u.delta) {
+        await journaliserMouvement({
+          stock_id: u.id,
+          produit: u.nom,
+          delta: u.delta,
+          quantite_apres: u.quantite,
+          motif: 'import',
+        });
+      }
+    }
+    setEnCours(false);
+    if (erreurs.length) { setStatut(`Import impossible (${erreurs.join(', ')}). Vérifie le fichier et réessaie.`); return; }
+    setStatut(`Import stocks : ${aInserer.length} nouveau(x) produit(s), ${aMaj.length} réapprovisionné(s).`);
+    setStocks(null);
   }
 
   const totalCaisse = resultat ? somme(resultat.caisse.map((c) => c.ventes_directes)) : 0;
@@ -111,9 +228,10 @@ export default function Import() {
     <div className="page">
       <h1>Import de l'historique</h1>
 
-      <div className="bascule">
-        <button className={mode === 'tableur' ? 'actif' : ''} onClick={() => setMode('tableur')}>Tableur (caisse/charges/fournisseurs)</button>
-        <button className={mode === 'chromes' ? 'actif' : ''} onClick={() => setMode('chromes')}>Dettes clients</button>
+      <div className="bascule bascule-mini">
+        <button className={mode === 'tableur' ? 'actif' : ''} onClick={() => setMode('tableur')}>Tableur</button>
+        <button className={mode === 'chromes' ? 'actif' : ''} onClick={() => setMode('chromes')}>Dettes</button>
+        <button className={mode === 'stocks' ? 'actif' : ''} onClick={() => setMode('stocks')}>Stocks</button>
       </div>
 
       {mode === 'tableur' ? (
@@ -129,10 +247,15 @@ export default function Import() {
                 {employes.map((emp) => (<option key={emp.id} value={emp.id}>{emp.nom}</option>))}
               </select>
             </label>
-            <label className="btn btn-primary">
-              Choisir les fichiers CSV…
-              <input type="file" accept=".csv,text/csv" multiple style={{ display: 'none' }} onChange={choisirFichiers} />
-            </label>
+            <div className="form-inline">
+              <label className="btn btn-primary">
+                Choisir les fichiers CSV…
+                <input type="file" accept=".csv,text/csv" multiple style={{ display: 'none' }} onChange={choisirFichiers} />
+              </label>
+              <button type="button" className="btn btn-discret" onClick={() => telechargerModele('caisse')}>
+                ⬇️ Télécharger un modèle
+              </button>
+            </div>
           </div>
 
           {resultat && (
@@ -149,7 +272,7 @@ export default function Import() {
             </>
           )}
         </>
-      ) : (
+      ) : mode === 'chromes' ? (
         <>
           <div className="card">
             <p className="statut">
@@ -160,10 +283,15 @@ export default function Import() {
               <input type="checkbox" checked={remplacer} onChange={(e) => setRemplacer(e.target.checked)} />
               <span>Repartir de zéro (supprime d'abord tous les chromes existants — utile si tu remplaces un total provisoire)</span>
             </label>
-            <label className="btn btn-primary">
-              Choisir le fichier CSV…
-              <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={choisirChromes} />
-            </label>
+            <div className="form-inline">
+              <label className="btn btn-primary">
+                Choisir le fichier CSV…
+                <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={choisirChromes} />
+              </label>
+              <button type="button" className="btn btn-discret" onClick={() => telechargerModele('chromes')}>
+                ⬇️ Télécharger un modèle
+              </button>
+            </div>
           </div>
 
           {chromes && (
@@ -175,15 +303,15 @@ export default function Import() {
               </div>
               <div className="card">
                 <h2>Aperçu</h2>
-                <table className="tableau">
+                <table className="tableau tableau-cartes">
                   <thead><tr><th>Date</th><th>Client</th><th>Type</th><th className="droite">Montant</th></tr></thead>
                   <tbody>
                     {chromes.slice(0, 12).map((l, i) => (
                       <tr key={i}>
-                        <td>{formatDateFr(l.date)}</td>
-                        <td>{l.surnom}</td>
-                        <td>{l.type === 'avance' ? 'Avance' : 'Remboursement'}</td>
-                        <td className={`droite ${l.type === 'avance' ? 'dette' : 'solde-ok'}`}>{formatEuros(l.montant)}</td>
+                        <td data-label="Date">{formatDateFr(l.date)}</td>
+                        <td data-label="Client">{l.surnom}</td>
+                        <td data-label="Type">{l.type === 'avance' ? 'Avance' : 'Remboursement'}</td>
+                        <td className={`droite ${l.type === 'avance' ? 'dette' : 'solde-ok'}`} data-label="Montant">{formatEuros(l.montant)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -192,6 +320,75 @@ export default function Import() {
               </div>
               <button className="btn btn-primary" onClick={importerChromes} disabled={enCours}>
                 {enCours ? 'Import…' : `Importer ${chromes.length} ligne(s)`}
+              </button>
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="card">
+            <p className="statut">
+              Dépose un <strong>CSV de stocks</strong> — colonnes reconnues : <strong>catégorie</strong>,{' '}
+              <strong>produit</strong>, <strong>quantité</strong> (peu importe l'ordre / la casse).
+              Produit déjà présent = réapprovisionné ; sinon créé.
+            </p>
+            <div className="form-inline">
+              <label className="field" style={{ flex: 1 }}>
+                <span>Catégorie à forcer (facultatif — sinon celle du fichier)</span>
+                <input
+                  value={catForcee}
+                  onChange={(e) => setCatForcee(e.target.value)}
+                  placeholder="ex. Fleurs"
+                />
+              </label>
+              <label className="field">
+                <span>Unité (nouveaux produits)</span>
+                <select value={uniteDefaut} onChange={(e) => setUniteDefaut(e.target.value)}>
+                  {UNITES.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className="case-partage">
+              <input type="checkbox" checked={ajouterQte} onChange={(e) => setAjouterQte(e.target.checked)} />
+              <span>Ajouter aux quantités existantes (réappro). Décoché = remplace la quantité.</span>
+            </label>
+            <div className="form-inline">
+              <label className="btn btn-primary">
+                Choisir le fichier CSV…
+                <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={choisirStocks} />
+              </label>
+              <button type="button" className="btn btn-discret" onClick={() => telechargerModele('stocks')}>
+                ⬇️ Télécharger un modèle
+              </button>
+            </div>
+          </div>
+
+          {stocks && (
+            <>
+              <div className="cartes-kpi">
+                <div className="kpi"><span className="kpi-label">Lignes</span><span className="kpi-valeur">{stocks.length}</span></div>
+                <div className="kpi"><span className="kpi-label">Quantité totale</span><span className="kpi-valeur">{formatNombre(somme(stocks.map((s) => s.quantite)))}</span></div>
+              </div>
+              <div className="card">
+                <h2>Aperçu</h2>
+                <table className="tableau tableau-cartes">
+                  <thead><tr><th>Catégorie</th><th>Produit</th><th className="droite">Quantité</th></tr></thead>
+                  <tbody>
+                    {stocks.slice(0, 12).map((s, i) => (
+                      <tr key={i}>
+                        <td data-label="Catégorie">{catForcee.trim() || s.categorie || '—'}</td>
+                        <td data-label="Produit">{s.nom}</td>
+                        <td className="droite" data-label="Quantité">{formatNombre(s.quantite)} {uniteDefaut}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {stocks.length > 12 && <p className="statut">… et {stocks.length - 12} autre(s) ligne(s).</p>}
+              </div>
+              <button className="btn btn-primary" onClick={importerStocks} disabled={enCours}>
+                {enCours ? 'Import…' : `Importer ${stocks.length} produit(s)`}
               </button>
             </>
           )}

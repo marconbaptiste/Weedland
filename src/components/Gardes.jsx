@@ -3,6 +3,7 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { exporterMagasin } from '../lib/exportMagasin';
+import BoutonAbonnement from './BoutonAbonnement';
 
 /** Écran affiché quand l'abonnement du magasin est expiré / suspendu. */
 function AbonnementExpire() {
@@ -43,6 +44,7 @@ function AbonnementExpire() {
         </p>
         {estAdmin && (
           <>
+            <BoutonAbonnement libelle="💳 Gérer mon abonnement" className="btn btn-primary" />
             <button className="btn" onClick={exporter} disabled={enExport}>
               {enExport ? 'Export…' : '⬇️ Exporter mes données'}
             </button>
@@ -98,6 +100,14 @@ export function RequireAdmin() {
   const { estAdmin, chargement } = useAuth();
   if (chargement) return <p className="centre">Chargement…</p>;
   if (!estAdmin) return <Navigate to="/" replace />;
+  return <Outlet />;
+}
+
+/** Bloque l'accès à un module dont l'option d'abonnement n'est pas active. */
+export function RequireOption({ option }) {
+  const { options, chargement } = useAuth();
+  if (chargement) return <p className="centre">Chargement…</p>;
+  if (!options?.[option]) return <Navigate to="/" replace />;
   return <Outlet />;
 }
 

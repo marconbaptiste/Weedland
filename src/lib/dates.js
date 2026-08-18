@@ -55,6 +55,22 @@ export function intervallePeriode(periode, referenceISO = aujourdhuiISO()) {
   return [versISO(debut), versISO(fin)];
 }
 
+/**
+ * Décale une date de référence d'un cran de période (précédent / suivant).
+ * @param {'jour'|'semaine'|'mois'|'annee'} periode
+ * @param {string} referenceISO date de référence AAAA-MM-JJ
+ * @param {number} sens -1 (précédent) ou +1 (suivant)
+ * @returns {string} nouvelle date de référence AAAA-MM-JJ
+ */
+export function decalerReference(periode, referenceISO, sens) {
+  const d = new Date(`${referenceISO}T00:00:00`);
+  if (periode === 'jour') d.setDate(d.getDate() + sens);
+  else if (periode === 'semaine') d.setDate(d.getDate() + 7 * sens);
+  else if (periode === 'annee') d.setFullYear(d.getFullYear() + sens);
+  else d.setMonth(d.getMonth() + sens); // mois
+  return versISO(d);
+}
+
 /** Premier jour du mois (AAAA-MM-01) contenant la date de référence. */
 export function premierDuMois(referenceISO = aujourdhuiISO()) {
   return `${referenceISO.slice(0, 7)}-01`;

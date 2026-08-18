@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { RequireAuth, RequireAdmin, RequireSuperadmin } from './components/Gardes';
+import { RequireAuth, RequireAdmin, RequireSuperadmin, RequireOption } from './components/Gardes';
+import { useAuth } from './auth/AuthProvider';
 import Layout from './components/Layout';
 import Landing from './pages/Landing';
 import CGU from './pages/CGU';
@@ -10,18 +11,38 @@ import Carte from './pages/Carte';
 import RejoindreCarte from './pages/RejoindreCarte';
 import Profil from './pages/Profil';
 import Caisse from './pages/Caisse';
+import Cloture from './pages/Cloture';
+import Historique from './pages/Historique';
 import Chromes from './pages/Chromes';
+import Commandes from './pages/Commandes';
 import Fidelite from './pages/Fidelite';
 import Stocks from './pages/Stocks';
-import Historique from './pages/Historique';
+import Gestion from './pages/Gestion';
+import AProposMagasin from './pages/AProposMagasin';
+import Configuration from './pages/Configuration';
+import NouveauMotDePasse from './pages/NouveauMotDePasse';
+import Veille from './pages/Veille';
 import Paiements from './pages/Paiements';
-import Dashboard from './pages/Dashboard';
 import Comptes from './pages/Comptes';
+import Promotions from './pages/Promotions';
 import Journal from './pages/Journal';
+import JournalModifs from './pages/JournalModifs';
 import Comptabilite from './pages/Comptabilite';
+import Plannings from './pages/Plannings';
 import Magasins from './pages/Magasins';
+import Pilote from './pages/Pilote';
 import Support from './pages/Support';
 import Import from './pages/Import';
+
+// Accueil (route index) : le super-admin atterrit sur le panneau pilote tant
+// qu'il n'a pas choisi de magasin pour cette session ; sinon vue normale.
+function Accueil() {
+  const { estSuperadmin } = useAuth();
+  if (estSuperadmin && sessionStorage.getItem('pilote:entre') !== '1') {
+    return <Navigate to="/pilote" replace />;
+  }
+  return <Profil />;
+}
 
 export default function App() {
   return (
@@ -30,28 +51,54 @@ export default function App() {
       <Route path="/cgu" element={<CGU />} />
       <Route path="/confidentialite" element={<Confidentialite />} />
       <Route path="/connexion" element={<Login />} />
+      <Route path="/nouveau-mot-de-passe" element={<NouveauMotDePasse />} />
       <Route path="/inscription" element={<Inscription />} />
       <Route path="/carte/:clientId" element={<Carte />} />
       <Route path="/rejoindre/:magasinId" element={<RejoindreCarte />} />
 
       <Route element={<RequireAuth />}>
+        {/* Panneau pilote (super-admin) — hors Layout, plein écran */}
+        <Route element={<RequireSuperadmin />}>
+          <Route path="/pilote" element={<Pilote />} />
+        </Route>
+
         <Route element={<Layout />}>
-          <Route index element={<Profil />} />
+          <Route index element={<Accueil />} />
           <Route path="caisse" element={<Caisse />} />
+          <Route path="caisse/cloture" element={<Cloture />} />
+          <Route path="caisse/historique" element={<Historique />} />
           <Route path="chromes" element={<Chromes />} />
-          <Route path="stocks" element={<Stocks />} />
-          <Route path="historique" element={<Historique />} />
+          <Route path="veille" element={<Veille />} />
           <Route path="support" element={<Support />} />
-          <Route path="f/:clientId" element={<Fidelite />} />
+
+          {/* Modules à option d'abonnement */}
+          <Route element={<RequireOption option="stock" />}>
+            <Route path="stocks" element={<Stocks />} />
+          </Route>
+          <Route element={<RequireOption option="fidelite" />}>
+            <Route path="f/:clientId" element={<Fidelite />} />
+          </Route>
+          <Route element={<RequireOption option="livraisons" />}>
+            <Route path="commandes" element={<Commandes />} />
+          </Route>
 
           {/* Réservé à l'admin */}
           <Route element={<RequireAdmin />}>
-            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="gestion" element={<Gestion />} />
+            <Route path="configuration" element={<Configuration />} />
+            <Route path="a-propos-magasin" element={<AProposMagasin />} />
             <Route path="comptabilite" element={<Comptabilite />} />
             <Route path="paiements" element={<Paiements />} />
             <Route path="journal" element={<Journal />} />
+            <Route path="journal-chromes" element={<JournalModifs />} />
             <Route path="comptes" element={<Comptes />} />
             <Route path="import" element={<Import />} />
+            <Route element={<RequireOption option="planning" />}>
+              <Route path="plannings" element={<Plannings />} />
+            </Route>
+            <Route element={<RequireOption option="fidelite" />}>
+              <Route path="promotions" element={<Promotions />} />
+            </Route>
           </Route>
 
           {/* Réservé au super-admin (exploitant) */}
