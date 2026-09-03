@@ -1,15 +1,20 @@
 // Edge Function — stripe-options
-// Ajoute / retire une option sur l'abonnement Stripe d'un magasin, en tant que
-// ligne d'abonnement (subscription item), met à jour le drapeau opt_*
-// correspondant, puis applique la REMISE PACK automatique (plafond de prix) :
-// dès que toutes les options d'un pack sont actives, un coupon Stripe
-// « pack-remise-<centimes> » (créé à la volée, réutilisé ensuite) ramène la
-// facture au prix du pack. Réservé à l'admin/superadmin du magasin.
-// Secrets : STRIPE_SECRET_KEY uniquement. AUCUN produit/prix à créer dans le
-// Dashboard : chaque option est provisionnée automatiquement par lookup_key
-// (`kanabiz_<option>`) au premier besoin. Les anciens secrets STRIPE_PRICE_*
-// ne servent plus qu'à retrouver (pour les retirer) les lignes d'abonnement
-// posées avec l'ancienne grille.
+// Ajoute / retire une option sur l'abonnement Stripe d'un magasin (une ligne
+// d'abonnement par option), puis applique la REMISE PACK automatique (plafond
+// de prix) via un coupon « pack-remise-<centimes> ». Réservé à l'admin /
+// superadmin du magasin. Secrets : STRIPE_SECRET_KEY uniquement (produits et
+// prix provisionnés par lookup_key `kanabiz_<option>`).
+//
+// Principes (audit facturation) :
+//  - Une seule source de vérité : les LIGNES de l'abonnement Stripe. Après la
+//    bascule on relit l'abonnement et on dérive TOUS les drapeaux opt_* depuis
+//    ses lignes (lookup_key + anciens IDs de prix). Plus de décalage possible
+//    entre Stripe et la base (ni avec le webhook, qui fait la même chose).
+//  - La remise pack est calculée sur les montants RÉELS des lignes (un abonné
+//    resté sur une ancienne grille n'est ni sur- ni sous-facturé), et le coupon
+//    pack ne touche JAMAIS aux autres remises du client (code promo −20 %…).
+//  - Un aperçu de la prochaine facture (prorata) est renvoyé pour l'afficher.
+// Ce fichier est autonome (déployable par copier-coller dans le Dashboard).
 import Stripe from "npm:stripe@17";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -20,49 +25,62 @@ const cors = {
 const env = (n: string) => {
   const v = Deno.env.get(n);
   if (!v) throw new Error(`Secret manquant : ${n}`);
-  return v;
+  return v.trim();
 };
 const json = (o: unknown, status = 200) =>
   new Response(JSON.stringify(o), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-// option → (colonne du drapeau, prix HT/mois, nom du produit Stripe,
-// ancien secret de prix — legacy, pour retirer les lignes de l'ancienne grille).
 // ⚠️ Grille répliquée depuis src/lib/tarifs.js — garder les DEUX cohérentes.
-const OPTS: Record<string, { col: string; prix: number; nom: string; ancienSecret?: string }> = {
-  stock: { col: "opt_stock", prix: 10, nom: "Kanabiz — Option Stocks & achats", ancienSecret: "STRIPE_PRICE_STOCK" },
-  fidelite: { col: "opt_fidelite", prix: 12, nom: "Kanabiz — Option Fidélité & promos", ancienSecret: "STRIPE_PRICE_FIDELITE" },
-  livraisons: { col: "opt_livraisons", prix: 8, nom: "Kanabiz — Option Commandes & livraisons" },
-  planning: { col: "opt_planning", prix: 8, nom: "Kanabiz — Option Planning & horaires", ancienSecret: "STRIPE_PRICE_PLANNING" },
-  compta: { col: "opt_compta", prix: 12, nom: "Kanabiz — Option Compta Pro" },
-  news: { col: "opt_news", prix: 9, nom: "Kanabiz — Option News IA" },
+const OPTS: Record<string, { prix: number; nom: string; ancienSecret?: string }> = {
+  stock: { prix: 10, nom: "Kanabiz — Option Stocks & achats", ancienSecret: "STRIPE_PRICE_STOCK" },
+  fidelite: { prix: 12, nom: "Kanabiz — Option Fidélité & promos", ancienSecret: "STRIPE_PRICE_FIDELITE" },
+  livraisons: { prix: 8, nom: "Kanabiz — Option Commandes & livraisons" },
+  planning: { prix: 8, nom: "Kanabiz — Option Planning & horaires", ancienSecret: "STRIPE_PRICE_PLANNING" },
+  compta: { prix: 12, nom: "Kanabiz — Option Compta Pro" },
+  news: { prix: 9, nom: "Kanabiz — Option News IA" },
 };
-const SOCLE = 29;
+const COL = (cle: string) => `opt_${cle}`;
 // Packs (plafonds), du plus complet au plus simple — même table que tarifs.js.
 const PACKS = [
   { options: ["stock", "fidelite", "livraisons", "planning", "compta", "news"], prix: 69 },
   { options: ["stock", "fidelite", "livraisons", "planning", "compta"], prix: 59 },
   { options: ["stock", "fidelite"], prix: 45 },
 ];
+const PREFIXE_COUPON = "pack-remise-";
+const TAX_AUTO = (Deno.env.get("STRIPE_TAX_AUTO") ?? "").trim().toLowerCase() === "on";
 
-// Remise pack (en €) pour un ensemble d'options actives : c'est le PREMIER pack
-// applicable (le plus complet) qui s'applique — même règle que tarifs.js.
-function remisePack(actives: Set<string>): number {
-  const plein = SOCLE + [...actives].reduce((s, cle) => s + (OPTS[cle]?.prix ?? 0), 0);
-  let total = plein;
+// Clé d'option d'un prix : lookup_key `kanabiz_<cle>`, sinon ancien ID (grille
+// précédente) via les secrets STRIPE_PRICE_*, sinon null (socle / inconnu).
+function cleDepuisPrix(price: Stripe.Price | null | undefined): string | null {
+  if (!price) return null;
+  const lk = price.lookup_key ?? "";
+  if (lk.startsWith("kanabiz_")) {
+    const cle = lk.slice("kanabiz_".length);
+    return cle in OPTS ? cle : null;
+  }
+  for (const [cle, o] of Object.entries(OPTS)) {
+    const id = o.ancienSecret ? Deno.env.get(o.ancienSecret)?.trim() : undefined;
+    if (id && id === price.id) return cle;
+  }
+  return null;
+}
+
+// Remise pack (centimes) : plafond du PREMIER pack complet (le plus complet
+// prime — même règle que tarifs.js) appliqué au prix RÉEL des lignes.
+// `montants` = centimes réellement facturés par option active (lignes Stripe).
+function remisePackCts(montants: Map<string, number>, socleCts: number): number {
+  const actives = new Set(montants.keys());
+  const plein = socleCts + [...montants.values()].reduce((s, m) => s + m, 0);
   for (const p of PACKS) {
     if (!p.options.every((cle) => actives.has(cle))) continue;
     const horsPack = [...actives].filter((cle) => !p.options.includes(cle));
-    const candidat = p.prix + horsPack.reduce((s, cle) => s + (OPTS[cle]?.prix ?? 0), 0);
-    if (candidat < plein) total = candidat;
-    break;
+    const candidat = p.prix * 100 + horsPack.reduce((s, cle) => s + (montants.get(cle) ?? 0), 0);
+    return Math.max(0, plein - candidat);
   }
-  return plein - total;
+  return 0;
 }
 
-// Retrouve — ou CRÉE — le prix Stripe d'une option par lookup_key. Idempotent :
-// au premier appel le produit + prix sont créés, ensuite ils sont retrouvés.
-// Si le montant de la grille change, un nouveau prix est créé et récupère la
-// lookup_key (transfer_lookup_key) sans toucher les abonnés existants.
+// Retrouve — ou CRÉE — le prix Stripe d'une option par lookup_key (idempotent).
 async function prixParCle(stripe: Stripe, cle: string, montantCts: number, nom: string): Promise<string> {
   const l = await stripe.prices.list({ lookup_keys: [cle], limit: 1 });
   const actuel = l.data[0];
@@ -73,6 +91,7 @@ async function prixParCle(stripe: Stripe, cle: string, montantCts: number, nom: 
     unit_amount: montantCts,
     currency: "eur",
     recurring: { interval: "month" },
+    ...(TAX_AUTO ? { tax_behavior: "exclusive" as const } : {}), // prix HT si TVA auto
     ...(actuel && typeof actuel.product === "string"
       ? { product: actuel.product }
       : { product_data: { name: nom } }),
@@ -82,7 +101,7 @@ async function prixParCle(stripe: Stripe, cle: string, montantCts: number, nom: 
 
 // Coupon Stripe réutilisable « pack-remise-<centimes> » (créé au premier besoin).
 async function couponRemise(stripe: Stripe, centimes: number): Promise<string> {
-  const id = `pack-remise-${centimes}`;
+  const id = `${PREFIXE_COUPON}${centimes}`;
   try {
     await stripe.coupons.retrieve(id);
     return id;
@@ -119,61 +138,94 @@ Deno.serve(async (req) => {
 
     const { data: mag } = await svc
       .from("magasins")
-      .select(
-        "stripe_subscription_id, gratuit, opt_planning, opt_stock, opt_fidelite, opt_livraisons, opt_compta, opt_news"
-      )
+      .select("stripe_subscription_id, stripe_customer_id, gratuit")
       .eq("id", magasinId)
       .single();
     if (!mag) return json({ error: "Magasin inconnu" }, 404);
     if (mag.gratuit) return json({ error: "Ce magasin a déjà toutes les options (gratuit)." }, 400);
-    if (!mag.stripe_subscription_id) return json({ error: "Abonne-toi d'abord à l'offre de base." }, 400);
+    if (!mag.stripe_subscription_id) return json({ error: "Abonne-toi d'abord au socle." }, 400);
 
     const stripe = new Stripe(env("STRIPE_SECRET_KEY"), { httpClient: Stripe.createFetchHttpClient() });
-    const priceId = await prixParCle(stripe, `kanabiz_${option}`, conf.prix * 100, conf.nom);
-    const sub = await stripe.subscriptions.retrieve(mag.stripe_subscription_id);
-    // Retrouve la ligne de cette option : prix courant, lookup_key (ancien prix
-    // remplacé par un changement de grille) ou prix legacy des anciens secrets.
-    const ancienPrix = conf.ancienSecret ? Deno.env.get(conf.ancienSecret) : undefined;
-    const item = sub.items.data.find(
-      (it) =>
-        it.price.id === priceId ||
-        it.price.lookup_key === `kanabiz_${option}` ||
-        (ancienPrix && it.price.id === ancienPrix)
-    );
+    let sub = await stripe.subscriptions.retrieve(mag.stripe_subscription_id, {
+      expand: ["items.data.price", "discounts"],
+    });
+    if (sub.status === "canceled" || sub.status === "incomplete_expired") {
+      return json({ error: "Abonnement résilié — réactive-le d'abord depuis Gestion → Abonnement." }, 400);
+    }
 
+    // 1) Bascule de la ligne d'option.
+    const item = sub.items.data.find((it) => cleDepuisPrix(it.price as Stripe.Price) === option);
     if (actif && !item) {
+      const priceId = await prixParCle(stripe, `kanabiz_${option}`, conf.prix * 100, conf.nom);
       await stripe.subscriptionItems.create({ subscription: sub.id, price: priceId, quantity: 1 });
     } else if (!actif && item) {
       await stripe.subscriptionItems.del(item.id);
     }
 
-    // Mise à jour immédiate du drapeau (le webhook confirmera de son côté).
-    await svc.from("magasins").update({ [conf.col]: !!actif }).eq("id", magasinId);
+    // 2) Relecture : l'état RÉEL des lignes fait foi (drapeaux + remise).
+    sub = await stripe.subscriptions.retrieve(sub.id, { expand: ["items.data.price", "discounts"] });
+    const montants = new Map<string, number>(); // option → centimes réels
+    let socleCts = 0;
+    for (const it of sub.items.data) {
+      const price = it.price as Stripe.Price;
+      const cle = cleDepuisPrix(price);
+      const cts = (price.unit_amount ?? 0) * (it.quantity ?? 1);
+      if (cle) montants.set(cle, (montants.get(cle) ?? 0) + cts);
+      else if (price.lookup_key === "kanabiz_socle" || socleCts === 0) socleCts = cts;
+    }
+    const patch: Record<string, boolean> = {};
+    for (const cle of Object.keys(OPTS)) patch[COL(cle)] = montants.has(cle);
+    await svc.from("magasins").update(patch).eq("id", magasinId);
 
-    // Remise pack automatique (plafond) sur l'ensemble d'options APRÈS bascule.
-    // Best-effort : si Stripe refuse le coupon, la bascule d'option reste faite
-    // (on renvoie un avertissement plutôt que d'échouer toute l'opération).
+    // 3) Remise pack : on ne touche QU'aux coupons « pack-remise-* », les autres
+    //    remises du client (codes promo) sont conservées telles quelles.
     let avertissement: string | undefined;
     try {
-      const actives = new Set(
-        Object.keys(OPTS).filter((cle) => (cle === option ? !!actif : !!mag[OPTS[cle].col as keyof typeof mag]))
+      const remise = remisePackCts(montants, socleCts);
+      const existants = (sub.discounts ?? []).filter(
+        (d): d is Stripe.Discount => typeof d !== "string",
       );
-      const remise = remisePack(actives);
-      if (remise > 0) {
-        const coupon = await couponRemise(stripe, Math.round(remise * 100));
-        await stripe.subscriptions.update(sub.id, { discounts: [{ coupon }] });
-      } else {
-        // Plus de pack complet → retirer une éventuelle remise résiduelle.
-        if (sub.discounts && sub.discounts.length > 0) {
-          await stripe.subscriptions.deleteDiscount(sub.id);
-        }
+      const autres = existants
+        .filter((d) => !(d.coupon?.id ?? "").startsWith(PREFIXE_COUPON))
+        .map((d) => ({ discount: d.id }));
+      const packActuel = existants.find((d) => (d.coupon?.id ?? "").startsWith(PREFIXE_COUPON));
+      const packVoulu = remise > 0 ? await couponRemise(stripe, remise) : null;
+      const inchange = (packActuel?.coupon?.id ?? null) === packVoulu;
+      if (!inchange) {
+        const discounts = [...autres, ...(packVoulu ? [{ coupon: packVoulu }] : [])];
+        // deno-lint-ignore no-explicit-any
+        await stripe.subscriptions.update(sub.id, { discounts: (discounts.length ? discounts : "") as any });
       }
     } catch (e) {
       console.error("stripe-options remise pack:", e);
-      avertissement = "Option basculée, mais la remise pack n'a pas pu être ajustée — réessaie ou contacte le support.";
+      avertissement =
+        "Option basculée, mais la remise pack n'a pas pu être ajustée — réessaie ou contacte le support.";
     }
 
-    return json({ ok: true, ...(avertissement ? { avertissement } : {}) });
+    // 4) Aperçu de la prochaine facture (prorata) — best-effort, informatif.
+    let prochaineFacture: { montant: number; date: string | null } | undefined;
+    try {
+      const customer = typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
+      // deno-lint-ignore no-explicit-any
+      const inv: any = await (stripe.invoices as any).retrieveUpcoming({ customer, subscription: sub.id });
+      prochaineFacture = {
+        montant: (inv.amount_due ?? inv.total ?? 0) / 100,
+        date: inv.next_payment_attempt
+          ? new Date(inv.next_payment_attempt * 1000).toISOString().slice(0, 10)
+          : sub.current_period_end
+            ? new Date(sub.current_period_end * 1000).toISOString().slice(0, 10)
+            : null,
+      };
+    } catch {
+      /* aperçu indisponible : pas bloquant */
+    }
+
+    return json({
+      ok: true,
+      options: patch,
+      ...(prochaineFacture ? { prochaineFacture } : {}),
+      ...(avertissement ? { avertissement } : {}),
+    });
   } catch (e) {
     console.error("stripe-options error:", e);
     return json({ error: "Erreur interne." }, 500);

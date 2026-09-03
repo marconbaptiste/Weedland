@@ -26,9 +26,38 @@ Source unique : `src/lib/tarifs.js` (répliquée dans l'Edge Function
   `pack-remise-<centimes>` (créé automatiquement, `amount_off` forfaitaire,
   `duration: forever`) qui ramène la facture au prix du pack ; les options hors
   pack s'ajoutent au prix du pack. Retirer une option recalcule/retire la remise.
-- **Annuel = 2 mois offerts** et **2ᵉ magasin = −20 %** : à gérer par des
-  **codes promo Stripe** (le Checkout a `allow_promotion_codes` activé) — crée
-  les coupons/codes dans le Dashboard, rien à coder.
+- **Codes promo** : le Checkout a `allow_promotion_codes` activé — tu peux
+  créer des coupons/codes dans le Dashboard (ex. −20 % pour un 2ᵉ magasin) et
+  les donner à la main. ⚠️ Aucune offre annuelle n'existe (prix mensuels
+  uniquement) : **ne pas l'annoncer** dans l'app tant qu'un prix annuel n'est
+  pas créé (pratique commerciale trompeuse sinon). La remise pack ne touche
+  JAMAIS aux codes promo du client (elle ne gère que ses coupons
+  `pack-remise-*`).
+
+## Règles de facturation (audit « revenue correctness »)
+
+- **Source de vérité = les lignes de l'abonnement Stripe.** `stripe-options`
+  et `stripe-webhook` relisent l'abonnement et dérivent les 6 drapeaux `opt_*`
+  de ses lignes (par `lookup_key`, ou par ancien ID de prix `STRIPE_PRICE_*`
+  pour les abonnés de l'ancienne grille). Plus de décalage Stripe ↔ base.
+- **Remise pack** calculée sur les montants RÉELS des lignes (un abonné resté
+  sur un ancien prix n'est ni sur- ni sous-facturé).
+- **Pas de double abonnement** : `stripe-checkout` refuse si le customer a déjà
+  un abonnement en cours (et resynchronise la base), et le webhook traite
+  `checkout.session.completed` pour poser l'id d'abonnement immédiatement ; le
+  front attend cette synchro au retour du Checkout.
+- **Pas de double essai** : l'essai Stripe se cale sur `magasins.essai_fin`
+  (période commencée à l'inscription). Une **réactivation** (customer ayant déjà
+  eu un abonnement) n'a pas de nouvel essai.
+- **Résiliation** → `stripe_subscription_id` remis à NULL (customer conservé) :
+  le magasin peut se réabonner (« Réactiver »).
+- **Impayé** : `past_due` = grâce (Stripe relance, bandeau « mets à jour ta
+  carte ») ; `unpaid`/`canceled` = suspendu (blocage).
+- **Customer Stripe avec email** (email de l'admin) : reçus, rappel de fin
+  d'essai et relances d'impayé partent de Stripe (active-les dans le Dashboard :
+  Settings → Emails).
+- **Adresse de facturation** toujours collectée au Checkout (mentions de
+  facture). **TVA** : voir `STRIPE_TAX_AUTO` ci-dessous.
 
 ## Pièces
 
@@ -57,12 +86,17 @@ Source unique : `src/lib/tarifs.js` (répliquée dans l'Edge Function
 2. **Clé secrète** : Developers → API keys → **Secret key** (`sk_live_…` ou `sk_test_…`).
 3. **Webhook** : Developers → Webhooks → *Add endpoint* :
    - URL : `https://<projet>.supabase.co/functions/v1/stripe-webhook`
-   - Événements : `customer.subscription.created`, `customer.subscription.updated`,
-     `customer.subscription.deleted`.
+   - Événements : `checkout.session.completed`, `customer.subscription.created`,
+     `customer.subscription.updated`, `customer.subscription.deleted`.
    - Récupère le **Signing secret** (`whsec_…`) → `STRIPE_WEBHOOK_SECRET`.
-4. **Codes promo** (optionnel) : coupons « −20 % forever » (2ᵉ magasin) et
-   l'équivalent « 2 mois offerts » (ex. −16,7 % sur 12 mois, ou un prix annuel
-   dédié) + *promotion codes* associés, à donner aux gérants.
+   - Une seule destination vers cette URL (une destination en double avec une
+     autre clé de signature = 100 % d'erreurs).
+4. **Emails Stripe** : Settings → Emails → activer les reçus, le rappel de fin
+   d'essai et les relances d'impayé (le customer porte l'email de l'admin).
+5. **Informations de facturation** : Settings → Business → nom, adresse, SIRET,
+   n° de TVA (ou mention « TVA non applicable, art. 293 B du CGI » en pied de
+   facture si franchise en base). Obligatoire pour des factures conformes.
+6. **Codes promo** (optionnel) : coupons + *promotion codes* dans le Dashboard.
 
 ## 2. Secrets Supabase (toi)
 
@@ -72,7 +106,19 @@ Edge Functions → Secrets :
 |---|---|
 | `STRIPE_SECRET_KEY` | `sk_…` |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_…` |
-| `APP_PUBLIC_URL` | ex. `https://weedland-tawny.vercel.app` |
+| `APP_PUBLIC_URL` | ex. `https://kanabiz.dev` |
+| `STRIPE_TAX_AUTO` | **`off`** (défaut) ou `on` — voir ci-dessous |
+
+### TVA (`STRIPE_TAX_AUTO`) — à trancher avec le comptable
+
+- **`off` (défaut, aujourd'hui)** : rien ne change, les prix sont prélevés tels
+  quels (29 € = 29 €). Si tu es en **franchise en base**, ajoute la mention
+  « TVA non applicable, art. 293 B du CGI » en pied de facture dans le Dashboard.
+- **`on`** : Stripe Tax calcule la TVA automatiquement (prix HT, `tax_behavior:
+  exclusive` sur les nouveaux prix, adresse + n° de TVA client collectés au
+  Checkout). Prérequis : **enregistrer Stripe Tax pour la France** dans le
+  Dashboard (Settings → Tax). Redéployer `stripe-checkout` et `stripe-options`
+  après avoir posé le secret.
 
 *(Les anciens secrets `STRIPE_PRICE_ID` / `STRIPE_PRICE_STOCK` / `_FIDELITE` /
 `_PLANNING` peuvent rester : ils ne servent plus qu'à retrouver — pour les
@@ -104,6 +150,14 @@ supabase functions deploy stripe-webhook --no-verify-jwt   # appelé par Stripe 
 |---|---|---|
 | `trialing` | `essai` | accès, `essai_fin` = fin d'essai |
 | `active` | `actif` | accès |
-| `past_due` / `unpaid` / `canceled` / … | `suspendu` | **blocage** (écran AbonnementExpiré) |
+| `past_due` | `actif` (grâce) | accès + bandeau « mets à jour ta carte » (`stripe_statut`) |
+| `incomplete` | *(inchangé)* | paiement initial en cours |
+| `unpaid` / `paused` | `suspendu` | **blocage** (écran AbonnementExpiré) |
+| `canceled` / `incomplete_expired` | `suspendu` + `stripe_subscription_id = NULL` | **blocage**, bouton **Réactiver** (nouveau Checkout, sans essai) |
 
-> Le blocage réutilise la logique existante (`AuthProvider.magasinBloque`).
+> Le blocage (`AuthProvider.magasinBloque`) : jamais pour le superadmin ni un
+> magasin `gratuit` ; avec abonnement Stripe → bloqué si `suspendu` ; sans
+> abonnement Stripe → bloqué si `suspendu` ou si l'essai (`essai_fin`) est
+> dépassé. Le portail Stripe (`stripe-portal`) utilise une configuration créée
+> par code : factures, moyen de paiement, résiliation **en fin de période**,
+> pas de changement d'offre (les options se gèrent dans l'app).
