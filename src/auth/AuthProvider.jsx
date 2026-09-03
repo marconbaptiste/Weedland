@@ -90,7 +90,7 @@ export function AuthProvider({ children }) {
     const { data } = await supabase
       .from('magasins')
       .select(
-        'nom, abonnement, essai_fin, logo, gratuit, stripe_subscription_id, opt_planning, opt_stock, opt_fidelite, opt_livraisons, opt_compta, opt_news'
+        'nom, abonnement, essai_fin, logo, gratuit, stripe_subscription_id, stripe_statut, opt_planning, opt_stock, opt_fidelite, opt_livraisons, opt_compta, opt_news'
       )
       .eq('id', profil.magasin_id)
       .single();
@@ -116,19 +116,23 @@ export function AuthProvider({ children }) {
         compta: magasinInfo?.opt_compta ?? false,
         news: magasinInfo?.opt_news ?? false,
       };
-  // Blocage d'abonnement : c'est STRIPE qui fait autorité. On ne bloque un
-  // magasin QUE s'il est réellement sur un abonnement Stripe suspendu (impayé /
-  // résiliation, statut poussé par le webhook). Ainsi :
-  //  - le superadmin n'est jamais bloqué ;
-  //  - un magasin `gratuit` (offert, ex. Weedland) n'est jamais bloqué ;
-  //  - les magasins sans abonnement Stripe (pas encore facturés, états `essai`/
-  //    `suspendu` hérités de l'ancien pilotage) ne sont PLUS bloqués à tort.
+  // Blocage d'abonnement (règle commerciale) :
+  //  - jamais pour le superadmin ni pour un magasin `gratuit` (offert, ex. Weedland) ;
+  //  - magasin AVEC abonnement Stripe : bloqué seulement si `suspendu` (impayé
+  //    confirmé / résiliation — statut poussé par le webhook ; `past_due` = grâce) ;
+  //  - magasin SANS abonnement Stripe : bloqué si suspendu manuellement (pilotage)
+  //    ou si sa période d'essai (`essai_fin`, posée à l'inscription) est dépassée
+  //    → il doit s'abonner. Un bandeau le prévient 3 jours avant (Layout).
+  const aujourdHui = new Date().toISOString().slice(0, 10);
+  const essaiDepasse =
+    magasinInfo?.abonnement === 'essai' && !!magasinInfo?.essai_fin && magasinInfo.essai_fin < aujourdHui;
   const magasinBloque =
     !estSuperadmin &&
     !!magasinInfo &&
     !magasinInfo.gratuit &&
-    Boolean(magasinInfo.stripe_subscription_id) &&
-    magasinInfo.abonnement === 'suspendu';
+    (magasinInfo.stripe_subscription_id
+      ? magasinInfo.abonnement === 'suspendu'
+      : magasinInfo.abonnement === 'suspendu' || essaiDepasse);
 
   // Super-admin : bascule le magasin actif (met à jour son propre magasin_id).
   // Un rechargement garantit que toutes les pages relisent le bon magasin.
