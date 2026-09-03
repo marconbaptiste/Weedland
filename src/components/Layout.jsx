@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import Aide from './Aide';
+import BandeauAbonnement from './BandeauAbonnement';
 import Logo, { FeuilleKanabiz } from './Logo';
 import { urlLogo } from '../lib/logo';
 import { appliquerMarqueMagasin } from '../lib/marqueMagasin';
@@ -119,6 +120,7 @@ export default function Layout() {
       </header>
 
       <main className="contenu">
+        <BandeauAbonnement />
         <Outlet />
       </main>
 
