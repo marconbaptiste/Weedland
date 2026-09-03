@@ -1,7 +1,13 @@
 // Edge Function — stripe-portal
-// Ouvre le portail de facturation Stripe (gérer paiement / annuler) d'un magasin
-// et renvoie l'URL. Appelé par le superadmin ou l'admin du magasin.
-// Secrets : STRIPE_SECRET_KEY, APP_PUBLIC_URL.
+// Ouvre le portail de facturation Stripe d'un magasin (moyen de paiement,
+// factures, résiliation) et renvoie l'URL. Appelé par le superadmin ou l'admin
+// du magasin. Secrets : STRIPE_SECRET_KEY, APP_PUBLIC_URL.
+//
+// Le portail utilise une CONFIGURATION explicite créée par code (et réutilisée)
+// plutôt que le réglage par défaut du Dashboard : factures ✅, moyen de
+// paiement ✅, résiliation en FIN de période ✅ (jamais immédiate), et PAS de
+// changement d'offre dans le portail (les options se gèrent dans l'app, pour
+// que la remise pack reste juste). Autonome (copier-coller Dashboard).
 import Stripe from "npm:stripe@17";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -12,10 +18,39 @@ const cors = {
 const env = (n: string) => {
   const v = Deno.env.get(n);
   if (!v) throw new Error(`Secret manquant : ${n}`);
-  return v;
+  return v.trim();
 };
 const json = (o: unknown, status = 200) =>
   new Response(JSON.stringify(o), { status, headers: { ...cors, "Content-Type": "application/json" } });
+
+const MARQUEUR = "kanabiz-portail-v1";
+
+// Retrouve (par metadata) ou crée la configuration du portail.
+async function configurationPortail(stripe: Stripe): Promise<string> {
+  const liste = await stripe.billingPortal.configurations.list({ limit: 100, active: true });
+  const existante = liste.data.find((c) => c.metadata?.kanabiz === MARQUEUR);
+  if (existante) return existante.id;
+  const cree = await stripe.billingPortal.configurations.create({
+    business_profile: { headline: "Kanabiz — gestion de votre abonnement" },
+    features: {
+      invoice_history: { enabled: true },
+      payment_method_update: { enabled: true },
+      customer_update: { enabled: true, allowed_updates: ["email", "address", "name", "tax_id"] },
+      subscription_cancel: {
+        enabled: true,
+        mode: "at_period_end",
+        proration_behavior: "none",
+        cancellation_reason: {
+          enabled: true,
+          options: ["too_expensive", "missing_features", "switched_service", "unused", "other"],
+        },
+      },
+      subscription_update: { enabled: false },
+    },
+    metadata: { kanabiz: MARQUEUR },
+  });
+  return cree.id;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -43,9 +78,11 @@ Deno.serve(async (req) => {
     if (!mag?.stripe_customer_id) return json({ error: "Aucun abonnement Stripe pour ce magasin." }, 400);
 
     const stripe = new Stripe(env("STRIPE_SECRET_KEY"), { httpClient: Stripe.createFetchHttpClient() });
+    const configuration = await configurationPortail(stripe);
     const session = await stripe.billingPortal.sessions.create({
       customer: mag.stripe_customer_id,
-      return_url: `${env("APP_PUBLIC_URL")}/`,
+      configuration,
+      return_url: `${env("APP_PUBLIC_URL")}/gestion`,
     });
     return json({ url: session.url });
   } catch (e) {

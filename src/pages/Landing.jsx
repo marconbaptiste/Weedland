@@ -125,7 +125,7 @@ export default function Landing() {
           Options à la carte :{' '}
           {OPTIONS_TARIFS.map((o) => `${o.nom.replace(/^\S+\s/, '')} +${o.prix} €`).join(' · ')}.
           <br />
-          Pack Pro (tout sauf IA) : 59 € · Abonnement annuel : 2 mois offerts · 2ᵉ magasin : −20 %.
+          Pack Pro (tout sauf IA) : 59 € · Sans engagement, résiliable à tout moment.
         </p>
       </section>
 

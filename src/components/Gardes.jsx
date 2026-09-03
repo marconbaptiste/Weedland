@@ -7,10 +7,14 @@ import BoutonAbonnement from './BoutonAbonnement';
 
 /** Écran affiché quand l'abonnement du magasin est expiré / suspendu. */
 function AbonnementExpire() {
-  const { estAdmin, magasinId, utilisateur, deconnexion } = useAuth();
+  const { estAdmin, magasinId, magasinInfo, utilisateur, deconnexion } = useAuth();
   const [message, setMessage] = useState('');
   const [statut, setStatut] = useState('');
   const [enExport, setEnExport] = useState(false);
+  const [redirection, setRedirection] = useState(false);
+  // Sans abonnement Stripe en cours (essai terminé ou abonnement résilié), le
+  // portail ne permet pas de repayer : on propose directement le Checkout.
+  const aAbonnement = Boolean(magasinInfo?.stripe_subscription_id);
 
   async function exporter() {
     setEnExport(true);
@@ -19,6 +23,24 @@ function AbonnementExpire() {
     } finally {
       setEnExport(false);
     }
+  }
+  async function sabonner() {
+    setStatut('');
+    setRedirection(true);
+    const { data, error } = await supabase.functions.invoke('stripe-checkout', { body: { magasinId } });
+    if (data?.url) {
+      window.location.href = data.url;
+      return;
+    }
+    setRedirection(false);
+    let detail = data?.error || error?.message || 'Paiement indisponible pour le moment.';
+    try {
+      const c = await error?.context?.json?.();
+      if (c?.error) detail = c.error;
+    } catch {
+      /* corps illisible */
+    }
+    setStatut(detail);
   }
   async function envoyer() {
     if (!message.trim()) return;
@@ -39,12 +61,20 @@ function AbonnementExpire() {
         <h1 className="logo-connexion">Abonnement expiré</h1>
         <p className="statut">
           L’accès à ce magasin est suspendu. {estAdmin
-            ? 'Contacte le support pour réactiver ton abonnement — tes données restent disponibles à l’export.'
+            ? aAbonnement
+              ? 'Mets à jour ton moyen de paiement pour réactiver l’accès — tes données restent disponibles à l’export.'
+              : 'Ta période d’essai est terminée ou ton abonnement a été résilié. Abonne-toi pour retrouver l’accès — tes données sont conservées.'
             : 'Contacte ton responsable.'}
         </p>
         {estAdmin && (
           <>
-            <BoutonAbonnement libelle="💳 Gérer mon abonnement" className="btn btn-primary" />
+            {aAbonnement ? (
+              <BoutonAbonnement libelle="💳 Mettre à jour mon paiement" className="btn btn-primary" />
+            ) : (
+              <button className="btn btn-primary" onClick={sabonner} disabled={redirection}>
+                {redirection ? 'Redirection…' : '💳 S’abonner / Réactiver (29 € HT/mois)'}
+              </button>
+            )}
             <button className="btn" onClick={exporter} disabled={enExport}>
               {enExport ? 'Export…' : '⬇️ Exporter mes données'}
             </button>
