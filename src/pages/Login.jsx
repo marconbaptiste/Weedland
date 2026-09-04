@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import Logo from '../components/Logo';
@@ -7,6 +7,8 @@ import Logo from '../components/Logo';
 export default function Login() {
   const { connexion, connexionGoogle } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const info = location.state?.info ?? ''; // message transmis par l'inscription
   const [email, setEmail] = useState('');
   const [motDePasse, setMotDePasse] = useState('');
   const [erreur, setErreur] = useState('');
@@ -63,6 +65,7 @@ export default function Login() {
       <form className="card carte-connexion" onSubmit={soumettre}>
         <Logo taille={40} className="marque-hero" />
         <p className="statut" style={{ marginTop: '-0.25rem' }}>Connecte-toi à ton espace</p>
+        {info && <p className="statut message-info">🎉 {info}</p>}
         <label className="field">
           <span>Email</span>
           <input

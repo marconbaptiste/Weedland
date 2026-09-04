@@ -193,16 +193,9 @@ export default function Stocks() {
       setStatut(`Modification impossible : ${error.message}`);
       return;
     }
-    const ecart = ancien ? arrondi(nouvelleQte - Number(ancien.quantite)) : 0;
-    if (ecart !== 0) {
-      await journaliserMouvement({
-        stock_id: id,
-        produit: nom,
-        delta: ecart,
-        quantite_apres: nouvelleQte,
-        motif: 'correction',
-      });
-    }
+    // Le changement de quantité est journalisé côté serveur (trigger
+    // `stock_journal`, motif « correction ») : rien à tracer ici.
+    void ancien;
     setEdition(null);
     setStatut(`« ${nom} » modifié ✅`);
     charger();
@@ -234,23 +227,19 @@ export default function Stocks() {
   async function mouvement(p, signe) {
     const d = parseMontant(delta[p.id] ?? '');
     if (d <= 0) return;
-    const nouvelle = Math.max(0, arrondi(Number(p.quantite) + signe * d));
-    const { error } = await supabase.from('stocks').update({ quantite: nouvelle }).eq('id', p.id);
+    // Mouvement ATOMIQUE côté serveur (`stock_mouvement`) : la quantité est
+    // lue et écrite dans la même transaction (deux employés simultanés ne
+    // perdent plus de mouvement) et le journal est écrit avec elle.
+    const { data, error } = await supabase.rpc('stock_mouvement', {
+      p_id: p.id,
+      p_delta: arrondi(signe * d),
+      p_motif: signe > 0 ? 'entree' : 'sortie',
+    });
     if (error) {
       setStatut(`Mouvement impossible : ${error.message}`);
       return;
     }
-    // On trace la variation réelle (le stock ne descend jamais sous 0).
-    const ecart = arrondi(nouvelle - Number(p.quantite));
-    if (ecart !== 0) {
-      await journaliserMouvement({
-        stock_id: p.id,
-        produit: p.nom,
-        delta: ecart,
-        quantite_apres: nouvelle,
-        motif: signe > 0 ? 'entree' : 'sortie',
-      });
-    }
+    const nouvelle = Number(data ?? Math.max(0, arrondi(Number(p.quantite) + signe * d)));
     setDelta((x) => ({ ...x, [p.id]: '' }));
     // Si la fiche du produit est ouverte, on synchronise le champ Quantité pour
     // qu'un « Enregistrer » ne réécrive pas l'ancienne valeur par-dessus.

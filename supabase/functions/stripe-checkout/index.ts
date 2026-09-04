@@ -131,8 +131,11 @@ Deno.serve(async (req) => {
     if (!dejaEuUnAbonnement) {
       if (mag.essai_fin) {
         const finMs = new Date(`${mag.essai_fin}T23:59:59Z`).getTime();
-        const minMs = Date.now() + 2 * 24 * 3600 * 1000; // Stripe : ≥ 48 h dans le futur
-        if (finMs > minMs) essai = { trial_end: Math.floor(finMs / 1000) };
+        // Stripe exige trial_end ≥ 48 h dans le futur : s'il reste moins (ou si
+        // l'essai vient d'expirer), on accorde ces 48 h plutôt que de prélever
+        // immédiatement un commerçant à qui il restait 1-2 jours d'essai.
+        const minMs = Date.now() + 2 * 24 * 3600 * 1000 + 10 * 60 * 1000;
+        essai = { trial_end: Math.floor(Math.max(finMs, minMs) / 1000) };
       } else {
         essai = { trial_period_days: ESSAI_JOURS };
       }

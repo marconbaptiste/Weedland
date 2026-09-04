@@ -45,11 +45,27 @@ export default function Inscription() {
       setEnvoi(false);
       return;
     }
+    if (data?.compteExistant) {
+      // Cet email a déjà un compte Supabase (ex. connexion Google) : le magasin
+      // est créé et l'email autorisé ; le profil se crée à la connexion.
+      setEnvoi(false);
+      navigate('/connexion', {
+        replace: true,
+        state: {
+          info:
+            'Ton magasin est créé ! Cet email avait déjà un compte : connecte-toi comme d’habitude (Google ou mot de passe existant) pour y accéder.',
+        },
+      });
+      return;
+    }
     // Compte créé : on connecte directement, puis on affiche les félicitations.
     const { error: errCo } = await connexion(form.email.trim().toLowerCase(), form.motDePasse);
     setEnvoi(false);
     if (errCo) {
-      navigate('/connexion', { replace: true });
+      navigate('/connexion', {
+        replace: true,
+        state: { info: 'Ton magasin est créé ! Connecte-toi avec l’email et le mot de passe choisis.' },
+      });
       return;
     }
     setSucces(true);

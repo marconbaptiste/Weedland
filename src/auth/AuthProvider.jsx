@@ -18,6 +18,9 @@ export function AuthProvider({ children }) {
   const [sessionPrete, setSessionPrete] = useState(false); // getSession() a répondu
   const [profil, setProfil] = useState(null);
   const [profilPret, setProfilPret] = useState(false);
+  const [erreurProfil, setErreurProfil] = useState(''); // lecture du profil en échec (réseau)
+  const [tentative, setTentative] = useState(0); // relance manuelle du chargement
+  const [magasinPret, setMagasinPret] = useState(false); // magasinInfo lu au moins une fois
   const [magasins, setMagasins] = useState([]); // liste (super-admin uniquement)
   const [magasinInfo, setMagasinInfo] = useState(null); // abonnement du magasin courant
   const [magasinLogo, setMagasinLogo] = useState(null); // chemin du logo (bucket public)
@@ -40,29 +43,42 @@ export function AuthProvider({ children }) {
     let actif = true;
     if (!session?.user) {
       setProfil(null);
+      setErreurProfil('');
       setProfilPret(true);
       return undefined;
     }
     setProfilPret(false);
-    supabase
-      .from('users')
-      .select('id, nom, role, pourcentage_interessement, magasin_id')
-      .eq('id', session.user.id)
-      .single()
-      .then(({ data }) => {
-        if (actif) {
-          setProfil(data ?? null);
-          setProfilPret(true);
-        }
-      });
+    (async () => {
+      const lire = () =>
+        supabase
+          .from('users')
+          .select('id, nom, role, pourcentage_interessement, magasin_id')
+          .eq('id', session.user.id)
+          .maybeSingle();
+      let { data, error } = await lire();
+      // Pas de profil : peut-être un compte (ex. Google) dont l'email vient
+      // d'être autorisé — `reclamer_profil()` le crée si l'allowlist le permet.
+      if (!error && !data) {
+        const { data: ok } = await supabase.rpc('reclamer_profil');
+        if (ok === true) ({ data, error } = await lire());
+      }
+      if (!actif) return;
+      // Une ERREUR de lecture (réseau, Supabase indisponible) n'est pas « pas de
+      // profil » : on l'affiche comme telle au lieu de « Accès non autorisé ».
+      setErreurProfil(error ? error.message || 'Connexion impossible' : '');
+      setProfil(data ?? null);
+      setProfilPret(true);
+    })();
     return () => {
       actif = false;
     };
-  }, [session]);
+  }, [session, tentative]);
 
   // Tant que la session n'a pas été relue (ou le profil chargé), on attend :
   // évite de rediriger vers la connexion au rafraîchissement.
-  const chargement = !sessionPrete || !profilPret;
+  // `magasinPret` évite qu'un F5 sur /stocks (option) renvoie à l'accueil parce
+  // que les options n'étaient pas encore lues (RequireOption).
+  const chargement = !sessionPrete || !profilPret || (!!profil?.magasin_id && !magasinPret);
 
   // Liste des magasins (pour le sélecteur du super-admin).
   useEffect(() => {
@@ -85,28 +101,44 @@ export function AuthProvider({ children }) {
     if (!profil?.magasin_id) {
       setMagasinInfo(null);
       setMagasinLogo(null);
+      setMagasinPret(true);
       return;
     }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('magasins')
       .select(
         'nom, abonnement, essai_fin, logo, gratuit, stripe_subscription_id, stripe_statut, opt_planning, opt_stock, opt_fidelite, opt_livraisons, opt_compta, opt_news'
       )
       .eq('id', profil.magasin_id)
-      .single();
-    setMagasinInfo(data ?? null);
-    setMagasinLogo(data?.logo ?? null);
+      .maybeSingle();
+    // En cas d'erreur de lecture, on garde la dernière valeur connue (ne pas
+    // faire disparaître les modules ni bloquer le magasin sur une coupure).
+    if (!error) {
+      setMagasinInfo(data ?? null);
+      setMagasinLogo(data?.logo ?? null);
+    }
+    setMagasinPret(true);
   }, [profil?.magasin_id]);
 
   useEffect(() => {
+    setMagasinPret(false);
     rechargerMagasin();
   }, [rechargerMagasin]);
 
   const estSuperadmin = profil?.role === 'superadmin';
+  const aujourdHui = new Date().toISOString().slice(0, 10);
+  const essaiDepasse =
+    magasinInfo?.abonnement === 'essai' && !!magasinInfo?.essai_fin && magasinInfo.essai_fin < aujourdHui;
+  // Période d'essai « app » (14 j posés à l'inscription, pas encore d'abonnement
+  // Stripe) : TOUTES les options sont ouvertes pour que le commerçant teste le
+  // produit complet, comme promis sur la landing. Dès l'abonnement, le webhook
+  // Stripe redérive les `opt_*` depuis les lignes réellement payées.
+  const enEssai =
+    !!magasinInfo && !magasinInfo.stripe_subscription_id && magasinInfo.abonnement === 'essai' && !essaiDepasse;
   // Options d'abonnement du magasin (paywall des modules). Le superadmin
   // (exploitant) n'est jamais bridé ; un magasin `gratuit` (ex. le magasin
   // originel Weedland) a toujours toutes les options, sans facturation.
-  const options = estSuperadmin || magasinInfo?.gratuit
+  const options = estSuperadmin || magasinInfo?.gratuit || enEssai
     ? { planning: true, stock: true, fidelite: true, livraisons: true, compta: true, news: true }
     : {
         planning: magasinInfo?.opt_planning ?? false,
@@ -123,9 +155,6 @@ export function AuthProvider({ children }) {
   //  - magasin SANS abonnement Stripe : bloqué si suspendu manuellement (pilotage)
   //    ou si sa période d'essai (`essai_fin`, posée à l'inscription) est dépassée
   //    → il doit s'abonner. Un bandeau le prévient 3 jours avant (Layout).
-  const aujourdHui = new Date().toISOString().slice(0, 10);
-  const essaiDepasse =
-    magasinInfo?.abonnement === 'essai' && !!magasinInfo?.essai_fin && magasinInfo.essai_fin < aujourdHui;
   const magasinBloque =
     !estSuperadmin &&
     !!magasinInfo &&
@@ -159,6 +188,8 @@ export function AuthProvider({ children }) {
     magasinBloque,
     changerMagasin,
     chargement,
+    erreurProfil,
+    reessayerProfil: () => setTentative((n) => n + 1),
     connexion: (email, motDePasse) =>
       supabase.auth.signInWithPassword({ email, password: motDePasse }),
     connexionGoogle: () =>

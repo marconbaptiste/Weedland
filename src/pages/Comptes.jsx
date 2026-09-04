@@ -111,7 +111,7 @@ export default function Comptes() {
   async function reinitialiserMdp(id, nom) {
     const motDePasse = await invite({
       titre: 'Réinitialiser le mot de passe',
-      label: `Nouveau mot de passe pour ${nom} (min. 6 caractères)`,
+      label: `Nouveau mot de passe pour ${nom} (min. 8 caractères)`,
       type: 'password',
     });
     if (!motDePasse) return;
@@ -313,7 +313,7 @@ export default function Comptes() {
                   required
                 />
                 <small className="champ-aide">
-                  6 caractères minimum. Il reste visible pour que tu puisses le communiquer à
+                  8 caractères minimum. Il reste visible pour que tu puisses le communiquer à
                   l’employé.
                 </small>
               </label>

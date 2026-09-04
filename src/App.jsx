@@ -69,7 +69,10 @@ export default function App() {
           <Route path="caisse/historique" element={<Historique />} />
           <Route path="chromes" element={<Chromes />} />
           <Route path="veille" element={<Veille />} />
-          <Route path="support" element={<Support />} />
+          {/* Messagerie admin ↔ exploitant : réservée à l'admin (RLS alignée) */}
+          <Route element={<RequireAdmin />}>
+            <Route path="support" element={<Support />} />
+          </Route>
 
           {/* Modules à option d'abonnement */}
           <Route element={<RequireOption option="stock" />}>

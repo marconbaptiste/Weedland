@@ -41,60 +41,102 @@ Deno.serve(async (req) => {
       const admin = createClient(url, serviceRole);
       const codeSaisi = String(corps.code ?? '').trim();
       const codeEnv = (Deno.env.get('CODE_INSCRIPTION') ?? '').trim();
-      // Code valide s'il = secret env (code maître de l'exploitant) OU s'il est
-      // CONSOMMÉ atomiquement dans codes_inscription (respecte plafond/expiration
-      // → ferme la création de masse via un code fuité).
-      let codeValide = false;
-      if (codeSaisi && codeEnv && codeSaisi === codeEnv) {
-        codeValide = true;
-      } else if (codeSaisi) {
-        const { data: ok } = await admin.rpc('consommer_code_inscription', { p_code: codeSaisi });
-        codeValide = ok === true;
-      }
-      if (!codeValide) {
-        return json({ error: 'Code d’inscription invalide ou épuisé.' }, 403);
-      }
-      const nomMagasin = String(corps.nomMagasin ?? '').trim();
-      const nom = String(corps.nom ?? '').trim();
+      const nomMagasin = String(corps.nomMagasin ?? '').trim().slice(0, 80);
+      const nom = String(corps.nom ?? '').trim().slice(0, 80);
       const email = String(corps.email ?? '').trim().toLowerCase();
       const motDePasse = String(corps.motDePasse ?? '');
-      if (!nomMagasin || !nom || !email) {
-        return json({ error: 'Magasin, nom et email sont requis.' }, 400);
+      // 1) Valider la saisie AVANT de consommer le code (un code n'est jamais
+      //    brûlé par une simple faute de frappe).
+      if (!nomMagasin || !nom || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return json({ error: 'Magasin, nom et email (valide) sont requis.' }, 400);
       }
       if (motDePasse.length < 8) {
         return json({ error: 'Mot de passe trop court (8 caractères minimum).' }, 400);
       }
-
-      // Email déjà autorisé / utilisé ?
+      if (!codeSaisi) return json({ error: 'Code d’inscription invalide ou épuisé.' }, 403);
+      // Email déjà autorisé (donc déjà rattaché à un magasin) ?
       const { data: deja } = await admin
         .from('comptes_autorises')
         .select('email')
         .eq('email', email)
         .maybeSingle();
-      if (deja) return json({ error: 'Cet email est déjà utilisé.' }, 400);
+      if (deja) {
+        return json({ error: 'Cet email a déjà un magasin. Connecte-toi (ou « mot de passe oublié »).' }, 400);
+      }
 
-      // Créer le magasin (service_role => contourne la RLS).
+      // 2) Code valide s'il = secret env (code maître de l'exploitant) OU s'il est
+      //    CONSOMMÉ atomiquement dans codes_inscription (respecte plafond/expiration
+      //    → ferme la création de masse via un code fuité).
+      let codeValide = false;
+      let codeConsomme = false;
+      if (codeEnv && codeSaisi === codeEnv) {
+        codeValide = true;
+      } else {
+        const { data: ok } = await admin.rpc('consommer_code_inscription', { p_code: codeSaisi });
+        codeValide = ok === true;
+        codeConsomme = codeValide;
+      }
+      if (!codeValide) {
+        return json({ error: 'Code d’inscription invalide ou épuisé.' }, 403);
+      }
+
+      // 3) Création : magasin → allowlist → compte. Chaque étape suivante qui
+      //    échoue ANNULE les précédentes (pas de magasin orphelin, pas d'email
+      //    verrouillé, code restitué) : le commerçant peut simplement réessayer.
+      let magasinId: string | null = null;
+      const annuler = async () => {
+        if (magasinId) {
+          await admin.from('comptes_autorises').delete().eq('email', email).eq('magasin_id', magasinId);
+          await admin.from('magasins').delete().eq('id', magasinId);
+        }
+        if (codeConsomme) await admin.rpc('rendre_code_inscription', { p_code: codeSaisi });
+      };
       const { data: mag, error: errMag } = await admin
         .from('magasins')
         .insert({ nom: nomMagasin })
         .select('id')
         .single();
-      if (errMag || !mag) return json({ error: errMag?.message ?? 'Création du magasin impossible' }, 400);
+      if (errMag || !mag) {
+        await annuler();
+        console.error('inscription magasin:', errMag);
+        return json({ error: 'Création du magasin impossible. Réessaie dans un instant.' }, 500);
+      }
+      magasinId = mag.id;
 
-      // Autoriser l'email en admin de ce magasin.
       const { error: errAuth } = await admin
         .from('comptes_autorises')
         .insert({ email, role: 'admin', magasin_id: mag.id });
-      if (errAuth) return json({ error: errAuth.message }, 400);
+      if (errAuth) {
+        await annuler();
+        console.error('inscription allowlist:', errAuth);
+        return json({ error: 'Création du compte impossible. Réessaie dans un instant.' }, 500);
+      }
 
-      // Créer le compte (le trigger crée le profil admin + magasin).
+      // Compte Supabase Auth déjà existant pour cet email (ex. 1re connexion
+      // Google avant l'inscription) : on ne touche pas à son mot de passe (on
+      // n'a aucune preuve que l'appelant possède cet email). L'email est
+      // maintenant autorisé en admin du nouveau magasin : à sa prochaine
+      // connexion, `reclamer_profil()` lui crée son profil (AuthProvider).
+      const { data: existe } = await admin.rpc('auth_email_existe', { p_email: email });
+      if (existe === true) {
+        return json({ ok: true, compteExistant: true }, 200);
+      }
+
+      // Créer le compte (le trigger handle_new_user crée le profil admin + magasin).
       const { error: errUser } = await admin.auth.admin.createUser({
         email,
         password: motDePasse,
         email_confirm: true,
         user_metadata: { nom, role: 'admin' },
       });
-      if (errUser) return json({ error: errUser.message }, 400);
+      if (errUser) {
+        await annuler();
+        console.error('inscription createUser:', errUser);
+        const msg = /password/i.test(errUser.message)
+          ? 'Mot de passe refusé : choisis-en un plus long ou plus varié.'
+          : 'Création du compte impossible. Réessaie dans un instant.';
+        return json({ error: msg }, 400);
+      }
 
       return json({ ok: true }, 200);
     }

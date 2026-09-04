@@ -406,6 +406,12 @@ textarea:focus {
   font-size: 0.9rem;
   margin: 0;
 }
+.message-info {
+  color: var(--vert);
+  border: 1px solid var(--vert);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+}
 .separateur {
   display: flex;
   align-items: center;
