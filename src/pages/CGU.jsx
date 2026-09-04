@@ -35,8 +35,8 @@ export default function CGU() {
 
       <h2>3. Accès et comptes</h2>
       <p>
-        L’accès est réservé aux utilisateurs autorisés. La création d’un magasin nécessite un code
-        d’inscription fourni par l’éditeur. Chaque utilisateur est responsable de la confidentialité
+        L’accès est réservé aux utilisateurs autorisés. La création d’un magasin se fait en ligne, après
+        confirmation de l’adresse email du commerçant. Chaque utilisateur est responsable de la confidentialité
         de ses identifiants et de toute activité réalisée depuis son compte. L’administrateur d’un
         magasin est responsable des comptes qu’il crée.
       </p>

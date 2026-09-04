@@ -84,7 +84,12 @@ function remisePackCts(montants: Map<string, number>, socleCts: number): number 
 async function prixParCle(stripe: Stripe, cle: string, montantCts: number, nom: string): Promise<string> {
   const l = await stripe.prices.list({ lookup_keys: [cle], limit: 1 });
   const actuel = l.data[0];
-  if (actuel && actuel.active && actuel.unit_amount === montantCts) return actuel.id;
+  // Réutilisé seulement s'il correspond : montant identique ET, si Stripe Tax est
+  // actif, prix déclaré HT (`tax_behavior: exclusive`) — sinon on en recrée un.
+  if (
+    actuel && actuel.active && actuel.unit_amount === montantCts &&
+    (!TAX_AUTO || actuel.tax_behavior === "exclusive")
+  ) return actuel.id;
   const cree = await stripe.prices.create({
     lookup_key: cle,
     transfer_lookup_key: true,
@@ -153,6 +158,18 @@ Deno.serve(async (req) => {
       return json({ error: "Abonnement résilié — réactive-le d'abord depuis Gestion → Abonnement." }, 400);
     }
 
+    // 0) TVA automatique : l'abonnement doit avoir automatic_tax activé pour que
+    //    les nouvelles lignes soient taxées (adresse de facturation requise).
+    let avertissement: string | undefined;
+    if (TAX_AUTO && !sub.automatic_tax?.enabled) {
+      try {
+        await stripe.subscriptions.update(sub.id, { automatic_tax: { enabled: true } });
+      } catch (e) {
+        console.error("stripe-options automatic_tax:", e);
+        avertissement = "TVA automatique non activée sur cet abonnement (adresse de facturation manquante ?) — à vérifier dans le portail.";
+      }
+    }
+
     // 1) Bascule de la ligne d'option.
     const item = sub.items.data.find((it) => cleDepuisPrix(it.price as Stripe.Price) === option);
     if (actif && !item) {
@@ -179,7 +196,6 @@ Deno.serve(async (req) => {
 
     // 3) Remise pack : on ne touche QU'aux coupons « pack-remise-* », les autres
     //    remises du client (codes promo) sont conservées telles quelles.
-    let avertissement: string | undefined;
     try {
       const remise = remisePackCts(montants, socleCts);
       const existants = (sub.discounts ?? []).filter(
