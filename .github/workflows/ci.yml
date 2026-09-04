@@ -1,0 +1,25 @@
+name: CI
+
+# Lint + tests + build sur chaque push et pull request vers main.
+# Vercel déploie automatiquement main : ce workflow est le filet de sécurité
+# (un test rouge se voit sur la PR avant le merge). Aucun secret requis.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

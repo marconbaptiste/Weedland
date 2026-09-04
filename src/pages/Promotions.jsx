@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { messageErreur } from '../lib/erreurs';
 import { formatDateFr } from '../lib/format';
 import NotifierClients from '../components/NotifierClients';
 
@@ -45,7 +46,7 @@ export default function Promotions() {
       date_fin: form.date_fin || null,
     });
     if (error) {
-      setMsg(`Création impossible : ${error.message}`);
+      setMsg(`Création impossible : ${messageErreur(error)}`);
       return;
     }
     setForm(VIDE);

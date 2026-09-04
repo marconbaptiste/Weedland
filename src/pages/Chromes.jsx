@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useVerrou } from '../lib/verrou';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { messageErreur } from '../lib/erreurs';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatDateFr } from '../lib/format';
 import { aujourdhuiISO } from '../lib/dates';
@@ -152,12 +153,12 @@ export default function Chromes() {
   // Fidélité — actions (fonctions SECURITY DEFINER côté base).
   async function ajouterTampon() {
     const { error } = await supabase.rpc('fidelite_ajouter', { p_client: clientSel.client_id });
-    setMsgClient(error ? `Erreur : ${error.message}` : '+1 étoile ⭐');
+    setMsgClient(error ? `Erreur : ${messageErreur(error)}` : '+1 étoile ⭐');
     chargerFidelite(clientSel.client_id);
   }
   async function retirerTampon() {
     const { error } = await supabase.rpc('fidelite_retirer', { p_client: clientSel.client_id });
-    if (error) setMsgClient(`Erreur : ${error.message}`);
+    if (error) setMsgClient(`Erreur : ${messageErreur(error)}`);
     chargerFidelite(clientSel.client_id);
   }
   async function utiliserRecompense() {
@@ -238,7 +239,7 @@ export default function Chromes() {
       adresse,
     });
     if (error) {
-      setMsgClient(`Modification impossible : ${error.message}`);
+      setMsgClient(`Modification impossible : ${messageErreur(error)}`);
       return;
     }
     setClientSel((c) => ({ ...c, adresse }));
@@ -257,7 +258,7 @@ export default function Chromes() {
     if (!s) return;
     const { error } = await majFiche({ surnom: s, telephone: clientSel.telephone, description: clientSel.description });
     if (error) {
-      setMsgClient(`Renommage impossible : ${error.message}`);
+      setMsgClient(`Renommage impossible : ${messageErreur(error)}`);
       return;
     }
     setClientSel((c) => ({ ...c, surnom: s }));
@@ -276,7 +277,7 @@ export default function Chromes() {
     const telephone = saisie.trim() || null;
     const { error } = await majFiche({ surnom: clientSel.surnom, telephone, description: clientSel.description });
     if (error) {
-      setMsgClient(`Modification impossible : ${error.message}`);
+      setMsgClient(`Modification impossible : ${messageErreur(error)}`);
       return;
     }
     setClientSel((c) => ({ ...c, telephone }));
@@ -294,7 +295,7 @@ export default function Chromes() {
       description: valeur,
     });
     if (error) {
-      setNoteMsg(`Enregistrement impossible : ${error.message}`);
+      setNoteMsg(`Enregistrement impossible : ${messageErreur(error)}`);
       return;
     }
     setClientSel((c) => ({ ...c, description: valeur }));
@@ -353,7 +354,7 @@ export default function Chromes() {
       return;
     const { error } = await supabase.rpc('client_anonymiser', { p_client: clientSel.client_id });
     if (error) {
-      setMsgClient(`Anonymisation impossible : ${error.message}`);
+      setMsgClient(`Anonymisation impossible : ${messageErreur(error)}`);
       return;
     }
     setClientSel(null);
@@ -383,7 +384,7 @@ export default function Chromes() {
     if (!window.confirm('Supprimer cette ligne ?')) return;
     const { error } = await supabase.from('chromes').delete().eq('id', id);
     if (error) {
-      setMsgClient(`Suppression impossible : ${error.message}`);
+      setMsgClient(`Suppression impossible : ${messageErreur(error)}`);
       return;
     }
     setMsgClient('Ligne supprimée ✅');
@@ -431,7 +432,7 @@ export default function Chromes() {
       employe_id: utilisateur.id,
     });
     if (error) {
-      setMsgClient(`Enregistrement impossible : ${error.message}`);
+      setMsgClient(`Enregistrement impossible : ${messageErreur(error)}`);
       return;
     }
     setNouvellePromo({ description: '', date: aujourdhuiISO() });
@@ -450,7 +451,7 @@ export default function Chromes() {
       employe_id: utilisateur.id,
     });
     if (error) {
-      setMsgClient(`Ajout impossible : ${error.message}`);
+      setMsgClient(`Ajout impossible : ${messageErreur(error)}`);
       return;
     }
     setMsgClient('Faveur ajoutée ✅');
@@ -513,7 +514,7 @@ export default function Chromes() {
       employe_id: utilisateur.id,
     });
     if (error) {
-      setMsgClient(`Enregistrement impossible : ${error.message}`);
+      setMsgClient(`Enregistrement impossible : ${messageErreur(error)}`);
       return;
     }
     setMontant('');

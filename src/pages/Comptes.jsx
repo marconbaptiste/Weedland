@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { messageErreur } from '../lib/erreurs';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant } from '../lib/format';
 import { useInvite } from '../components/ModalePrompt';
@@ -58,9 +59,18 @@ export default function Comptes() {
     e.preventDefault();
     const email = nouvelEmail.trim().toLowerCase();
     if (!email) return;
-    await supabase
+    const { error } = await supabase
       .from('comptes_autorises')
       .upsert({ email, magasin_id: profil?.magasin_id }, { onConflict: 'email' });
+    if (error) {
+      // L'email est unique sur toute la plateforme : déjà rattaché à un autre magasin.
+      setStatut(
+        error.code === '23505' || /row-level security/i.test(error.message ?? '')
+          ? 'Cet email est déjà utilisé sur un autre magasin.'
+          : `Autorisation impossible : ${messageErreur(error)}`,
+      );
+      return;
+    }
     setNouvelEmail('');
     charger();
   }
@@ -103,8 +113,8 @@ export default function Comptes() {
   }
 
   async function changerRole(id, role) {
-    await supabase.from('users').update({ role }).eq('id', id);
-    setStatut('Enregistré ✅');
+    const { error } = await supabase.from('users').update({ role }).eq('id', id);
+    setStatut(error ? `Rôle non modifié : ${messageErreur(error)}` : 'Enregistré ✅');
     charger();
   }
 
@@ -118,8 +128,13 @@ export default function Comptes() {
   // Persiste le taux d'intéressement de l'employé (au blur).
   async function enregistrerPourcentage(id, valeur) {
     const taux = parseMontant(valeur);
-    await supabase.from('users').update({ pourcentage_interessement: taux }).eq('id', id);
-    setStatut('Enregistré ✅');
+    if (taux < 0 || taux > 100) {
+      setStatut('Taux non enregistré : il doit être entre 0 et 100.');
+      charger();
+      return;
+    }
+    const { error } = await supabase.from('users').update({ pourcentage_interessement: taux }).eq('id', id);
+    setStatut(error ? `Taux non enregistré : ${messageErreur(error)}` : 'Enregistré ✅');
     charger();
   }
 
@@ -134,8 +149,8 @@ export default function Comptes() {
       charger(); // restaure l'ancien nom si vidé
       return;
     }
-    await supabase.from('users').update({ nom }).eq('id', id);
-    setStatut('Enregistré ✅');
+    const { error } = await supabase.from('users').update({ nom }).eq('id', id);
+    setStatut(error ? `Nom non enregistré : ${messageErreur(error)}` : 'Enregistré ✅');
     charger();
   }
 

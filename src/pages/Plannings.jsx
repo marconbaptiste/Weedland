@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { messageErreur } from '../lib/erreurs';
 import { useAuth } from '../auth/AuthProvider';
 import { aujourdhuiISO, versISO, premierDuMois } from '../lib/dates';
 import { formatDateFr } from '../lib/format';
@@ -128,7 +129,7 @@ export default function Plannings() {
     }
     const { error } = await supabase.from('plannings').insert(lignes);
     if (error) {
-      setMsg(`Erreur : ${error.message}`);
+      setMsg(`Erreur : ${messageErreur(error)}`);
       return;
     }
     setMsg(`${lignes.length} créneau(x) ajouté(s) depuis les horaires fixes.`);
@@ -147,14 +148,16 @@ export default function Plannings() {
       fin: form.fin,
     }));
     const { error } = await supabase.from('plannings').insert(lignes);
-    if (error) return setMsg(`Erreur : ${error.message}`);
+    if (error) return setMsg(`Erreur : ${messageErreur(error)}`);
     setForm((f) => ({ ...f, debut: '09:00', fin: '18:00' }));
     return charger();
   }
 
   async function supprimer(id) {
-    await supabase.from('plannings').delete().eq('id', id);
-    charger();
+    if (!window.confirm('Retirer ce créneau du planning ?')) return;
+    const { error } = await supabase.from('plannings').delete().eq('id', id);
+    if (error) return setMsg(`Suppression impossible : ${messageErreur(error)}`);
+    return charger();
   }
 
   const cases = [

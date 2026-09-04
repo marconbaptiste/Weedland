@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { messageErreur } from '../lib/erreurs';
 import { parseMontant, formatEuros, formatNombre, formatDateFr } from '../lib/format';
 import {
   premierDuMois,
@@ -203,8 +204,12 @@ export default function Comptabilite() {
   const setteur = { charges: setCharges, fournisseurs: setFournisseurs };
   const donnees = { charges, fournisseurs };
 
+  // Toute écriture qui échoue (session expirée, coupure, RLS) est SIGNALÉE :
+  // avant, l'écran montrait le montant alors que la base ne l'avait pas.
+  const signaler = (quoi, error) => window.alert(`${quoi} : ${messageErreur(error)}`);
   async function ajouter(table) {
-    const { data } = await supabase.from(table).insert({ libelle: '', montant: 0, mois }).select().single();
+    const { data, error } = await supabase.from(table).insert({ libelle: '', montant: 0, mois }).select().single();
+    if (error) return signaler('Ligne non ajoutée', error);
     if (data) setteur[table]((prev) => [...prev, data]);
   }
   function majLigne(table, id, champ, valeur) {
@@ -213,11 +218,15 @@ export default function Comptabilite() {
   async function enregistrer(table, id) {
     const it = donnees[table].find((x) => x.id === id);
     if (!it) return;
-    await supabase.from(table).update({ libelle: it.libelle || '', montant: parseMontant(it.montant) }).eq('id', id);
+    const montant = parseMontant(it.montant);
+    if (montant < 0) return signaler('Montant non enregistré', { message: 'Valeur refusée (montant négatif).' });
+    const { error } = await supabase.from(table).update({ libelle: it.libelle || '', montant }).eq('id', id);
+    if (error) signaler('Ligne non enregistrée', error);
   }
   async function supprimer(table, id) {
     if (!window.confirm('Supprimer cette ligne ? Cette action est irréversible.')) return;
-    await supabase.from(table).delete().eq('id', id);
+    const { error } = await supabase.from(table).delete().eq('id', id);
+    if (error) return signaler('Ligne non supprimée', error);
     setteur[table]((prev) => prev.filter((x) => x.id !== id));
   }
   async function copierPrecedent(table) {
@@ -228,7 +237,7 @@ export default function Comptabilite() {
       .select(avecCat ? 'libelle, montant, categorie' : 'libelle, montant')
       .eq('mois', precedent);
     if (!data || data.length === 0) return;
-    const { data: inserts } = await supabase
+    const { data: inserts, error } = await supabase
       .from(table)
       .insert(
         data.map((d) => ({
@@ -239,6 +248,7 @@ export default function Comptabilite() {
         }))
       )
       .select();
+    if (error) return signaler('Reprise du mois précédent impossible', error);
     setteur[table]((prev) => [...prev, ...(inserts ?? [])]);
   }
 
@@ -246,7 +256,8 @@ export default function Comptabilite() {
   // pas de blur fiable sur mobile, on écrit la valeur reçue directement).
   async function majCategorie(id, categorie) {
     majLigne('charges', id, 'categorie', categorie);
-    await supabase.from('charges').update({ categorie: categorie || null }).eq('id', id);
+    const { error } = await supabase.from('charges').update({ categorie: categorie || null }).eq('id', id);
+    if (error) signaler('Catégorie non enregistrée', error);
   }
 
   async function ajouterJustificatif(table, id, file) {
