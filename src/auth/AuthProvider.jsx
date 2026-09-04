@@ -53,7 +53,7 @@ export function AuthProvider({ children }) {
       const lire = () =>
         supabase
           .from('users')
-          .select('id, nom, role, pourcentage_interessement, magasin_id')
+          .select('id, nom, role, pourcentage_interessement, magasin_id, actif')
           .eq('id', session.user.id)
           .maybeSingle();
       let { data, error } = await lire();
@@ -67,7 +67,9 @@ export function AuthProvider({ children }) {
       // Une ERREUR de lecture (réseau, Supabase indisponible) n'est pas « pas de
       // profil » : on l'affiche comme telle au lieu de « Accès non autorisé ».
       setErreurProfil(error ? error.message || 'Connexion impossible' : '');
-      setProfil(data ?? null);
+      // Compte désactivé par l'admin (offboarding) : traité comme « pas de profil »
+      // (la RLS refuse déjà tout côté serveur via est_membre()).
+      setProfil(data && data.actif !== false ? data : null);
       setProfilPret(true);
     })();
     return () => {

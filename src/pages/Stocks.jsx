@@ -311,7 +311,7 @@ export default function Stocks() {
                 autoFocus
                 value={form.nom}
                 onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))}
-                placeholder="ex. Amnesia"
+                placeholder="ex. Huile 10 % 10 ml"
               />
             </label>
             <div className="form-inline">

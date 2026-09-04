@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { urlLogo } from '../lib/logo';
-import { activerPush, etatPush, pushSupporte } from '../lib/push';
+import { activerPush, desactiverPush, etatPush, pushSupporte } from '../lib/push';
 import { JOURS_SEMAINE } from '../lib/horaires';
 import { urlPlan } from '../lib/plan';
 import QRClient from '../components/QRClient';
@@ -132,6 +132,18 @@ export default function Carte() {
       setMsg("Ajoute d'abord la carte à ton écran d'accueil pour activer les notifications.");
     } else {
       setMsg('Activation impossible pour le moment.');
+    }
+  }
+
+  async function desactiverNotifs() {
+    const { data } = await supabase.rpc('fidelite_token', { p_client: clientId, p_ttl_sec: 60 });
+    const token = data?.[0]?.token ?? etat.token;
+    const r = await desactiverPush(clientId, token);
+    if (r.ok) {
+      setPushEtat('inactif');
+      setMsg('🔕 Notifications désactivées.');
+    } else {
+      setMsg('Désactivation impossible pour le moment.');
     }
   }
 
@@ -367,7 +379,21 @@ export default function Carte() {
           </button>
         )}
         {!profil && pushEtat === 'actif' && (
-          <p className="statut">🔔 Notifications activées — tu seras prévenu des promos.</p>
+          <p className="statut">
+            🔔 Notifications activées — tu seras prévenu des promos.{' '}
+            <button type="button" className="btn btn-discret" onClick={desactiverNotifs}>
+              Désactiver
+            </button>
+          </p>
+        )}
+        {!profil && (
+          <p className="statut" style={{ fontSize: '0.8rem' }}>
+            🔒 Tes données (surnom, téléphone, tampons) sont gérées par {etat?.magasin || 'le magasin'} —
+            pour les modifier ou supprimer ta carte, adresse-toi au comptoir.{' '}
+            <Link to={`/confidentialite-carte?magasin=${encodeURIComponent(etat?.magasin || '')}`}>
+              Vos données & vos droits
+            </Link>
+          </p>
         )}
 
         {promos.length > 0 && (

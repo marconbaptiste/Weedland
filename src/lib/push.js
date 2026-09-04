@@ -64,3 +64,21 @@ export async function etatPush() {
     return 'inactif';
   }
 }
+
+// Retire l'abonnement push de CETTE carte sur cet appareil (retrait du
+// consentement, aussi simple que son octroi). Serveur : `push_desactiver`
+// exige le token courant de la carte + l'endpoint exact.
+export async function desactiverPush(clientId, token) {
+  if (!pushSupporte()) return { ok: false, raison: 'non-supporte' };
+  try {
+    const reg = await navigator.serviceWorker.getRegistration('/sw-push.js');
+    const sub = reg && (await reg.pushManager.getSubscription());
+    if (sub) {
+      await supabase.rpc('push_desactiver', { p_client: clientId, p_token: token, p_endpoint: sub.endpoint });
+      await sub.unsubscribe();
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, raison: e?.message || 'erreur' };
+  }
+}

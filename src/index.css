@@ -367,6 +367,13 @@ textarea:focus {
 .legal p {
   color: var(--texte);
 }
+.legal ul {
+  padding-left: 1.2rem;
+  color: var(--texte);
+}
+.legal li {
+  margin-bottom: 0.35rem;
+}
 .legal-maj {
   color: var(--texte-doux);
   font-size: 0.85rem;

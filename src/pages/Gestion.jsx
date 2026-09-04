@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { exporterMagasin } from '../lib/exportMagasin';
 import { useAuth } from '../auth/AuthProvider';
 import BoutonAbonnement from '../components/BoutonAbonnement';
 import GestionOptions from '../components/GestionOptions';
@@ -48,6 +50,15 @@ function sections(estSuperadmin, options) {
 
 export default function Gestion() {
   const { estSuperadmin, options } = useAuth();
+  const [enExport, setEnExport] = useState(false);
+  async function exporter() {
+    setEnExport(true);
+    try {
+      await exporterMagasin();
+    } finally {
+      setEnExport(false);
+    }
+  }
   return (
     <div className="page">
       <h1>Gestion</h1>
@@ -78,7 +89,25 @@ export default function Gestion() {
           </p>
           <BoutonAbonnement />
         </div>
+        <div className="card">
+          <p className="statut">
+            Tes données t’appartiennent : télécharge à tout moment une copie complète (JSON) de ton
+            magasin — clients, caisse, chromes, stocks, compta, équipe.
+          </p>
+          <button type="button" className="btn" onClick={exporter} disabled={enExport}>
+            {enExport ? 'Export…' : '⬇️ Exporter mes données'}
+          </button>
+        </div>
       </section>
+
+      <footer className="landing-pied">
+        <nav className="landing-liens">
+          <Link to="/cgv">CGV</Link>
+          <Link to="/cgu">CGU</Link>
+          <Link to="/confidentialite">Confidentialité</Link>
+          <Link to="/mentions-legales">Mentions légales</Link>
+        </nav>
+      </footer>
     </div>
   );
 }

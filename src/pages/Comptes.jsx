@@ -39,7 +39,7 @@ export default function Comptes() {
     const [{ data }, { data: aut }, { data: mag }] = await Promise.all([
       supabase
         .from('users')
-        .select('id, nom, role, pourcentage_interessement, horaires_fixes, email')
+        .select('id, nom, role, pourcentage_interessement, horaires_fixes, email, actif')
         .eq('magasin_id', magasinId)
         .order('nom'),
       supabase.from('comptes_autorises').select('email, role').eq('magasin_id', magasinId).order('email'),
@@ -68,6 +68,37 @@ export default function Comptes() {
   async function retirerEmail(email) {
     if (!window.confirm(`Retirer ${email} des comptes autorisés ?`)) return;
     await supabase.from('comptes_autorises').delete().eq('email', email).eq('magasin_id', magasinId);
+    charger();
+  }
+
+  // Offboarding : désactive (ou réactive) un compte via l'Edge Function —
+  // bannissement Auth + users.actif=false (la RLS refuse tout immédiatement)
+  // + retrait de l'allowlist. Le profil et son historique sont conservés.
+  async function basculerActif(u) {
+    const desactiver = u.actif !== false;
+    if (
+      desactiver &&
+      !window.confirm(
+        `Désactiver le compte de ${u.nom} ? Il ne pourra plus se connecter ni accéder aux données (réactivable plus tard).`,
+      )
+    )
+      return;
+    setStatut('');
+    const { data, error } = await supabase.functions.invoke('creer-employe', {
+      body: { action: desactiver ? 'desactiver-compte' : 'reactiver-compte', userId: u.id },
+    });
+    if (error || data?.error) {
+      let message = data?.error ?? 'Opération impossible.';
+      try {
+        const corps = await error?.context?.json();
+        if (corps?.error) message = corps.error;
+      } catch {
+        /* message générique */
+      }
+      setStatut(message);
+      return;
+    }
+    setStatut(desactiver ? 'Compte désactivé — accès coupé ✅' : 'Compte réactivé ✅');
     charger();
   }
 
@@ -357,7 +388,10 @@ export default function Comptes() {
           >
             <div className="modale-client" onClick={(e) => e.stopPropagation()}>
               <div className="modale-client-tete">
-                <strong>{u.nom || 'Employé'}</strong>
+                <strong>
+                  {u.nom || 'Employé'}
+                  {u.actif === false && <span className="badge badge-dette"> désactivé</span>}
+                </strong>
                 <button type="button" className="btn btn-discret" onClick={() => setGestion(null)}>
                   Fermer
                 </button>
@@ -409,13 +443,13 @@ export default function Comptes() {
                     🔑 Réinit. mot de passe
                   </button>
                 </div>
-                {u.email && (
+                {!estMoi && (
                   <button
                     type="button"
-                    className="btn btn-discret fiche-supprimer"
-                    onClick={() => retirerEmail(u.email)}
+                    className={`btn ${u.actif === false ? '' : 'btn-discret fiche-supprimer'}`}
+                    onClick={() => basculerActif(u)}
                   >
-                    🚫 Retirer l’accès (email autorisé)
+                    {u.actif === false ? '✅ Réactiver le compte' : '🚫 Désactiver le compte (retirer l’accès)'}
                   </button>
                 )}
                 {statut && <p className="statut">{statut}</p>}

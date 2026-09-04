@@ -62,7 +62,7 @@ export default function NotifierClients() {
             value={corps}
             onChange={(e) => setCorps(e.target.value)}
             maxLength={160}
-            placeholder="ex. -15% sur l’Amnesia du 5 au 8 juillet !"
+            placeholder="ex. -15 % sur les huiles 10 % du 5 au 8 juillet !"
           />
         </label>
         <button className="btn btn-primary" type="submit" disabled={envoi}>

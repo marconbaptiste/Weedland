@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
+import { VERSION_LEGAL } from '../lib/marque';
 
 // Page publique — inscription self-service d'un magasin (protégée par un code).
 // Crée le magasin + le compte administrateur via l'Edge Function, puis connecte.
@@ -15,6 +16,7 @@ export default function Inscription() {
     email: '',
     motDePasse: '',
   });
+  const [cgv, setCgv] = useState(false); // acceptation explicite (non pré-cochée)
   const [erreur, setErreur] = useState('');
   const [envoi, setEnvoi] = useState(false);
   const [succes, setSucces] = useState(false); // écran de félicitations
@@ -24,6 +26,10 @@ export default function Inscription() {
   async function soumettre(e) {
     e.preventDefault();
     setErreur('');
+    if (!cgv) {
+      setErreur('Merci d’accepter les CGV, les CGU et la politique de confidentialité pour continuer.');
+      return;
+    }
     setEnvoi(true);
     const { data, error } = await supabase.functions.invoke('creer-employe', {
       body: {
@@ -31,6 +37,8 @@ export default function Inscription() {
         ...form,
         code: form.code.trim(),
         email: form.email.trim().toLowerCase(),
+        cgv: true,
+        cgvVersion: VERSION_LEGAL,
       },
     });
     if (error || data?.error) {
@@ -146,10 +154,15 @@ export default function Inscription() {
           />
         </label>
         {erreur && <p className="message-erreur">{erreur}</p>}
-        <p className="statut">
-          En créant un magasin, tu acceptes les <Link to="/cgu">CGU</Link> et la{' '}
-          <Link to="/confidentialite">politique de confidentialité</Link>.
-        </p>
+        <label className="case-consent">
+          <input type="checkbox" checked={cgv} onChange={(e) => setCgv(e.target.checked)} required />
+          <span>
+            J’ai lu et j’accepte les <Link to="/cgv" target="_blank">CGV</Link>, les{' '}
+            <Link to="/cgu" target="_blank">CGU</Link> et la{' '}
+            <Link to="/confidentialite" target="_blank">politique de confidentialité</Link> (version
+            du {VERSION_LEGAL}). Essai gratuit 14 jours, sans carte bancaire.
+          </span>
+        </label>
         <button className="btn btn-primary" type="submit" disabled={envoi}>
           {envoi ? 'Création…' : 'Créer mon magasin'}
         </button>

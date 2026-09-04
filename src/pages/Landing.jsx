@@ -139,8 +139,10 @@ export default function Landing() {
         <Logo taille={18} />
         <span className="landing-copy">© {new Date().getFullYear()} Kanabiz</span>
         <nav className="landing-liens">
+          <Link to="/cgv">CGV</Link>
           <Link to="/cgu">CGU</Link>
           <Link to="/confidentialite">Confidentialité</Link>
+          <Link to="/mentions-legales">Mentions légales</Link>
         </nav>
       </footer>
     </div>

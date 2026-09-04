@@ -340,6 +340,29 @@ export default function Chromes() {
     );
   }
 
+  // Droit à l'effacement (RGPD) : efface les données personnelles de la fiche
+  // (surnom, téléphone, adresse, description, notifications, faveurs) et
+  // invalide sa carte, en CONSERVANT les avances/remboursements (obligation
+  // comptable). Utilisable même quand la suppression est bloquée par l'historique.
+  async function anonymiserClient() {
+    if (
+      !window.confirm(
+        `Anonymiser « ${clientSel.surnom} » ? Surnom, téléphone, adresse, description et notifications seront effacés définitivement ; l'historique comptable est conservé sans identité.`,
+      )
+    )
+      return;
+    const { error } = await supabase.rpc('client_anonymiser', { p_client: clientSel.client_id });
+    if (error) {
+      setMsgClient(`Anonymisation impossible : ${error.message}`);
+      return;
+    }
+    setClientSel(null);
+    setLignes([]);
+    setPromos([]);
+    setMsgClient('');
+    chargerClients();
+  }
+
   async function supprimerClient() {
     if (!window.confirm(`Supprimer définitivement la fiche « ${clientSel.surnom} » ?`)) return;
     const { error } = await supabase.from('clients').delete().eq('id', clientSel.client_id);
@@ -729,9 +752,19 @@ export default function Chromes() {
                     </button>
                   )}
                   {estAdmin && (
-                    <button type="button" className="btn btn-discret" onClick={supprimerClient}>
-                      Supprimer la fiche
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-discret"
+                        onClick={anonymiserClient}
+                        title="Efface les données personnelles, garde l'historique comptable (RGPD)"
+                      >
+                        🕶️ Anonymiser (RGPD)
+                      </button>
+                      <button type="button" className="btn btn-discret" onClick={supprimerClient}>
+                        Supprimer la fiche
+                      </button>
+                    </>
                   )}
                 </div>
               )}
