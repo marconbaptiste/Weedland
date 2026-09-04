@@ -1,41 +1,45 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { RequireAuth, RequireAdmin, RequireSuperadmin, RequireOption } from './components/Gardes';
 import { useAuth } from './auth/AuthProvider';
 import Layout from './components/Layout';
 import Landing from './pages/Landing';
-import CGU from './pages/CGU';
-import Confidentialite from './pages/Confidentialite';
 import Login from './pages/Login';
 import Inscription from './pages/Inscription';
-import Carte from './pages/Carte';
-import RejoindreCarte from './pages/RejoindreCarte';
 import Profil from './pages/Profil';
-import Caisse from './pages/Caisse';
-import Cloture from './pages/Cloture';
-import Historique from './pages/Historique';
-import Chromes from './pages/Chromes';
-import Commandes from './pages/Commandes';
-import Fidelite from './pages/Fidelite';
-import Stocks from './pages/Stocks';
-import Gestion from './pages/Gestion';
-import AProposMagasin from './pages/AProposMagasin';
-import Configuration from './pages/Configuration';
-import NouveauMotDePasse from './pages/NouveauMotDePasse';
-import Veille from './pages/Veille';
-import Paiements from './pages/Paiements';
-import Comptes from './pages/Comptes';
-import Promotions from './pages/Promotions';
-import Journal from './pages/Journal';
-import JournalModifs from './pages/JournalModifs';
-import Comptabilite from './pages/Comptabilite';
-import Plannings from './pages/Plannings';
-import Magasins from './pages/Magasins';
-import Pilote from './pages/Pilote';
-import Support from './pages/Support';
-import CGV from './pages/CGV';
-import MentionsLegales from './pages/MentionsLegales';
-import ConfidentialiteCarte from './pages/ConfidentialiteCarte';
-import Import from './pages/Import';
+
+// Pages chargées à la demande (code-splitting) : le premier écran ne télécharge
+// plus jsPDF, Tesseract, html5-qrcode… — seulement la page demandée.
+const CGU = lazy(() => import('./pages/CGU'));
+const Confidentialite = lazy(() => import('./pages/Confidentialite'));
+const Carte = lazy(() => import('./pages/Carte'));
+const RejoindreCarte = lazy(() => import('./pages/RejoindreCarte'));
+const Caisse = lazy(() => import('./pages/Caisse'));
+const Cloture = lazy(() => import('./pages/Cloture'));
+const Historique = lazy(() => import('./pages/Historique'));
+const Chromes = lazy(() => import('./pages/Chromes'));
+const Commandes = lazy(() => import('./pages/Commandes'));
+const Fidelite = lazy(() => import('./pages/Fidelite'));
+const Stocks = lazy(() => import('./pages/Stocks'));
+const Gestion = lazy(() => import('./pages/Gestion'));
+const AProposMagasin = lazy(() => import('./pages/AProposMagasin'));
+const Configuration = lazy(() => import('./pages/Configuration'));
+const NouveauMotDePasse = lazy(() => import('./pages/NouveauMotDePasse'));
+const Veille = lazy(() => import('./pages/Veille'));
+const Paiements = lazy(() => import('./pages/Paiements'));
+const Comptes = lazy(() => import('./pages/Comptes'));
+const Promotions = lazy(() => import('./pages/Promotions'));
+const Journal = lazy(() => import('./pages/Journal'));
+const JournalModifs = lazy(() => import('./pages/JournalModifs'));
+const Comptabilite = lazy(() => import('./pages/Comptabilite'));
+const Plannings = lazy(() => import('./pages/Plannings'));
+const Magasins = lazy(() => import('./pages/Magasins'));
+const Pilote = lazy(() => import('./pages/Pilote'));
+const Support = lazy(() => import('./pages/Support'));
+const CGV = lazy(() => import('./pages/CGV'));
+const MentionsLegales = lazy(() => import('./pages/MentionsLegales'));
+const ConfidentialiteCarte = lazy(() => import('./pages/ConfidentialiteCarte'));
+const Import = lazy(() => import('./pages/Import'));
 
 // Accueil (route index) : le super-admin atterrit sur le panneau pilote tant
 // qu'il n'a pas choisi de magasin pour cette session ; sinon vue normale.
@@ -49,6 +53,7 @@ function Accueil() {
 
 export default function App() {
   return (
+    <Suspense fallback={<p className="centre">Chargement…</p>}>
     <Routes>
       <Route path="/presentation" element={<Landing />} />
       <Route path="/cgu" element={<CGU />} />
@@ -119,5 +124,6 @@ export default function App() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   );
 }

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, lireTout } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatNombre, formatDateFr } from '../lib/format';
 import { premierDuMois, intervallePeriode } from '../lib/dates';
@@ -20,16 +20,24 @@ export default function Historique() {
     if (estAdmin) return undefined;
     let annule = false;
     (async () => {
+      // Paginé (`lireTout`) : tout l'historique de l'employé, au-delà des
+      // 1 000 lignes que PostgREST renvoie par défaut sans prévenir.
       const [{ data: p }, { data: chr }] = await Promise.all([
-        supabase
-          .from('v_interessement_employe')
-          .select('caisse_id, date, est_proprietaire, ca_jour, encaissements, ecart, heures_travaillees, interessement')
-          .eq('employe_id', utilisateur.id)
-          .order('date', { ascending: false }),
-        supabase
-          .from('chromes')
-          .select('date, type, montant, clients(surnom)')
-          .eq('employe_id', utilisateur.id),
+        lireTout(
+          supabase
+            .from('v_interessement_employe')
+            .select('caisse_id, date, est_proprietaire, ca_jour, encaissements, ecart, heures_travaillees, interessement')
+            .eq('employe_id', utilisateur.id)
+            .order('date', { ascending: false })
+            .order('caisse_id'),
+        ),
+        lireTout(
+          supabase
+            .from('chromes')
+            .select('date, type, montant, clients(surnom)')
+            .eq('employe_id', utilisateur.id)
+            .order('id'),
+        ),
       ]);
       if (annule) return;
       setPerso(p ?? []);
