@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatNombre, formatDateFr } from '../lib/format';
 import { premierDuMois, intervallePeriode } from '../lib/dates';
+import { somme } from '../lib/comptabilite';
 import ChampMontant from '../components/ChampMontant';
 
 // Module Historique.
@@ -60,7 +61,7 @@ export default function Historique() {
     const [cl, emps, chr] = await Promise.all([
       supabase
         .from('v_ca_jour')
-        .select('caisse_id, date, employe_id, ventes_directes, cb, especes, fond_caisse, avances, remboursements, ca_jour, encaissements, ecart')
+        .select('caisse_id, date, employe_id, ventes_directes, cb, especes, virements, fond_caisse, avances, remboursements, autres, ca_jour, encaissements, ecart')
         .gte('date', debut)
         .lte('date', fin)
         .order('date', { ascending: false }),
@@ -168,6 +169,7 @@ export default function Historique() {
     setEditForm({
       cb: String(c.cb),
       especes: String(c.especes),
+      virements: String(c.virements ?? 0),
       fond_caisse: String(c.fond_caisse),
       employe_id: c.employe_id,
     });
@@ -175,15 +177,26 @@ export default function Historique() {
   const majEdit = (champ) => (v) => setEditForm((f) => ({ ...f, [champ]: v }));
 
   async function enregistrerEdition(id) {
-    // CA recalculé automatiquement : ventes_directes = CB + espèces.
+    // CA recalculé automatiquement : ventes_directes = CB + espèces + virements
+    // (même convention que la Clôture — oublier les virements ici faisait
+    // chuter le CA de la journée à chaque correction).
+    const cb = parseMontant(editForm.cb);
+    const especes = parseMontant(editForm.especes);
+    const virements = parseMontant(editForm.virements);
+    const fond = parseMontant(editForm.fond_caisse);
+    if ([cb, especes, virements, fond].some((v) => v < 0)) {
+      setEditMsg('Les montants ne peuvent pas être négatifs.');
+      return;
+    }
     const { error } = await supabase
       .from('caisse_jour')
       .update({
         employe_id: editForm.employe_id,
-        ventes_directes: parseMontant(editForm.cb) + parseMontant(editForm.especes),
-        cb: parseMontant(editForm.cb),
-        especes: parseMontant(editForm.especes),
-        fond_caisse: parseMontant(editForm.fond_caisse),
+        ventes_directes: somme([cb, especes, virements]),
+        cb,
+        especes,
+        virements,
+        fond_caisse: fond,
       })
       .eq('id', id);
     if (error) {
@@ -266,6 +279,7 @@ export default function Historique() {
                 </label>
                 <ChampMontant label="Encaissements CB" valeur={editForm.cb} onChange={majEdit('cb')} />
                 <ChampMontant label="Espèces" valeur={editForm.especes} onChange={majEdit('especes')} />
+                <ChampMontant label="Virements / autres" valeur={editForm.virements} onChange={majEdit('virements')} />
                 <ChampMontant label="Fond de caisse" valeur={editForm.fond_caisse} onChange={majEdit('fond_caisse')} />
                 <div className="form-inline">
                   <button className="btn btn-primary" onClick={() => enregistrerEdition(c.caisse_id)}>Enregistrer</button>
@@ -282,6 +296,11 @@ export default function Historique() {
                     <span>CA</span><strong>{formatEuros(c.ca_jour)}</strong>
                     <span>CB</span><span>{formatEuros(c.cb)}</span>
                     <span>Espèces</span><span>{formatEuros(c.especes)}</span>
+                    {Number(c.virements) > 0 && (
+                      <>
+                        <span>Virements / autres</span><span>{formatEuros(c.virements)}</span>
+                      </>
+                    )}
                     <span>Fond de caisse</span><span>{formatEuros(c.fond_caisse)}</span>
                   </div>
                 ) : (

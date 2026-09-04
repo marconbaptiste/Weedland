@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useVerrou } from '../lib/verrou';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { parseMontant, formatEuros, formatDateFr } from '../lib/format';
@@ -24,6 +25,7 @@ const ORDRE_STATUT = { en_cours: 0, traitee: 1, envoyee: 2, annulee: 3 };
 const FORM_VIDE = { client_id: '', montant: '', payee: false, mode_paiement: 'cb', adresse: '', note: '' };
 
 export default function Commandes() {
+  const verrou = useVerrou();
   const [commandes, setCommandes] = useState([]);
   const [clients, setClients] = useState([]);
   const [charge, setCharge] = useState(false);
@@ -147,7 +149,7 @@ export default function Commandes() {
 
       {creationOuverte && (
         <div className="card">
-          <form className="form-chrome" onSubmit={creerCommande}>
+          <form className="form-chrome" onSubmit={(e) => verrou(() => creerCommande(e))}>
             <label className="field">
               <span>Client</span>
               <select autoFocus value={form.client_id} onChange={(e) => choisirClient(e.target.value)}>
@@ -161,7 +163,7 @@ export default function Commandes() {
             </label>
             <label className="field">
               <span>Montant</span>
-              <ChampMontant value={form.montant} onChange={(v) => setForm((f) => ({ ...f, montant: v }))} />
+              <ChampMontant valeur={form.montant} onChange={(v) => setForm((f) => ({ ...f, montant: v }))} />
             </label>
             <label className="field">
               <span>Adresse de livraison (pour cette commande)</span>

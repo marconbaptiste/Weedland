@@ -199,9 +199,15 @@ export default function Cloture() {
   async function enregistrer(e) {
     e.preventDefault();
     // Garde-fou : éviter d'enregistrer une clôture vide par erreur.
-    const rienEncaisse = cbNum + especesNum + virementsNum === 0;
+    const rienEncaisse = somme([cbNum, especesNum, virementsNum]) === 0;
     if (rienEncaisse && chromesJour.length === 0) {
       if (!window.confirm('Aucune vente saisie (0 €). Enregistrer quand même cette clôture ?')) return;
+    }
+    const fondNum = parseMontant(form.fond_caisse);
+    const heuresNum = parseMontant(form.heures_travaillees);
+    if ([cbNum, especesNum, virementsNum, fondNum, heuresNum].some((v) => v < 0)) {
+      setStatut('Les montants ne peuvent pas être négatifs.');
+      return;
     }
     setEnregistrement(true);
     setStatut('');
@@ -211,13 +217,12 @@ export default function Cloture() {
         {
           employe_id: utilisateur.id,
           date,
-          ventes_directes:
-            parseMontant(form.cb) + parseMontant(form.especes) + parseMontant(form.virements),
-          cb: parseMontant(form.cb),
-          especes: parseMontant(form.especes),
-          virements: parseMontant(form.virements),
-          fond_caisse: parseMontant(form.fond_caisse),
-          heures_travaillees: parseMontant(form.heures_travaillees),
+          ventes_directes: somme([cbNum, especesNum, virementsNum]),
+          cb: cbNum,
+          especes: especesNum,
+          virements: virementsNum,
+          fond_caisse: fondNum,
+          heures_travaillees: heuresNum,
           pourcentage_interessement: tauxParDefaut,
           commentaire: form.commentaire || null,
         },
@@ -235,21 +240,20 @@ export default function Cloture() {
 
     setCaisseId(ligne.id);
 
-    // Remplace les co-participants de cette clôture.
-    await supabase.from('caisse_partage').delete().eq('caisse_id', ligne.id);
-    if (partageurs.length > 0) {
-      const { error: errPartage } = await supabase.from('caisse_partage').insert(
-        partageurs.map((p) => ({
-          caisse_id: ligne.id,
-          employe_id: p.employe_id,
-          heures_travaillees: parseMontant(p.heures),
-        })),
-      );
-      if (errPartage) {
-        setEnregistrement(false);
-        setStatut(`Clôture enregistrée, mais partage en erreur : ${errPartage.message}`);
-        return;
-      }
+    // Remplace les co-participants de cette clôture en UNE transaction
+    // (`caisse_partage_set`) : plus de delete-puis-insert qui pouvait laisser
+    // la clôture sans co-participants (intéressement des collègues perdu).
+    const { error: errPartage } = await supabase.rpc('caisse_partage_set', {
+      p_caisse: ligne.id,
+      p_partageurs: partageurs.map((p) => ({
+        employe_id: p.employe_id,
+        heures_travaillees: parseMontant(p.heures),
+      })),
+    });
+    if (errPartage) {
+      setEnregistrement(false);
+      setStatut(`Clôture enregistrée, mais partage en erreur : ${errPartage.message}`);
+      return;
     }
 
     // Recharge depuis la base pour confirmer la persistance et rafraîchir le récap.

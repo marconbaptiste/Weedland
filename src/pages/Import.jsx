@@ -118,28 +118,16 @@ export default function Import() {
     setEnCours(true);
     setStatut('');
 
-    if (remplacer) {
-      const { error } = await supabase.from('chromes').delete().not('id', 'is', null);
-      if (error) { console.error('Import chromes — purge:', error); setEnCours(false); setStatut('Impossible de repartir de zéro. Réessaie.'); return; }
-    }
-
-    // Rattachement des clients par surnom (réutilise l'existant, crée les manquants).
-    const { data: clients } = await supabase.from('clients').select('id, surnom');
-    const map = new Map((clients ?? []).map((c) => [cleEntete(c.surnom), c.id]));
-    const manquants = [...new Set(chromes.map((l) => l.surnom))].filter((s) => !map.has(cleEntete(s)));
-    if (manquants.length) {
-      const { data: crees, error } = await supabase.from('clients').insert(manquants.map((surnom) => ({ surnom }))).select('id, surnom');
-      if (error) { console.error('Import chromes — clients:', error); setEnCours(false); setStatut('Impossible de créer les fiches clients manquantes. Réessaie.'); return; }
-      (crees ?? []).forEach((c) => map.set(cleEntete(c.surnom), c.id));
-    }
-
-    const rows = chromes.map((l) => ({
-      client_id: map.get(cleEntete(l.surnom)), type: l.type, montant: l.montant, date: l.date, employe_id: utilisateur.id,
-    }));
-    const { error } = await supabase.from('chromes').insert(rows);
+    // Import TRANSACTIONNEL côté serveur (`importer_chromes`) : rattachement des
+    // clients par surnom, purge éventuelle et insertion dans la même transaction.
+    // Plus aucun cas où l'historique est supprimé puis l'insertion échoue.
+    const { data, error } = await supabase.rpc('importer_chromes', {
+      p_lignes: chromes.map((l) => ({ surnom: l.surnom, type: l.type, montant: l.montant, date: l.date })),
+      p_remplacer: remplacer,
+    });
     setEnCours(false);
-    if (error) { console.error('Import chromes:', error); setStatut('Import impossible. Vérifie le fichier et réessaie.'); return; }
-    setStatut(`${rows.length} ligne(s) de chromes importée(s) pour ${manquants.length} nouveau(x) client(s).`);
+    if (error) { console.error('Import chromes:', error); setStatut(`Import impossible (rien n'a été modifié) : ${error.message}`); return; }
+    setStatut(`${data?.lignes ?? chromes.length} ligne(s) de chromes importée(s) pour ${data?.clients_crees ?? 0} nouveau(x) client(s).`);
     setChromes(null);
   }
 

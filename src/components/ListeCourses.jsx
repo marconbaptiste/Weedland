@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useVerrou } from '../lib/verrou';
 import { supabase } from '../lib/supabase';
 
 // Liste de courses partagée du magasin (to-do d'achats) : tout membre ajoute un
@@ -8,6 +9,7 @@ import { supabase } from '../lib/supabase';
 // flottant). `onMaj` est appelé après chaque modification (pour rafraîchir le
 // compteur du bouton flottant).
 export default function ListeCourses({ embarque = false, onMaj }) {
+  const verrou = useVerrou();
   const [articles, setArticles] = useState([]);
   const [nouveau, setNouveau] = useState('');
   const [ouvert, setOuvert] = useState(false);
@@ -68,7 +70,7 @@ export default function ListeCourses({ embarque = false, onMaj }) {
 
   const corps = (
     <>
-      <form className="form-inline" onSubmit={ajouter}>
+      <form className="form-inline" onSubmit={(e) => verrou(() => ajouter(e))}>
         <input
           type="text"
           placeholder="Ajouter un article à acheter…"
