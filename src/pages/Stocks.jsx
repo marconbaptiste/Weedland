@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { messageErreur } from '../lib/erreurs';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatNombre } from '../lib/format';
 import { somme } from '../lib/comptabilite';
@@ -141,7 +142,7 @@ export default function Stocks() {
       .select('id')
       .single();
     if (error) {
-      setStatut(`Ajout impossible : ${error.message}`);
+      setStatut(`Ajout impossible : ${messageErreur(error)}`);
       return;
     }
     if (quantite > 0) {
@@ -190,7 +191,7 @@ export default function Stocks() {
       })
       .eq('id', id);
     if (error) {
-      setStatut(`Modification impossible : ${error.message}`);
+      setStatut(`Modification impossible : ${messageErreur(error)}`);
       return;
     }
     // Le changement de quantité est journalisé côté serveur (trigger
@@ -206,7 +207,7 @@ export default function Stocks() {
     const produit = produits.find((p) => p.id === id);
     const { error } = await supabase.from('stocks').delete().eq('id', id);
     if (error) {
-      setStatut(`Suppression impossible : ${error.message}`);
+      setStatut(`Suppression impossible : ${messageErreur(error)}`);
       return;
     }
     if (produit && Number(produit.quantite) > 0) {
@@ -236,7 +237,7 @@ export default function Stocks() {
       p_motif: signe > 0 ? 'entree' : 'sortie',
     });
     if (error) {
-      setStatut(`Mouvement impossible : ${error.message}`);
+      setStatut(`Mouvement impossible : ${messageErreur(error)}`);
       return;
     }
     const nouvelle = Number(data ?? Math.max(0, arrondi(Number(p.quantite) + signe * d)));

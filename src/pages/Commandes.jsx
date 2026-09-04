@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useVerrou } from '../lib/verrou';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { messageErreur } from '../lib/erreurs';
 import { parseMontant, formatEuros, formatDateFr } from '../lib/format';
 import { urlPlan } from '../lib/plan';
 import ChampMontant from '../components/ChampMontant';
@@ -85,7 +86,7 @@ export default function Commandes() {
       note: form.note.trim() || null,
     });
     if (error) {
-      setMsg(`Création impossible : ${error.message}`);
+      setMsg(`Création impossible : ${messageErreur(error)}`);
       return;
     }
     setForm(FORM_VIDE);
@@ -96,7 +97,7 @@ export default function Commandes() {
 
   async function changerStatut(id, statut) {
     const { error } = await supabase.from('commandes').update({ statut }).eq('id', id);
-    if (error) setMsg(`Modification impossible : ${error.message}`);
+    if (error) setMsg(`Modification impossible : ${messageErreur(error)}`);
     else charger();
   }
 
@@ -106,7 +107,7 @@ export default function Commandes() {
       .update({ payee: true, mode_paiement: mode })
       .eq('id', id);
     setPaiementPour(null);
-    if (error) setMsg(`Encaissement impossible : ${error.message}`);
+    if (error) setMsg(`Encaissement impossible : ${messageErreur(error)}`);
     else charger();
   }
 
@@ -121,14 +122,14 @@ export default function Commandes() {
     if (saisie == null) return;
     const adresse = saisie.trim() || null;
     const { error } = await supabase.from('commandes').update({ adresse_livraison: adresse }).eq('id', c.id);
-    if (error) setMsg(`Modification impossible : ${error.message}`);
+    if (error) setMsg(`Modification impossible : ${messageErreur(error)}`);
     else charger();
   }
 
   async function supprimer(id) {
     if (!window.confirm('Supprimer cette commande ?')) return;
     const { error } = await supabase.from('commandes').delete().eq('id', id);
-    if (error) setMsg(`Suppression impossible : ${error.message}`);
+    if (error) setMsg(`Suppression impossible : ${messageErreur(error)}`);
     else charger();
   }
 
