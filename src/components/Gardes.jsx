@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { exporterMagasin } from '../lib/exportMagasin';
 import { OPTIONS_TARIFS } from '../lib/tarifs';
-import { EDITEUR } from '../lib/marque';
+import { EDITEUR, VERSION_LEGAL } from '../lib/marque';
 import BoutonAbonnement from './BoutonAbonnement';
 
 // Email de contact de l'exploitant, seulement s'il a été renseigné dans
@@ -198,18 +198,77 @@ function ConnexionImpossible() {
   );
 }
 
-/** Écran affiché à un utilisateur connecté mais sans profil (non autorisé). */
+/** Écran affiché à un utilisateur connecté mais sans profil : soit il attend
+ *  qu'un admin l'autorise (employé), soit il crée son propre magasin
+ *  (inscription publique — ex. arrivé par Google). */
 function CompteNonAutorise() {
-  const { utilisateur, deconnexion } = useAuth();
+  const { utilisateur, deconnexion, reessayerProfil } = useAuth();
+  const [nomMagasin, setNomMagasin] = useState('');
+  const [cgv, setCgv] = useState(false);
+  const [statut, setStatut] = useState('');
+  const [envoi, setEnvoi] = useState(false);
+  const confirme = Boolean(utilisateur?.email_confirmed_at || utilisateur?.confirmed_at);
+
+  async function creerMagasin(e) {
+    e.preventDefault();
+    if (!nomMagasin.trim()) return setStatut('Indique le nom de ton magasin.');
+    if (!cgv) return setStatut('Merci d’accepter les CGV pour continuer.');
+    setEnvoi(true);
+    setStatut('');
+    const { data, error } = await supabase.functions.invoke('creer-employe', {
+      body: { action: 'creer-magasin', nomMagasin: nomMagasin.trim(), cgvVersion: VERSION_LEGAL },
+    });
+    setEnvoi(false);
+    let detail = data?.error || error?.message;
+    try {
+      const c = await error?.context?.json?.();
+      if (c?.error) detail = c.error;
+    } catch {
+      /* corps illisible */
+    }
+    if (!data?.ok) return setStatut(detail || 'Création impossible pour le moment.');
+    return reessayerProfil();
+  }
+
   return (
     <div className="page-connexion">
       <div className="card carte-connexion">
-        <h1 className="logo-connexion">Accès non autorisé</h1>
+        <h1 className="logo-connexion">Bienvenue</h1>
         <p className="statut">
-          Le compte <strong>{utilisateur?.email}</strong> n’est pas autorisé à accéder à
-          l’application. Demande à l’administrateur d’ajouter ton adresse aux comptes autorisés.
+          Le compte <strong>{utilisateur?.email}</strong> n’est rattaché à aucun magasin pour le moment.
         </p>
-        <button className="btn" onClick={deconnexion}>
+        <p className="statut">
+          <strong>Tu es employé ?</strong> Demande à ton responsable d’ajouter ton adresse dans
+          Gestion → Comptes, puis clique sur « Réessayer ».
+        </p>
+        <button className="btn" onClick={reessayerProfil}>
+          🔄 Réessayer
+        </button>
+        {confirme && (
+          <form onSubmit={creerMagasin} className="bloc-form">
+            <p className="statut">
+              <strong>Tu es commerçant ?</strong> Crée ton magasin — essai gratuit 14 jours, toutes les
+              options.
+            </p>
+            <label className="field">
+              <span>Nom du magasin</span>
+              <input value={nomMagasin} onChange={(e) => setNomMagasin(e.target.value)} maxLength={80} />
+            </label>
+            <label className="case-consent">
+              <input type="checkbox" checked={cgv} onChange={(e) => setCgv(e.target.checked)} />
+              <span>
+                J’accepte les <Link to="/cgv" target="_blank">CGV</Link>, les{' '}
+                <Link to="/cgu" target="_blank">CGU</Link> et la{' '}
+                <Link to="/confidentialite" target="_blank">politique de confidentialité</Link>.
+              </span>
+            </label>
+            <button className="btn btn-primary" type="submit" disabled={envoi}>
+              {envoi ? 'Création…' : '🏪 Créer mon magasin'}
+            </button>
+          </form>
+        )}
+        {statut && <p className="statut">{statut}</p>}
+        <button className="btn btn-discret" onClick={deconnexion}>
           Se déconnecter
         </button>
       </div>

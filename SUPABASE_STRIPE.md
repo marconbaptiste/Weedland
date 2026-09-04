@@ -109,16 +109,28 @@ Edge Functions → Secrets :
 | `APP_PUBLIC_URL` | ex. `https://kanabiz.dev` |
 | `STRIPE_TAX_AUTO` | **`off`** (défaut) ou `on` — voir ci-dessous |
 
-### TVA (`STRIPE_TAX_AUTO`) — à trancher avec le comptable
+### TVA (`STRIPE_TAX_AUTO`) — DÉCISION : TVA facturée (`on`)
 
-- **`off` (défaut, aujourd'hui)** : rien ne change, les prix sont prélevés tels
-  quels (29 € = 29 €). Si tu es en **franchise en base**, ajoute la mention
-  « TVA non applicable, art. 293 B du CGI » en pied de facture dans le Dashboard.
-- **`on`** : Stripe Tax calcule la TVA automatiquement (prix HT, `tax_behavior:
-  exclusive` sur les nouveaux prix, adresse + n° de TVA client collectés au
-  Checkout). Prérequis : **enregistrer Stripe Tax pour la France** dans le
-  Dashboard (Settings → Tax). Redéployer `stripe-checkout` et `stripe-options`
-  après avoir posé le secret.
+Les prix affichés sont **HT** ; Stripe Tax ajoute la **TVA (20 %)** sur la
+facture, calculée d'après l'adresse de facturation collectée au Checkout
+(`tax_behavior: exclusive` sur les prix, n° de TVA du client demandé). À faire,
+dans l'ordre :
+
+1. Stripe → **Settings → Tax** → **Add registration** → France → date de début
+   (ton n° de TVA intracommunautaire doit figurer dans Settings → Business).
+2. Stripe → Settings → Tax → **Default tax behavior : Exclusive** (prix HT).
+3. Supabase → Edge Functions → Secrets → `STRIPE_TAX_AUTO` = `on`.
+4. Recoller/redéployer `stripe-checkout` et `stripe-options` : au prochain
+   Checkout ou à la prochaine option activée, un **nouveau prix « exclusive »**
+   est créé automatiquement (l'ancien prix garde son id pour les abonnés
+   existants, la `lookup_key` est transférée). Un abonnement déjà en cours voit
+   `automatic_tax` activé à sa prochaine bascule d'option (adresse de
+   facturation requise — sinon un avertissement est renvoyé dans Gestion).
+5. Vérifie une facture de test : ligne « TVA 20 % » présente, mentions
+   légales (SIRET, n° TVA) dans Settings → Invoice template.
+
+`off` (ancien défaut) = franchise en base : prix prélevés tels quels, ajouter
+« TVA non applicable, art. 293 B du CGI » en pied de facture.
 
 *(Les anciens secrets `STRIPE_PRICE_ID` / `STRIPE_PRICE_STOCK` / `_FIDELITE` /
 `_PLANNING` peuvent rester : ils ne servent plus qu'à retrouver — pour les

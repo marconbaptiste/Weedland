@@ -41,7 +41,12 @@ const TAX_AUTO = (Deno.env.get("STRIPE_TAX_AUTO") ?? "").trim().toLowerCase() ==
 async function prixParCle(stripe: Stripe, cle: string, montantCts: number, nom: string): Promise<string> {
   const l = await stripe.prices.list({ lookup_keys: [cle], limit: 1 });
   const actuel = l.data[0];
-  if (actuel && actuel.active && actuel.unit_amount === montantCts) return actuel.id;
+  // Réutilisé seulement s'il correspond : montant identique ET, si Stripe Tax est
+  // actif, prix déclaré HT (`tax_behavior: exclusive`) — sinon on en recrée un.
+  if (
+    actuel && actuel.active && actuel.unit_amount === montantCts &&
+    (!TAX_AUTO || actuel.tax_behavior === "exclusive")
+  ) return actuel.id;
   const cree = await stripe.prices.create({
     lookup_key: cle,
     transfer_lookup_key: true,

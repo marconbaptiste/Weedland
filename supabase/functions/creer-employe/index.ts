@@ -1,10 +1,15 @@
 // Edge Function : création de comptes + inscription self-service d'un magasin.
 // Déploiement : `supabase functions deploy creer-employe` (slug : creer-employe).
 //
-// Trois usages :
-//  - action 'inscription' : PUBLIC (pas d'auth). Crée un magasin + son admin,
-//    protégé par un code secret (Deno.env CODE_INSCRIPTION). Anti-spam.
+// Usages :
+//  - action 'creer-magasin' : compte CONNECTÉ dont l'email est CONFIRMÉ et qui
+//    n'a pas encore de profil (inscription publique : le front fait
+//    auth.signUp → email de confirmation → à la 1re connexion on crée le
+//    magasin + le profil admin). Preuve de possession de l'email = la
+//    confirmation Supabase Auth ; 1 magasin par email ; plafond global/jour.
 //  - action 'reset' : admin/superadmin — réinitialise le mot de passe d'un employé.
+//  - action 'desactiver-compte' / 'reactiver-compte' : offboarding.
+//  - action 'supprimer-magasin' : super-admin.
 //  - défaut : admin/superadmin — crée un compte employé/admin.
 //
 // Le trigger handle_new_user (schema) crée le profil public.users à partir de
@@ -35,117 +40,6 @@ Deno.serve(async (req) => {
     const corps = await req.json();
 
     // ----------------------------------------------------------------------
-    // 1) Inscription self-service d'un magasin (PUBLIC, protégée par un code).
-    // ----------------------------------------------------------------------
-    if (corps.action === 'inscription') {
-      const admin = createClient(url, serviceRole);
-      const codeSaisi = String(corps.code ?? '').trim();
-      const codeEnv = (Deno.env.get('CODE_INSCRIPTION') ?? '').trim();
-      const nomMagasin = String(corps.nomMagasin ?? '').trim().slice(0, 80);
-      const nom = String(corps.nom ?? '').trim().slice(0, 80);
-      const email = String(corps.email ?? '').trim().toLowerCase();
-      const motDePasse = String(corps.motDePasse ?? '');
-      // 1) Valider la saisie AVANT de consommer le code (un code n'est jamais
-      //    brûlé par une simple faute de frappe).
-      if (!nomMagasin || !nom || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        return json({ error: 'Magasin, nom et email (valide) sont requis.' }, 400);
-      }
-      if (motDePasse.length < 8) {
-        return json({ error: 'Mot de passe trop court (8 caractères minimum).' }, 400);
-      }
-      if (!codeSaisi) return json({ error: 'Code d’inscription invalide ou épuisé.' }, 403);
-      if (corps.cgv !== true) {
-        return json({ error: 'L’acceptation des CGV, CGU et de la politique de confidentialité est requise.' }, 400);
-      }
-      const cgvVersion = String(corps.cgvVersion ?? '').trim().slice(0, 20) || 'inconnue';
-      // Email déjà autorisé (donc déjà rattaché à un magasin) ?
-      const { data: deja } = await admin
-        .from('comptes_autorises')
-        .select('email')
-        .eq('email', email)
-        .maybeSingle();
-      if (deja) {
-        return json({ error: 'Cet email a déjà un magasin. Connecte-toi (ou « mot de passe oublié »).' }, 400);
-      }
-
-      // 2) Code valide s'il = secret env (code maître de l'exploitant) OU s'il est
-      //    CONSOMMÉ atomiquement dans codes_inscription (respecte plafond/expiration
-      //    → ferme la création de masse via un code fuité).
-      let codeValide = false;
-      let codeConsomme = false;
-      if (codeEnv && codeSaisi === codeEnv) {
-        codeValide = true;
-      } else {
-        const { data: ok } = await admin.rpc('consommer_code_inscription', { p_code: codeSaisi });
-        codeValide = ok === true;
-        codeConsomme = codeValide;
-      }
-      if (!codeValide) {
-        return json({ error: 'Code d’inscription invalide ou épuisé.' }, 403);
-      }
-
-      // 3) Création : magasin → allowlist → compte. Chaque étape suivante qui
-      //    échoue ANNULE les précédentes (pas de magasin orphelin, pas d'email
-      //    verrouillé, code restitué) : le commerçant peut simplement réessayer.
-      let magasinId: string | null = null;
-      const annuler = async () => {
-        if (magasinId) {
-          await admin.from('comptes_autorises').delete().eq('email', email).eq('magasin_id', magasinId);
-          await admin.from('magasins').delete().eq('id', magasinId);
-        }
-        if (codeConsomme) await admin.rpc('rendre_code_inscription', { p_code: codeSaisi });
-      };
-      const { data: mag, error: errMag } = await admin
-        .from('magasins')
-        .insert({ nom: nomMagasin, cgv_version: cgvVersion, cgv_acceptees_le: new Date().toISOString() })
-        .select('id')
-        .single();
-      if (errMag || !mag) {
-        await annuler();
-        console.error('inscription magasin:', errMag);
-        return json({ error: 'Création du magasin impossible. Réessaie dans un instant.' }, 500);
-      }
-      magasinId = mag.id;
-
-      const { error: errAuth } = await admin
-        .from('comptes_autorises')
-        .insert({ email, role: 'admin', magasin_id: mag.id });
-      if (errAuth) {
-        await annuler();
-        console.error('inscription allowlist:', errAuth);
-        return json({ error: 'Création du compte impossible. Réessaie dans un instant.' }, 500);
-      }
-
-      // Compte Supabase Auth déjà existant pour cet email (ex. 1re connexion
-      // Google avant l'inscription) : on ne touche pas à son mot de passe (on
-      // n'a aucune preuve que l'appelant possède cet email). L'email est
-      // maintenant autorisé en admin du nouveau magasin : à sa prochaine
-      // connexion, `reclamer_profil()` lui crée son profil (AuthProvider).
-      const { data: existe } = await admin.rpc('auth_email_existe', { p_email: email });
-      if (existe === true) {
-        return json({ ok: true, compteExistant: true }, 200);
-      }
-
-      // Créer le compte (le trigger handle_new_user crée le profil admin + magasin).
-      const { error: errUser } = await admin.auth.admin.createUser({
-        email,
-        password: motDePasse,
-        email_confirm: true,
-        user_metadata: { nom, role: 'admin' },
-      });
-      if (errUser) {
-        await annuler();
-        console.error('inscription createUser:', errUser);
-        const msg = /password/i.test(errUser.message)
-          ? 'Mot de passe refusé : choisis-en un plus long ou plus varié.'
-          : 'Création du compte impossible. Réessaie dans un instant.';
-        return json({ error: msg }, 400);
-      }
-
-      return json({ ok: true }, 200);
-    }
-
-    // ----------------------------------------------------------------------
     // 2) Reste : réservé aux administrateurs (et super-admin).
     // ----------------------------------------------------------------------
     const authHeader = req.headers.get('Authorization') ?? '';
@@ -163,9 +57,68 @@ Deno.serve(async (req) => {
       .from('users')
       .select('role, magasin_id, actif')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
     if (profil?.actif === false) return json({ error: 'Compte désactivé' }, 403);
-    if (profil?.role !== 'admin' && profil?.role !== 'superadmin') {
+
+    // ----------------------------------------------------------------------
+    // 1) Inscription publique — création du magasin par un compte confirmé.
+    // ----------------------------------------------------------------------
+    if (corps.action === 'creer-magasin') {
+      if (profil) return json({ error: 'Ce compte a déjà un magasin.' }, 400);
+      if (!user.email_confirmed_at && !user.confirmed_at) {
+        return json({ error: 'Confirme d’abord ton adresse email (lien reçu par email).' }, 403);
+      }
+      const email = String(user.email ?? '').toLowerCase();
+      const meta = user.user_metadata ?? {};
+      const nomMagasin = String(corps.nomMagasin ?? meta.nomMagasin ?? '').trim().slice(0, 80);
+      const nom = String(corps.nom ?? meta.nom ?? meta.full_name ?? meta.name ?? email.split('@')[0]).trim().slice(0, 80);
+      const cgvVersion = String(corps.cgvVersion ?? meta.cgvVersion ?? '').trim().slice(0, 20);
+      if (!nomMagasin) return json({ error: 'Le nom du magasin est requis.' }, 400);
+      if (!cgvVersion) return json({ error: 'L’acceptation des CGV est requise.' }, 400);
+      // Email déjà rattaché à un magasin (autorisé par un admin) ? → le profil se
+      // crée par reclamer_profil(), pas ici.
+      const { data: deja } = await admin.from('comptes_autorises').select('magasin_id').eq('email', email).maybeSingle();
+      if (deja) return json({ error: 'Cet email est déjà rattaché à un magasin : reconnecte-toi.' }, 400);
+      // Plafond global anti-création de masse (bots) : 40 nouveaux magasins / jour.
+      const depuis = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const { count } = await admin.from('magasins').select('id', { count: 'exact', head: true }).gte('created_at', depuis);
+      if ((count ?? 0) >= 40) {
+        console.error('creer-magasin: plafond quotidien atteint');
+        return json({ error: 'Trop d’inscriptions aujourd’hui, réessaie demain.' }, 429);
+      }
+
+      const { data: mag, error: errMag } = await admin
+        .from('magasins')
+        .insert({ nom: nomMagasin, cgv_version: cgvVersion, cgv_acceptees_le: new Date().toISOString() })
+        .select('id')
+        .single();
+      if (errMag || !mag) {
+        console.error('creer-magasin magasin:', errMag);
+        return json({ error: 'Création du magasin impossible. Réessaie dans un instant.' }, 500);
+      }
+      const { error: errAuth } = await admin
+        .from('comptes_autorises')
+        .insert({ email, role: 'admin', magasin_id: mag.id });
+      const { error: errProfil } = errAuth
+        ? { error: errAuth }
+        : await admin.from('users').insert({
+            id: user.id,
+            nom,
+            role: 'admin',
+            pourcentage_interessement: 0,
+            magasin_id: mag.id,
+            email,
+          });
+      if (errProfil) {
+        await admin.from('comptes_autorises').delete().eq('email', email).eq('magasin_id', mag.id);
+        await admin.from('magasins').delete().eq('id', mag.id);
+        console.error('creer-magasin profil:', errProfil);
+        return json({ error: 'Création du compte impossible. Réessaie dans un instant.' }, 500);
+      }
+      return json({ ok: true, magasinId: mag.id }, 200);
+    }
+
+    if (!profil || (profil.role !== 'admin' && profil.role !== 'superadmin')) {
       return json({ error: 'Accès réservé aux administrateurs' }, 403);
     }
 

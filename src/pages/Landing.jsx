@@ -41,7 +41,7 @@ const PACKS_LANDING = [
 ];
 
 const ETAPES = [
-  { n: '1', titre: 'Crée ton magasin', texte: 'Inscris-toi avec ton code et ouvre ta boutique en quelques secondes.' },
+  { n: '1', titre: 'Crée ton magasin', texte: 'Inscris-toi avec ton email et ouvre ta boutique en quelques secondes — sans carte bancaire.' },
   { n: '2', titre: 'Ajoute ton équipe', texte: 'Crée les comptes de tes employés, tes produits et tes clients.' },
   { n: '3', titre: 'Encaisse & suis', texte: 'Tes employés clôturent la caisse ; toi, tu suis le CA et le bénéfice.' },
 ];
@@ -99,7 +99,7 @@ export default function Landing() {
         <h2>Des tarifs simples, à la carte</h2>
         <p className="landing-sous">
           Un socle accessible, des options que tu actives quand tu en as besoin — sans engagement,
-          essai 14 jours. Prix HT / mois / magasin.
+          essai 14 jours. Prix HT / mois / magasin (TVA 20 % en sus).
         </p>
         <div className="tarifs-grille">
           {PACKS_LANDING.map((p) => (

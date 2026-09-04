@@ -165,7 +165,7 @@ export default function GestionOptions() {
     <div className="card">
       <h2>Abonnement & options</h2>
       <p className="statut">
-        Socle <strong>Comptoir — {SOCLE} € HT/mois</strong> : caisse, clôtures, dettes clients,
+        Socle <strong>Comptoir — {SOCLE} € HT/mois</strong> (TVA 20 % en sus) : caisse, clôtures, dettes clients,
         fiches, journal, comptes équipe. Ajoute les options quand tu veux.
       </p>
 
@@ -210,7 +210,7 @@ export default function GestionOptions() {
       {abonne ? (
         <>
           <p className="periode-info">
-            Total actuel : <strong>{formatEuros(total)} HT/mois</strong>
+            Total actuel : <strong>{formatEuros(total)} HT/mois</strong> (+ TVA)
             {pack && (
               <>
                 {' '}

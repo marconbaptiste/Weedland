@@ -47,7 +47,8 @@ export default function CGV() {
       <p>
         Plafonds de prix («&nbsp;packs&nbsp;»), appliqués automatiquement&nbsp;:{' '}
         {PACKS.map((p) => `${p.nom} ${p.prix} € HT/mois`).join(' · ')}. Les prix s’entendent hors
-        taxes&nbsp;; la TVA applicable est ajoutée sur la facture ({EDITEUR.tva}). L’Éditeur peut
+        taxes&nbsp;; la <strong>TVA au taux en vigueur (20 %)</strong> est ajoutée sur la facture, calculée
+        automatiquement selon l’adresse de facturation (n° de TVA de l’Éditeur&nbsp;: {EDITEUR.tva}). L’Éditeur peut
         modifier ses tarifs avec un préavis de 30 jours notifié dans le Service ou par email&nbsp;; le
         Magasin peut alors résilier sans frais avant l’entrée en vigueur.
       </p>

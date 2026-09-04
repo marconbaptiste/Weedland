@@ -63,6 +63,14 @@ export function AuthProvider({ children }) {
         const { data: ok } = await supabase.rpc('reclamer_profil');
         if (ok === true) ({ data, error } = await lire());
       }
+      // Inscription publique : le compte vient de confirmer son email et porte
+      // le nom du magasin choisi à l'inscription → on crée magasin + profil admin
+      // (Edge Function `creer-magasin`, qui revérifie l'email confirmé).
+      const u = session.user;
+      if (!error && !data && u.user_metadata?.nomMagasin && (u.email_confirmed_at || u.confirmed_at)) {
+        const { data: r } = await supabase.functions.invoke('creer-employe', { body: { action: 'creer-magasin' } });
+        if (r?.ok) ({ data, error } = await lire());
+      }
       if (!actif) return;
       // Une ERREUR de lecture (réseau, Supabase indisponible) n'est pas « pas de
       // profil » : on l'affiche comme telle au lieu de « Accès non autorisé ».
