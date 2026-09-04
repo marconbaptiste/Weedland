@@ -30,8 +30,8 @@ export default function NouveauMotDePasse() {
   async function soumettre(e) {
     e.preventDefault();
     setErreur('');
-    if (mdp.length < 6) {
-      setErreur('Le mot de passe doit faire au moins 6 caractères.');
+    if (mdp.length < 8) {
+      setErreur('Le mot de passe doit faire au moins 8 caractères.');
       return;
     }
     if (mdp !== mdp2) {
@@ -71,7 +71,7 @@ export default function NouveauMotDePasse() {
                 autoComplete="new-password"
                 required
               />
-              <small className="champ-aide">6 caractères minimum.</small>
+              <small className="champ-aide">8 caractères minimum.</small>
             </label>
             <label className="field">
               <span>Confirme le mot de passe</span>

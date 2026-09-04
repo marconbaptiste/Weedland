@@ -99,8 +99,9 @@ export default function Magasins() {
 
   // --- Codes ---
   async function genererCode() {
-    const alpha = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const code = Array.from({ length: 8 }, () => alpha[Math.floor(Math.random() * alpha.length)]).join('');
+    const alpha = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 32 symboles → un octet aléatoire par caractère (sans biais)
+    const octets = crypto.getRandomValues(new Uint8Array(8));
+    const code = Array.from(octets, (o) => alpha[o % alpha.length]).join('');
     await supabase.from('codes_inscription').insert({ code });
     charger();
   }

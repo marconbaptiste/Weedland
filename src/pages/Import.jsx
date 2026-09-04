@@ -197,18 +197,11 @@ export default function Import() {
       }
     }
     for (const u of aMaj) {
-      const { error } = await supabase.from('stocks').update({ quantite: u.quantite }).eq('id', u.id);
+      if (!u.delta) continue;
+      // Réappro ATOMIQUE et journalisée côté serveur (`stock_mouvement`, motif
+      // import) : pas de lecture-modification-écriture, pas de double trace.
+      const { error } = await supabase.rpc('stock_mouvement', { p_id: u.id, p_delta: u.delta, p_motif: 'import' });
       if (error) { console.error('Import stocks — réappro:', error); erreurs.push('réappro'); break; }
-      // Trace la variation apportée par l'import (delta = ce qui a été ajouté).
-      if (u.delta) {
-        await journaliserMouvement({
-          stock_id: u.id,
-          produit: u.nom,
-          delta: u.delta,
-          quantite_apres: u.quantite,
-          motif: 'import',
-        });
-      }
     }
     setEnCours(false);
     if (erreurs.length) { setStatut(`Import impossible (${erreurs.join(', ')}). Vérifie le fichier et réessaie.`); return; }
