@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useVerrou } from '../lib/verrou';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
@@ -27,6 +28,7 @@ const formatHeure = (iso) => {
 // RGPD : les clients sont identifiés par un SURNOM uniquement, jamais par leur
 // nom/prénom réel. La description est interne (visible seulement du personnel).
 export default function Chromes() {
+  const verrou = useVerrou(); // anti-double tap (avance/client/tampon/faveur)
   const { utilisateur, estAdmin, magasinId, options } = useAuth();
   const { invite, elementInvite } = useInvite();
   const [recherche, setRecherche] = useState('');
@@ -562,7 +564,7 @@ export default function Chromes() {
           </ul>
 
           {creationOuverte ? (
-            <form className="form-chrome" onSubmit={creerClient}>
+            <form className="form-chrome" onSubmit={(e) => verrou(() => creerClient(e))}>
               <label className="field">
                 <span>Surnom</span>
                 <input
@@ -739,7 +741,7 @@ export default function Chromes() {
                 <div className="entete-client">
                   <h3>💸 Chromes — avances / remboursements</h3>
                 </div>
-                <form className="form-chrome" onSubmit={ajouterLigne}>
+                <form className="form-chrome" onSubmit={(e) => verrou(() => ajouterLigne(e))}>
                   <div className="bascule">
                     <button
                       type="button"
@@ -955,7 +957,7 @@ export default function Chromes() {
                   </div>
                 ) : (
                   <div className="form-inline">
-                    <button type="button" className="btn btn-primary" onClick={ajouterTampon}>
+                    <button type="button" className="btn btn-primary" onClick={() => verrou(ajouterTampon)}>
                       + 1 tampon
                     </button>
                     <button type="button" className="btn btn-discret" onClick={retirerTampon}>
@@ -988,7 +990,7 @@ export default function Chromes() {
                     ))}
                   </div>
                 )}
-                <form className="form-inline" onSubmit={creerPromo}>
+                <form className="form-inline" onSubmit={(e) => verrou(() => creerPromo(e))}>
                   <input
                     placeholder="ex. -10% sur tout, 1 g offert…"
                     value={nouvellePromo.description}

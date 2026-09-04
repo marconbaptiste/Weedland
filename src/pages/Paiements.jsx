@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useVerrou } from '../lib/verrou';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatDateFr } from '../lib/format';
@@ -8,6 +9,7 @@ import ChampMontant from '../components/ChampMontant';
 
 // Module 3 — Paiements employés (réservé admin). Total par employé / mois courant.
 export default function Paiements() {
+  const verrou = useVerrou();
   const { magasinId } = useAuth();
   const [employes, setEmployes] = useState([]);
   const [paiements, setPaiements] = useState([]);
@@ -125,7 +127,7 @@ export default function Paiements() {
           aria-label="Nouveau paiement"
           onClick={() => setAjoutOuvert(false)}
         >
-          <form className="modale-client" onClick={(e) => e.stopPropagation()} onSubmit={ajouter}>
+          <form className="modale-client" onClick={(e) => e.stopPropagation()} onSubmit={(e) => verrou(() => ajouter(e))}>
             <div className="modale-client-tete">
               <strong>Nouveau paiement</strong>
               <button type="button" className="btn btn-discret" onClick={() => setAjoutOuvert(false)}>

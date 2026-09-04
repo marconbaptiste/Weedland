@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { aujourdhuiISO } from '../lib/dates';
 
 const AuthContext = createContext(null);
 
@@ -126,7 +127,7 @@ export function AuthProvider({ children }) {
   }, [rechargerMagasin]);
 
   const estSuperadmin = profil?.role === 'superadmin';
-  const aujourdHui = new Date().toISOString().slice(0, 10);
+  const aujourdHui = aujourdhuiISO(); // date LOCALE (pas UTC : cohérent avec le bandeau)
   const essaiDepasse =
     magasinInfo?.abonnement === 'essai' && !!magasinInfo?.essai_fin && magasinInfo.essai_fin < aujourdHui;
   // Période d'essai « app » (14 j posés à l'inscription, pas encore d'abonnement
