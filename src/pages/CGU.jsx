@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { NOM, EDITEUR } from '../lib/marque';
+import { NOM, EDITEUR, VERSION_LEGAL } from '../lib/marque';
 
 // Conditions Générales d'Utilisation — MODÈLE à faire valider par un juriste.
 export default function CGU() {
@@ -11,7 +11,7 @@ export default function CGU() {
       </header>
 
       <h1>Conditions Générales d’Utilisation</h1>
-      <p className="legal-maj">Dernière mise à jour : {new Date().toLocaleDateString('fr-FR')}</p>
+      <p className="legal-maj">Version du {VERSION_LEGAL}</p>
 
       <div className="legal-avis">
         ⚠️ Modèle fourni à titre indicatif. À faire vérifier et compléter par un professionnel du
@@ -97,7 +97,9 @@ export default function CGU() {
       <footer className="landing-pied">
         <nav className="landing-liens">
           <Link to="/presentation">Accueil</Link>
+          <Link to="/cgv">CGV</Link>
           <Link to="/confidentialite">Confidentialité</Link>
+          <Link to="/mentions-legales">Mentions légales</Link>
         </nav>
       </footer>
     </div>

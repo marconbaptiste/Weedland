@@ -54,6 +54,10 @@ Deno.serve(async (req) => {
         return json({ error: 'Mot de passe trop court (8 caractères minimum).' }, 400);
       }
       if (!codeSaisi) return json({ error: 'Code d’inscription invalide ou épuisé.' }, 403);
+      if (corps.cgv !== true) {
+        return json({ error: 'L’acceptation des CGV, CGU et de la politique de confidentialité est requise.' }, 400);
+      }
+      const cgvVersion = String(corps.cgvVersion ?? '').trim().slice(0, 20) || 'inconnue';
       // Email déjà autorisé (donc déjà rattaché à un magasin) ?
       const { data: deja } = await admin
         .from('comptes_autorises')
@@ -93,7 +97,7 @@ Deno.serve(async (req) => {
       };
       const { data: mag, error: errMag } = await admin
         .from('magasins')
-        .insert({ nom: nomMagasin })
+        .insert({ nom: nomMagasin, cgv_version: cgvVersion, cgv_acceptees_le: new Date().toISOString() })
         .select('id')
         .single();
       if (errMag || !mag) {
@@ -157,14 +161,17 @@ Deno.serve(async (req) => {
     const admin = createClient(url, serviceRole);
     const { data: profil } = await admin
       .from('users')
-      .select('role, magasin_id')
+      .select('role, magasin_id, actif')
       .eq('id', user.id)
       .single();
+    if (profil?.actif === false) return json({ error: 'Compte désactivé' }, 403);
     if (profil?.role !== 'admin' && profil?.role !== 'superadmin') {
       return json({ error: 'Accès réservé aux administrateurs' }, 403);
     }
 
     // 2a. Suppression d'un magasin et de toutes ses données (super-admin).
+    //     Purge SQL transactionnelle (magasin_purger : toutes les tables dans
+    //     l'ordre des dépendances), puis comptes Auth et fichiers Storage.
     if (corps.action === 'supprimer-magasin') {
       if (profil.role !== 'superadmin') return json({ error: 'Réservé au super-admin' }, 403);
       const magasinId = String(corps.magasinId ?? '');
@@ -173,18 +180,70 @@ Deno.serve(async (req) => {
       if (moi?.magasin_id === magasinId) {
         return json({ error: 'Bascule sur un autre magasin avant de supprimer celui-ci.' }, 400);
       }
-      const tables = ['caisse_jour', 'chromes', 'promos', 'stocks', 'charges', 'fournisseurs', 'paiements_employes', 'clients'];
-      for (const t of tables) {
-        const { error: errDel } = await admin.from(t).delete().eq('magasin_id', magasinId);
-        if (errDel) return json({ error: `${t}: ${errDel.message}` }, 400);
+      const { data: membres } = await admin.from('users').select('id, role').eq('magasin_id', magasinId);
+      if ((membres ?? []).some((m) => m.role === 'superadmin')) {
+        return json({ error: 'Ce magasin héberge un compte superadmin : déplace-le d’abord.' }, 400);
       }
-      const { data: membres } = await admin.from('users').select('id').eq('magasin_id', magasinId);
+      const { error: errPurge } = await admin.rpc('magasin_purger', { p_id: magasinId });
+      if (errPurge) {
+        console.error('supprimer-magasin purge:', errPurge);
+        return json({ error: 'Suppression impossible (données). Rien n’a été supprimé.' }, 500);
+      }
       for (const membre of membres ?? []) {
-        await admin.auth.admin.deleteUser(membre.id);
+        const { error: errDel } = await admin.auth.admin.deleteUser(membre.id);
+        if (errDel) console.error('supprimer-magasin deleteUser:', membre.id, errDel.message);
       }
-      await admin.from('comptes_autorises').delete().eq('magasin_id', magasinId);
-      const { error: errMag } = await admin.from('magasins').delete().eq('id', magasinId);
-      if (errMag) return json({ error: errMag.message }, 400);
+      // Fichiers : justificatifs/<magasin>/… et logos/<magasin>/…
+      for (const bucket of ['justificatifs', 'logos']) {
+        try {
+          const chemins: string[] = [];
+          const { data: dossiers } = await admin.storage.from(bucket).list(magasinId, { limit: 1000 });
+          for (const d of dossiers ?? []) {
+            if (d.id) {
+              chemins.push(`${magasinId}/${d.name}`);
+            } else {
+              const { data: fichiers } = await admin.storage.from(bucket).list(`${magasinId}/${d.name}`, { limit: 1000 });
+              for (const f of fichiers ?? []) chemins.push(`${magasinId}/${d.name}/${f.name}`);
+            }
+          }
+          if (chemins.length) await admin.storage.from(bucket).remove(chemins);
+        } catch (e) {
+          console.error('supprimer-magasin storage', bucket, e);
+        }
+      }
+      return json({ ok: true }, 200);
+    }
+
+    // 2b. Désactivation / réactivation d'un compte employé (offboarding).
+    //     Désactiver = bannir le compte Auth (plus de connexion ni de refresh)
+    //     + users.actif=false (est_membre()/est_admin() → toute la RLS refuse
+    //     immédiatement, même avec un JWT encore valide) + retrait de l'allowlist.
+    //     Le profil est conservé (historique des clôtures/chromes référencé).
+    if (corps.action === 'desactiver-compte' || corps.action === 'reactiver-compte') {
+      const userId = String(corps.userId ?? '');
+      if (!userId) return json({ error: 'userId requis' }, 400);
+      if (userId === user.id) return json({ error: 'Impossible sur son propre compte.' }, 400);
+      const { data: cible } = await admin.from('users').select('magasin_id, role, email').eq('id', userId).single();
+      if (!cible || cible.role === 'superadmin') return json({ error: 'Compte introuvable' }, 404);
+      if (profil.role !== 'superadmin' && cible.magasin_id !== profil.magasin_id) {
+        return json({ error: 'Compte hors de votre magasin' }, 403);
+      }
+      const desactiver = corps.action === 'desactiver-compte';
+      const { error: errBan } = await admin.auth.admin.updateUserById(userId, {
+        ban_duration: desactiver ? '876600h' : 'none',
+      });
+      if (errBan) {
+        console.error('desactiver-compte ban:', errBan);
+        return json({ error: 'Opération impossible. Réessaie.' }, 500);
+      }
+      await admin.from('users').update({ actif: !desactiver }).eq('id', userId);
+      if (desactiver && cible.email) {
+        await admin.from('comptes_autorises').delete().eq('email', cible.email).eq('magasin_id', cible.magasin_id);
+      } else if (!desactiver && cible.email) {
+        await admin
+          .from('comptes_autorises')
+          .upsert({ email: cible.email, role: cible.role === 'admin' ? 'admin' : 'employe', magasin_id: cible.magasin_id }, { onConflict: 'email' });
+      }
       return json({ ok: true }, 200);
     }
 

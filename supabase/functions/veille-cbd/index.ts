@@ -244,6 +244,7 @@ async function genererEtInserer(svc: SupabaseClient, magasinId: string | null, p
   const finJson =
     "Regles STRICTES : " +
     "0) Bulletin PRIVE et propre a CETTE boutique. Sources PUBLIQUES uniquement. N'invente aucun 'deal', tarif ou accord fournisseur, ne suppose rien sur les secrets d'autres boutiques. " +
+    "0bis) LEGALITE : ne propose JAMAIS en 'produit', 'opportunite' ou 'fournisseur' un produit contenant une molecule classee STUPEFIANT ou interdite en France (statut 'interdit' dans la reference, ex. HHC, HHCO, HHCP, THCP, H4CBD…) ni de statut incertain ('gris') : ces molecules ne peuvent apparaitre qu'en categorie reglementaire (interdit/a_suivre). Aucune allegation therapeutique. " +
     "1) N'INVENTE RIEN : chaque item vient d'une source reelle ; recopie l'URL (source_url), le media (source_nom) et la date si visible. " +
     "2) Categories : 'produit' = un produit/gamme precis qui sort (vendable en boutique) ; 'fournisseur' = grossiste/marque/distributeur/salon avec une nouveaute ; 'opportunite' = molecule/produit qui monte et que la boutique ne vend pas encore ; 'interdit'/'autorise'/'a_suivre' = reglementaire. " +
     "Rends UNIQUEMENT un JSON strict, sans texte autour. Ecris TROIS syntheses courtes en francais (1 a 2 phrases chacune, vide si rien) : 'intro' = synthese generale du jour ; 'synthese_produits' = nouveautes produits & fournisseurs ; 'synthese_reglementation' = legal & reglementaire. Puis 'items' = le detail source par source. Forme EXACTE : " +
@@ -287,6 +288,16 @@ async function genererEtInserer(svc: SupabaseClient, magasinId: string | null, p
 
   const catsOk = new Set(["interdit", "autorise", "a_suivre", "produit", "fournisseur", "opportunite"]);
   const dateParLien = new Map(top.map((t) => [t.lien, t.date]));
+  // Garde serveur (independante du prompt) : un item COMMERCIAL qui cite une
+  // molecule interdite/grise de la reference est requalifie en 'a_suivre'
+  // (jamais de suggestion d'achat d'un produit stupefiant).
+  const codesInterdits = (molRef ?? [])
+    .filter((m: { code: string; statut: string }) => m.statut === "interdit" || m.statut === "gris")
+    .map((m: { code: string }) => String(m.code).toUpperCase());
+  const citeInterdit = (texte: string) => {
+    const t = texte.toUpperCase().replace(/[\s\-]/g, "");
+    return codesInterdits.some((c) => c.length >= 3 && t.includes(c.replace(/[\s\-]/g, "")));
+  };
   const items = parsed.items
     .filter((x: Record<string, unknown>) => x && typeof x.texte === "string")
     .slice(0, 12)
@@ -298,7 +309,10 @@ async function genererEtInserer(svc: SupabaseClient, magasinId: string | null, p
       const dIa = typeof x.date === "string" ? x.date.slice(0, 10) : "";
       const dateIa = dateValide(dIa) ? dIa : "";
       return {
-        categorie: catsOk.has(String(x.categorie)) ? x.categorie : "a_suivre",
+        categorie:
+          ["produit", "opportunite", "fournisseur"].includes(String(x.categorie)) && citeInterdit(String(x.texte))
+            ? "a_suivre"
+            : catsOk.has(String(x.categorie)) ? x.categorie : "a_suivre",
         texte: String(x.texte).slice(0, 400),
         date: dateParLien.get(url) || dateIa,
         source_nom: String(x.source_nom ?? "").slice(0, 120),

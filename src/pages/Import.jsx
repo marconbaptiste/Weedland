@@ -26,7 +26,7 @@ const MODELES = {
   stocks: {
     fichier: 'modele-stocks.csv',
     entetes: ['categorie', 'produit', 'quantite'],
-    exemple: ['Fleurs', 'Amnesia', '50'],
+    exemple: ['Huiles', 'Huile 10 % 10 ml', '50'],
   },
 };
 const telechargerModele = (cle) => {

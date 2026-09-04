@@ -32,6 +32,9 @@ import Plannings from './pages/Plannings';
 import Magasins from './pages/Magasins';
 import Pilote from './pages/Pilote';
 import Support from './pages/Support';
+import CGV from './pages/CGV';
+import MentionsLegales from './pages/MentionsLegales';
+import ConfidentialiteCarte from './pages/ConfidentialiteCarte';
 import Import from './pages/Import';
 
 // Accueil (route index) : le super-admin atterrit sur le panneau pilote tant
@@ -50,6 +53,9 @@ export default function App() {
       <Route path="/presentation" element={<Landing />} />
       <Route path="/cgu" element={<CGU />} />
       <Route path="/confidentialite" element={<Confidentialite />} />
+      <Route path="/cgv" element={<CGV />} />
+      <Route path="/mentions-legales" element={<MentionsLegales />} />
+      <Route path="/confidentialite-carte" element={<ConfidentialiteCarte />} />
       <Route path="/connexion" element={<Login />} />
       <Route path="/nouveau-mot-de-passe" element={<NouveauMotDePasse />} />
       <Route path="/inscription" element={<Inscription />} />
