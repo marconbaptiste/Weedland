@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabase, lireTout } from '../lib/supabase';
 import { messageErreur } from '../lib/erreurs';
 import { parseMontant, formatEuros, formatNombre, formatDateFr } from '../lib/format';
 import {
@@ -112,23 +112,25 @@ export default function Comptabilite() {
     // ventes_directes (CB+espèces, hors virement) et on ajoute les autres depuis
     // `chromes` : pas de double comptage (v_ca_jour.encaissements inclut déjà les
     // autres), et les autres des jours SANS clôture sont bien pris en compte.
+    // ⚠️ Lectures PAGINÉES (`lireTout`) : PostgREST tronque à 1 000 lignes sans
+    // erreur — sur une année de chromes, une somme côté client serait fausse.
     const [enc, an, chr, anChr, ch, fo, pEnc, pChr, pCh, pFo, cj, sc] = await Promise.all([
-      supabase.from('v_ca_jour').select('date, ventes_directes').gte('date', debut).lte('date', fin),
-      supabase.from('v_ca_jour').select('ventes_directes').gte('date', anneeDebut).lte('date', anneeFin),
-      supabase.from('chromes').select('date, type, montant').gte('date', debut).lte('date', fin),
-      supabase.from('chromes').select('type, montant').gte('date', anneeDebut).lte('date', anneeFin),
-      reqCharges,
-      reqFourn,
+      lireTout(supabase.from('v_ca_jour').select('date, ventes_directes').gte('date', debut).lte('date', fin).order('caisse_id')),
+      lireTout(supabase.from('v_ca_jour').select('ventes_directes').gte('date', anneeDebut).lte('date', anneeFin).order('caisse_id')),
+      lireTout(supabase.from('chromes').select('date, type, montant').gte('date', debut).lte('date', fin).order('id')),
+      lireTout(supabase.from('chromes').select('type, montant').gte('date', anneeDebut).lte('date', anneeFin).order('id')),
+      lireTout(reqCharges),
+      lireTout(reqFourn),
       // Période précédente (comparaison) :
-      supabase.from('v_ca_jour').select('ventes_directes').gte('date', prevDebut).lte('date', prevFin),
-      supabase.from('chromes').select('type, montant').gte('date', prevDebut).lte('date', prevFin),
-      supabase.from('charges').select('montant').gte('mois', premierDuMois(prevDebut)).lte('mois', prevFin),
-      supabase.from('fournisseurs').select('montant').gte('mois', premierDuMois(prevDebut)).lte('mois', prevFin),
+      lireTout(supabase.from('v_ca_jour').select('ventes_directes').gte('date', prevDebut).lte('date', prevFin).order('caisse_id')),
+      lireTout(supabase.from('chromes').select('type, montant').gte('date', prevDebut).lte('date', prevFin).order('id')),
+      lireTout(supabase.from('charges').select('montant').gte('mois', premierDuMois(prevDebut)).lte('mois', prevFin).order('id')),
+      lireTout(supabase.from('fournisseurs').select('montant').gte('mois', premierDuMois(prevDebut)).lte('mois', prevFin).order('id')),
       // Encaissements par moyen de paiement (clôtures de la période — page admin,
       // la RLS laisse l'admin lire toutes les clôtures de SON magasin) :
-      supabase.from('caisse_jour').select('cb, especes, virements').gte('date', debut).lte('date', fin),
+      lireTout(supabase.from('caisse_jour').select('cb, especes, virements').gte('date', debut).lte('date', fin).order('id')),
       // Créances clients (dettes chromes en cours, à ce jour) :
-      supabase.from('v_solde_client').select('solde'),
+      lireTout(supabase.from('v_solde_client').select('solde').order('client_id')),
     ]);
     setEncRows(enc.data ?? []);
     setChromesRows(chr.data ?? []);
@@ -174,22 +176,26 @@ export default function Comptabilite() {
       .from('v_ca_jour')
       .select('caisse_id, date, employe_id, avances, remboursements, autres')
       .gte('date', debut)
-      .lte('date', fin);
+      .lte('date', fin)
+      .order('caisse_id');
     let qInt = supabase
       .from('v_interessement_employe')
       .select('caisse_id, employe_id, date, est_proprietaire, heures_travaillees, pourcentage_interessement, ca_jour, encaissements, interessement')
       .gte('date', debut)
       .lte('date', fin)
-      .order('date', { ascending: false });
-    let qChr = supabase.from('chromes').select('date, employe_id, type, montant').gte('date', debut).lte('date', fin);
-    let qPay = supabase.from('paiements_employes').select('montant').gte('date', debut).lte('date', fin);
+      .order('date', { ascending: false })
+      .order('caisse_id')
+      .order('employe_id');
+    let qChr = supabase.from('chromes').select('date, employe_id, type, montant').gte('date', debut).lte('date', fin).order('id');
+    let qPay = supabase.from('paiements_employes').select('montant').gte('date', debut).lte('date', fin).order('id');
     if (employeFiltre) {
       qCa = qCa.eq('employe_id', employeFiltre);
       qInt = qInt.eq('employe_id', employeFiltre);
       qChr = qChr.eq('employe_id', employeFiltre);
       qPay = qPay.eq('employe_id', employeFiltre);
     }
-    const [ca, ir, chr, pay] = await Promise.all([qCa, qInt, qChr, qPay]);
+    // Paginé (plafond 1 000 lignes PostgREST) — cf. `lireTout`.
+    const [ca, ir, chr, pay] = await Promise.all([lireTout(qCa), lireTout(qInt), lireTout(qChr), lireTout(qPay)]);
     setCaEmpRows(ca.data ?? []);
     setIntRows(ir.data ?? []);
     setChromesEmpRows(chr.data ?? []);

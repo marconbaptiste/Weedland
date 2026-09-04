@@ -7,7 +7,10 @@ import { aujourdhuiISO, intervallePeriode, intervalleAnnee } from '../lib/dates'
 import { somme } from '../lib/comptabilite';
 import GuideDemarrage from '../components/GuideDemarrage';
 import CalculatriceMonnaie from '../components/CalculatriceMonnaie';
-import ScannerFidelite from '../components/ScannerFidelite';
+import { lazy, Suspense } from 'react';
+
+// Scanner (html5-qrcode, lourd) chargé seulement à l'ouverture de la bulle.
+const ScannerFidelite = lazy(() => import('../components/ScannerFidelite'));
 import ListeCourses from '../components/ListeCourses';
 
 // Accueil après connexion : profil + CA (jour/semaine) + une rangée de
@@ -464,7 +467,11 @@ export default function Profil() {
           </div>
         </div>
       )}
-      {outil === 'scanner' && <ScannerFidelite onClose={fermerOutil} />}
+      {outil === 'scanner' && (
+        <Suspense fallback={<p className="centre">Chargement du scanner…</p>}>
+          <ScannerFidelite onClose={fermerOutil} />
+        </Suspense>
+      )}
 
       {estAdmin && (
         <p className="periode-info">Tu es administrateur — retrouve la vue consolidée dans Comptabilité (menu Gestion).</p>
