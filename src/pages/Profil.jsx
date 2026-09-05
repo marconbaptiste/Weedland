@@ -221,8 +221,6 @@ export default function Profil() {
     <div className="page">
       <h1>Bonjour {prenom} 👋</h1>
 
-      <AlerteClotures />
-
       {estAdmin && !configFaite && (
         <Link to="/configuration" className="card banniere-config">
           <span className="banniere-config-emoji">🧭</span>
@@ -475,6 +473,9 @@ export default function Profil() {
           <ScannerFidelite onClose={fermerOutil} />
         </Suspense>
       )}
+
+      {/* Rappel des journées non clôturées — en fin de page pour ne pas gêner le comptoir. */}
+      <AlerteClotures />
 
       {estAdmin && (
         <p className="periode-info">Tu es administrateur — retrouve la vue consolidée dans Comptabilité (menu Gestion).</p>
