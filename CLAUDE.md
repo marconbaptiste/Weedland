@@ -50,6 +50,9 @@ npx vitest run -t "réconciliation"                   # tests dont le nom matche
 
 Copier `.env.example` en `.env` et renseigner `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`. `src/lib/supabase.js` lève une erreur explicite si elles manquent. Le `.env` n'est jamais committé.
 
+> ## ⚠️ RÈGLE DE DÉPLOIEMENT — la base AVANT le front
+> Vercel déploie `main` **automatiquement** à chaque merge. Tout code front qui lit une nouvelle colonne, appelle une nouvelle fonction SQL ou une Edge Function modifiée DOIT être précédé de l'application de la migration / du déploiement de la fonction en production — sinon l'app est cassée pour tous les magasins dès le merge (incident du 05/09 : `users.actif` absent → « Connexion impossible » partout). Ordre obligatoire : (1) appliquer la migration sur le projet Supabase `nshglljmfskvqxcogdjk` via les outils MCP (`apply_migration`) ou l'éditeur SQL, (2) déployer les Edge Functions (`deploy_edge_function`, `verify_jwt=false` sauf `envoyer-push`), (3) SEULEMENT ENSUITE merger la PR. En cas de doute, écrire le front de façon tolérante (colonne optionnelle, `maybeSingle`, repli).
+
 ## Base de données (Supabase)
 
 Le SQL vit dans `supabase/` et s'exécute dans l'éditeur SQL Supabase, **dans cet ordre** :
