@@ -118,7 +118,7 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase
       .from('magasins')
       .select(
-        'nom, abonnement, essai_fin, logo, gratuit, stripe_subscription_id, stripe_statut, opt_planning, opt_stock, opt_fidelite, opt_livraisons, opt_compta, opt_news'
+        'nom, abonnement, essai_fin, logo, gratuit, stripe_subscription_id, stripe_statut, opt_planning, opt_stock, opt_fidelite, opt_livraisons, opt_compta, opt_news, import_whatsapp'
       )
       .eq('id', profil.magasin_id)
       .maybeSingle();
@@ -149,8 +149,12 @@ export function AuthProvider({ children }) {
   // Options d'abonnement du magasin (paywall des modules). Le superadmin
   // (exploitant) n'est jamais bridé ; un magasin `gratuit` (ex. le magasin
   // originel Weedland) a toujours toutes les options, sans facturation.
+  // `whatsapp` (import des clôtures WhatsApp) n'est PAS une option commerciale :
+  // c'est un drapeau propre à un magasin (`magasins.import_whatsapp`, posé par le
+  // superadmin) — il suit le magasin actif, quel que soit le rôle.
+  const whatsapp = magasinInfo?.import_whatsapp ?? false;
   const options = estSuperadmin || magasinInfo?.gratuit || enEssai
-    ? { planning: true, stock: true, fidelite: true, livraisons: true, compta: true, news: true }
+    ? { planning: true, stock: true, fidelite: true, livraisons: true, compta: true, news: true, whatsapp }
     : {
         planning: magasinInfo?.opt_planning ?? false,
         stock: magasinInfo?.opt_stock ?? false,
@@ -158,6 +162,7 @@ export function AuthProvider({ children }) {
         livraisons: magasinInfo?.opt_livraisons ?? false,
         compta: magasinInfo?.opt_compta ?? false,
         news: magasinInfo?.opt_news ?? false,
+        whatsapp,
       };
   // Blocage d'abonnement (règle commerciale) :
   //  - jamais pour le superadmin ni pour un magasin `gratuit` (offert, ex. Weedland) ;
