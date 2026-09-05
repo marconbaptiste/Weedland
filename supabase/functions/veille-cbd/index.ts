@@ -1,14 +1,15 @@
 // Edge Function — veille-cbd
-// News CBD automatique, en 3 VOLETS independants (un par invocation, chacun avec
+// News CBD automatique, en 4 VOLETS independants (un par invocation, chacun avec
 // RECHERCHE WEB via l'outil serveur web_search_20260209) :
-//   produits      : fleurs NOMMEES (variete, marque, molecule, taux, culture),
-//                   autres produits, goodies/accessoires ;
+//   fleurs        : fleurs NOMMEES (variete, marque, molecule, taux, culture) ;
+//   produits      : autres produits (resines, huiles, vapes…) + goodies ;
 //   fournisseurs  : annuaire de grossistes europeens (sans tarif), tendances ;
 //   legal         : reglementation France/UE + statut des molecules (amorce RSS
 //                   Newsweed, repli RSS sans outil si le web echoue).
-// Chaque volet fusionne son resultat dans le bulletin du jour (veille_fusionner).
-// Le front lance les 3 volets en parallele ; le cron appelle SANS volet et la
-// fonction se rappelle 3 fois avec le secret (chaque volet a son budget ~150 s).
+// Chaque volet fusionne son resultat dans le bulletin du jour (veille_fusionner,
+// qui horodate le volet dans `veille.volets`). Le front lance les 4 volets en
+// parallele ; le cron appelle SANS volet et la fonction se rappelle 4 fois avec
+// le secret (chaque volet a son budget ~150 s).
 // Reponse 202 immediate, travail en tache de fond (EdgeRuntime.waitUntil).
 // Auth : en-tete `x-cron-secret` (cron) OU JWT admin/superadmin.
 // Secrets : ANTHROPIC_API_KEY (obligatoire), VEILLE_CRON_SECRET (cron).
@@ -119,11 +120,13 @@ async function appelIA(
   withWebSearch: boolean,
   maxTokens: number,
   timeoutMs: number,
+  model = "claude-sonnet-5",
 ) {
   const controller = new AbortController();
   const minuteur = setTimeout(() => controller.abort(), timeoutMs);
   const messages: { role: string; content: unknown }[] = [{ role: "user", content: prompt }];
-  const tools = withWebSearch ? [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }] : undefined;
+  // 4 recherches max : au-dela, l'appel depasse le budget de l'invocation.
+  const tools = withWebSearch ? [{ type: "web_search_20260209", name: "web_search", max_uses: 4 }] : undefined;
   let data: Record<string, unknown> | null = null;
   let restarts = 0;
   try {
@@ -131,7 +134,7 @@ async function appelIA(
       const resp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: maxTokens, ...(tools ? { tools } : {}), messages }),
+        body: JSON.stringify({ model, max_tokens: maxTokens, ...(tools ? { tools } : {}), messages }),
         signal: controller.signal,
       });
       if (!resp.ok) {
@@ -158,12 +161,14 @@ async function appelIA(
 }
 
 // Travail lourd (RSS + IA + recherche web + insertion). Lance en tache de fond.
-// Volets : 'produits' (fleurs, produits, goodies), 'fournisseurs' (annuaire +
-// tendances), 'legal' (reglementation + molecules). Chaque volet tourne dans SA
-// PROPRE invocation (une recherche web tient rarement en < 95 s : les deux
-// appels paralleles expiraient et le bulletin retombait sur le RSS).
-type Volet = "produits" | "fournisseurs" | "legal";
-const VOLETS: Volet[] = ["produits", "fournisseurs", "legal"];
+// Chaque volet tourne dans SA PROPRE invocation (une recherche web tient
+// rarement en < 95 s : deux appels paralleles expiraient et le bulletin
+// retombait sur le RSS).
+// 4 volets COURTS (≤ ~2 000 tokens de sortie, ≤ 4 recherches) : c'est la
+// GENERATION du JSON qui coute le plus de temps (≈ 50 tokens/s), pas la
+// recherche — un volet trop bavard (6 000 tokens) depassait le delai a lui seul.
+type Volet = "fleurs" | "produits" | "fournisseurs" | "legal";
+const VOLETS: Volet[] = ["fleurs", "produits", "fournisseurs", "legal"];
 
 async function genererEtInserer(svc: SupabaseClient, magasinId: string | null, parCron: boolean, volet: Volet) {
   const apiKey = env("ANTHROPIC_API_KEY");
@@ -254,33 +259,44 @@ async function genererEtInserer(svc: SupabaseClient, magasinId: string | null, p
     "PERIMETRE STRICT — les CANNABINOIDES legaux vendables en boutique en France : CBD, CBG, CBN, chanvre et derives (reference molecules : " + molecules + "), leur cadre LEGAL en France/UE, les PRODUITS et les FOURNISSEURS/grossistes europeens. N'explore AUCUN sujet hors de ce perimetre (legalisation etrangere, cannabis medical etranger, faits divers, politique) sauf IMPACT DIRECT sur une boutique CBD en France. " +
     contexteStock;
 
-  // Appel A — NOUVEAUTES PRODUITS, GOODIES, FOURNISSEURS EUROPEENS, TENDANCES.
-  // Objectif : une VRAIE liste de sorties nommees (fleurs avec variete, marque,
-  // molecule, taux) + un annuaire de grossistes europeens (sans tarif) pour que le
-  // gerant n'ait pas a chercher lui-meme.
+  // Forme commune des volets commerciaux (fleurs / produits / fournisseurs) :
+  // une VRAIE liste de sorties nommees (variete, marque, molecule, taux) et un
+  // annuaire de grossistes europeens (sans tarif) pour que le gerant n'ait pas a
+  // chercher lui-meme.
   const formeCommerce =
     '{"synthese":"1-2 phrases de synthese","items":[{"categorie":"fleur|produit|goodies|fournisseur|tendance","nom":"nom de la variete / du produit / du fournisseur","marque":"marque ou producteur (vide pour un fournisseur)","molecule":"CBD|CBG|CBN|… ou vide","taux":"ex. 18 % ou vide","type":"indoor|outdoor|greenhouse|resine|huile|vape|comestible|boisson|cosmetique|accessoire|grossiste ou vide","pays":"pays (fournisseur) ou vide","site":"URL du site officiel ou vide","texte":"phrase claire et factuelle (nouveaute, positionnement)","date":"AAAA-MM-JJ ou vide","source_nom":"nom du media/site","source_url":"lien exact"}]}.';
 
-  // Volet PRODUITS — une VRAIE liste de sorties nommees.
+  // Contrainte de VITESSE (commune aux volets web) : peu de recherches, reponse
+  // courte — sinon l'appel depasse le delai de l'invocation et rien n'est publie.
+  const vitesse =
+    "CONTRAINTE DE TEMPS : au maximum 4 recherches web, puis reponds DIRECTEMENT par le JSON (aucune reflexion ni texte avant/apres). Champs 'texte' courts (1 phrase, ≤ 25 mots). ";
+
+  // Volet FLEURS — une VRAIE liste de sorties nommees.
+  const promptFleurs =
+    cadre + vitesse +
+    "MISSION : les NOUVELLES FLEURS CBD/CBG/CBN sorties en Europe ces 60 derniers jours. Requetes web CIBLEES (fr + en, ex. 'nouvelle fleur CBD 2026', 'new CBD flower strain 2026', 'nouveaute fleur CBD indoor', pages 'nouveautes' des marques/grossistes). " +
+    "Pour CHAQUE fleur : nom de la variete, marque ou producteur, cannabinoide dominant, taux annonce (ex. 'CBD 18 %'), type de culture (indoor/outdoor/greenhouse). Vise 5 a 7 fleurs NOMMEES. " +
+    regles + "Categorie autorisee ici : fleur. Forme EXACTE : " + formeCommerce;
+
+  // Volet PRODUITS — autres produits + goodies/accessoires.
   const promptProduits =
-    cadre +
-    "MISSION : dresser la liste des NOUVEAUTES PRODUITS du marche CBD europeen des 60 derniers jours. Utilise l'outil web_search en requetes CIBLEES (francais ET anglais, ex. 'nouvelle fleur CBD 2026', 'new CBD flower strain 2026', 'nouveaute resine CBD', 'nouveau puff CBD', 'accessoires fumeur nouveautes', sites de marques/grossistes connus). Couvre 3 axes : " +
-    "(A) FLEURS : NOUVELLES varietes/sorties de fleurs CBD/CBG/CBN — pour CHACUNE : nom de la variete, marque ou producteur, cannabinoide dominant, taux annonce (ex. 'CBD 18 %'), type de culture (indoor/outdoor/greenhouse), format si connu. Vise 5 a 8 fleurs NOMMEES. " +
-    "(B) AUTRES PRODUITS : resines/hash, huiles, puffs/vapes/e-liquides, comestibles, boissons, cosmetiques — lancements CONCRETS (marque + produit + molecule + taux/dosage). Vise 3 a 6. " +
-    "(C) GOODIES & ACCESSOIRES : nouveautes utiles a vendre en boutique (grinders, feuilles/papiers, vaporisateurs, boites, merchandising, packaging) avec marque. Vise 2 a 4. " +
-    regles + "Categories autorisees ici : fleur, produit, goodies. Forme EXACTE : " + formeCommerce;
+    cadre + vitesse +
+    "MISSION : les NOUVEAUX PRODUITS CBD (hors fleurs) et GOODIES sortis en Europe ces 60 derniers jours. Requetes web CIBLEES (fr + en, ex. 'nouveaute resine CBD', 'nouveau puff CBD 2026', 'new CBD product launch', 'accessoires fumeur nouveautes grinder'). " +
+    "(A) PRODUITS : resines/hash, huiles, puffs/vapes/e-liquides, comestibles, boissons, cosmetiques — lancements CONCRETS (marque + produit + molecule + taux/dosage). Vise 3 a 5. " +
+    "(B) GOODIES & ACCESSOIRES : nouveautes utiles a vendre en boutique (grinders, feuilles/papiers, vaporisateurs, boites, merchandising) avec marque. Vise 2 a 3. " +
+    regles + "Categories autorisees ici : produit, goodies. Forme EXACTE : " + formeCommerce;
 
   // Volet FOURNISSEURS — annuaire europeen (sans tarif) + tendances.
   const promptFournisseurs =
-    cadre +
-    "MISSION : dresser un ANNUAIRE des FOURNISSEURS / GROSSISTES europeens (B2B) de produits CBD pour une boutique, et 2 a 3 TENDANCES de marche. Utilise l'outil web_search en requetes CIBLEES (fr + en : 'grossiste CBD France', 'grossiste CBD Europe B2B', 'CBD wholesale Europe', 'fournisseur fleurs CBD indoor grossiste', 'marque blanche CBD', 'grossiste accessoires fumeur', salons pro CBD). " +
-    "(D) FOURNISSEURS : pour CHACUN : nom, pays, specialite (fleurs, resines, huiles, vapes, marque blanche, accessoires…), site officiel, et une nouveaute recente si trouvee (nouvelle gamme, salon, ouverture). Vise 6 a 10 fournisseurs, SANS AUCUN TARIF. " +
-    "(E) TENDANCES : molecule/format/gout qui monte, salons pro a venir (nom, ville, date), mouvements d'acteurs. " +
+    cadre + vitesse +
+    "MISSION : un ANNUAIRE de FOURNISSEURS / GROSSISTES europeens (B2B) de produits CBD pour une boutique, et 2 TENDANCES de marche. Requetes web CIBLEES (fr + en : 'grossiste CBD France', 'CBD wholesale Europe B2B', 'fournisseur fleurs CBD indoor grossiste', 'marque blanche CBD'). " +
+    "(A) FOURNISSEURS : pour CHACUN : nom, pays, specialite (fleurs, resines, huiles, vapes, marque blanche, accessoires…), site officiel. Vise 6 a 8 fournisseurs, SANS AUCUN TARIF. " +
+    "(B) TENDANCES : molecule/format/gout qui monte, salons pro a venir (nom, ville, date). Vise 2. " +
     regles + "Categories autorisees ici : fournisseur, tendance. Forme EXACTE : " + formeCommerce;
 
   const promptLegal =
-    cadre +
-    "MISSION : le cadre LEGAL et les MOLECULES. Utilise web_search en quelques requetes CIBLEES (fr + en) : evolutions legales France/UE des 60 derniers jours (arretes, ANSM, MILDECA, decisions de justice, taux de THC, nouveaux produits alimentaires/novel food, etiquetage, vente aux mineurs, publicite), et changements de statut des molecules (nouvelles molecules vendues/discutees en boutique, classements comme stupefiant). Vise 4 a 8 items reglementaires. Titres RSS recents comme point de depart (ne t'y limite pas) :" + NL + liste + NL +
+    cadre + vitesse +
+    "MISSION : le cadre LEGAL et les MOLECULES. Requetes web CIBLEES (fr + en) : evolutions legales France/UE des 60 derniers jours (arretes, ANSM, MILDECA, decisions de justice, taux de THC, novel food, etiquetage, vente aux mineurs, publicite), et changements de statut des molecules (nouvelles molecules vendues/discutees en boutique, classements comme stupefiant). Vise 4 a 6 items reglementaires. Titres RSS recents comme point de depart (ne t'y limite pas) :" + NL + liste + NL +
     regles +
     "Categories : 'interdit' = devient interdit/restreint ; 'autorise' = autorise/clarifie ; 'a_suivre' = en discussion. Forme EXACTE : " +
     '{"intro":"1-2 phrases : synthese generale du jour pour un gerant","synthese_reglementation":"1-2 phrases sur le legal","items":[{"categorie":"interdit|autorise|a_suivre","texte":"phrase claire et factuelle","date":"AAAA-MM-JJ","source_nom":"nom du media","source_url":"lien exact"}],' +
@@ -294,23 +310,28 @@ async function genererEtInserer(svc: SupabaseClient, magasinId: string | null, p
     "Sans recherche web, a partir UNIQUEMENT des titres RSS recents ci-dessous : tri, classe et resume ce qui est utile a une boutique CBD en France (legal, molecules). Recopie fidelement lien et date de chaque titre choisi. Vise 4 a 8 items. Titres :" + NL + liste + NL + regles +
     'Forme EXACTE : {"intro":"...","synthese_reglementation":"...","items":[{"categorie":"interdit|autorise|a_suivre","texte":"...","date":"AAAA-MM-JJ","source_nom":"...","source_url":"..."}]}.';
 
-  // UN appel web par invocation (garde-temps 125 s ; repli RSS 20 s pour le legal).
+  // UN appel web par invocation (garde-temps 120 s, sortie ≤ 2 200 tokens). Pour
+  // le legal : 95 s web + repli RSS 40 s sur un modele rapide (Haiku), pour que
+  // le repli tienne dans les ~150 s de l'invocation.
   let produits: Record<string, unknown> | null = null;
   let fournisseurs: Record<string, unknown> | null = null;
   let legal: Record<string, unknown> | null = null;
   let legalWeb: Record<string, unknown> | null = null;
   let via = "web";
-  if (volet === "produits") produits = await appelIA(apiKey, promptProduits, true, 6000, 125000);
-  else if (volet === "fournisseurs") fournisseurs = await appelIA(apiKey, promptFournisseurs, true, 5000, 125000);
+  const debut = Date.now();
+  if (volet === "fleurs") produits = await appelIA(apiKey, promptFleurs, true, 2200, 120000);
+  else if (volet === "produits") produits = await appelIA(apiKey, promptProduits, true, 2200, 120000);
+  else if (volet === "fournisseurs") fournisseurs = await appelIA(apiKey, promptFournisseurs, true, 2200, 120000);
   else {
-    legalWeb = await appelIA(apiKey, promptLegal, true, 4000, 120000);
+    legalWeb = await appelIA(apiKey, promptLegal, true, 2000, 95000);
     legal = legalWeb;
     if (!legal || !Array.isArray(legal.items)) {
       console.log("veille: volet legal en repli RSS (web indisponible/trop long)");
-      legal = top.length ? await appelIA(apiKey, promptRss, false, 2500, 20000) : null;
+      legal = top.length ? await appelIA(apiKey, promptRss, false, 1800, 40000, "claude-haiku-4-5-20251001") : null;
       via = "rss";
     }
   }
+  console.log("veille: volet=" + volet + " duree=" + Math.round((Date.now() - debut) / 1000) + "s");
   const parsed = {
     intro: (legal?.intro as string | undefined) ?? null,
     synthese_produits: (produits?.synthese as string | undefined) ?? null,
@@ -498,27 +519,28 @@ Deno.serve(async (req) => {
     // est refusée si une vient d'être faite (< 3 min). Le garde-fou front (bouton
     // grisé) n'est PAS une sécurité — un appel direct contournerait.
     if (!parCron) {
-      const depuis = new Date(Date.now() - 3 * 60 * 1000).toISOString();
-      // Un bulletin du jour existe deja depuis < 3 min ET contient deja ce volet → refus.
+      // Le bulletin du jour porte `volets` = { volet: horodatage de reception } :
+      // ce volet recu il y a < 3 min → refus (le bulletin lui-meme peut dater du
+      // matin, c'est l'horodatage DU VOLET qui compte).
+      const jour = new Date();
+      jour.setUTCHours(0, 0, 0, 0);
       const { data: recent } = await svc
         .from("veille")
-        .select("id, items, synthese_produits, synthese_fournisseurs, synthese_reglementation")
+        .select("id, volets")
         .eq("magasin_id", magasinId)
         .eq("source", "manuel")
-        .gte("created_at", depuis)
+        .gte("created_at", jour.toISOString())
+        .order("created_at", { ascending: false })
         .limit(1);
-      const b = recent?.[0];
-      const dejaFait = b && (
-        (voletDemande === "produits" && b.synthese_produits) ||
-        (voletDemande === "fournisseurs" && b.synthese_fournisseurs) ||
-        (voletDemande === "legal" && b.synthese_reglementation));
-      if (dejaFait) {
+      const horod = (recent?.[0]?.volets as Record<string, string> | null)?.[voletDemande];
+      const recu = horod ? new Date(horod).getTime() : 0;
+      if (recu && Date.now() - recu < 3 * 60 * 1000) {
         return json({ error: "Une génération vient d'être lancée pour ce magasin — réessaie dans quelques minutes." }, 429);
       }
     }
 
-    // Volet demande (front : 3 appels paralleles, un par volet). Sans volet
-    // (cron), on se rappelle soi-meme 3 fois avec le secret cron : chaque volet
+    // Volet demande (front : 4 appels paralleles, un par volet). Sans volet
+    // (cron), on se rappelle soi-meme 4 fois avec le secret cron : chaque volet
     // dispose ainsi de son propre budget de temps.
     if (!(VOLETS as string[]).includes(voletDemande)) {
       if (parCron && cronSecret) {
@@ -538,7 +560,7 @@ Deno.serve(async (req) => {
         }
         return json({ ok: true, started: true, volets: VOLETS }, 202);
       }
-      return json({ error: "volet requis : produits | fournisseurs | legal" }, 400);
+      return json({ error: "volet requis : fleurs | produits | fournisseurs | legal" }, 400);
     }
     const volet = voletDemande as Volet;
 

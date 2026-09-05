@@ -28,7 +28,10 @@ const PROD = ['fleur', 'produit', 'goodies', 'opportunite']; // nouveautés à v
 const FOURN = ['fournisseur', 'tendance']; // approvisionnement & marché
 const REGL = ['interdit', 'autorise', 'a_suivre']; // réglementaire / légal
 const COLS =
-  'id, created_at, titre, intro, synthese_produits, synthese_fournisseurs, synthese_reglementation, items, magasin_id';
+  'id, created_at, titre, intro, synthese_produits, synthese_fournisseurs, synthese_reglementation, items, magasin_id, volets';
+// Volets de génération (chacun = une invocation serveur, fusionnés dans le
+// bulletin du jour). `veille.volets` = { volet: horodatage de réception }.
+const VOLETS = ['fleurs', 'produits', 'fournisseurs', 'legal'];
 
 // Fiche molécules (table `molecules`, référence globale mise à jour par l'IA).
 const STATUTS_MOL = {
@@ -304,18 +307,23 @@ export default function Veille() {
         .order('created_at', { ascending: true });
       if (monteRef.current) setPropositions(Array.isArray(props) ? props : []);
     }
-    // Génération en 3 volets (produits / fournisseurs / légal), chacun fusionné
-    // dans le bulletin du jour dès qu'il arrive : on affiche au fur et à mesure
-    // et on coupe la roue quand les 3 sont là.
-    if (attenduRef.current !== undefined && data && data.id !== attenduRef.current) {
-      const recus = [data.synthese_produits, data.synthese_fournisseurs, data.synthese_reglementation].filter(Boolean).length;
-      if (recus >= 3) {
+    // Génération en 4 volets (fleurs / produits / fournisseurs / légal), chacun
+    // fusionné dans le bulletin du jour dès qu'il arrive : on affiche au fur et à
+    // mesure et on coupe la roue quand les 4 sont là. Le bulletin peut être le
+    // MÊME que ce matin (fusion) : on compte les volets horodatés APRÈS le clic.
+    if (attenduRef.current !== undefined && data) {
+      const depuis = attenduRef.current - 60000; // tolérance d'horloge
+      const recus = VOLETS.filter((v) => {
+        const t = data.volets?.[v];
+        return t && new Date(t).getTime() >= depuis;
+      }).length;
+      if (recus >= VOLETS.length) {
         attenduRef.current = undefined;
         if (pollRef.current) clearTimeout(pollRef.current);
         setGen(false);
         setMsg(`Bulletin mis à jour ✅ (${(data.items ?? []).length} info(s)).`);
       } else {
-        setMsg(`Recherche en cours… ${recus}/3 volets reçus (nouveautés, fournisseurs, légal).`);
+        setMsg(`Recherche en cours… ${recus}/${VOLETS.length} volets reçus (fleurs, produits, fournisseurs, légal).`);
       }
     }
     return data;
@@ -344,7 +352,7 @@ export default function Veille() {
   // bulletin dès qu'il apparaît). Le retour de veille déclenche aussi `charger`.
   const surveiller = useCallback(
     (essai = 0) => {
-      const MAX = 33; // ~5,5 min à 10 s (3 volets de ≤ 2,5 min en parallèle)
+      const MAX = 30; // ~5 min à 10 s (4 volets de ≤ 2,5 min en parallèle)
       pollRef.current = setTimeout(async () => {
         if (!monteRef.current) return;
         await charger();
@@ -368,13 +376,11 @@ export default function Veille() {
     if (pollRef.current) clearTimeout(pollRef.current);
     setGen(true);
     setMsg('');
-    attenduRef.current = bulletin?.id ?? null; // on attend un bulletin d'id différent
-    // Trois recherches indépendantes, chacune dans sa propre invocation (une
+    attenduRef.current = Date.now(); // on attend les volets horodatés après ce clic
+    // Quatre recherches indépendantes, chacune dans sa propre invocation (une
     // recherche web ne tient pas dans le délai d'une seule) — lancées en parallèle.
     const reponses = await Promise.all(
-      ['produits', 'fournisseurs', 'legal'].map((volet) =>
-        supabase.functions.invoke('veille-cbd', { body: { volet } }),
-      ),
+      VOLETS.map((volet) => supabase.functions.invoke('veille-cbd', { body: { volet } })),
     );
     const echec = reponses.find((r) => r.error || r.data?.error);
     // Erreur immédiate (non autorisé, clé IA manquante…) → on s'arrête là.

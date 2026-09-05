@@ -7,6 +7,8 @@ import { cleEntete } from '../lib/csv';
 import { analyserFichiers, analyserChromes, analyserStocks } from '../lib/importHistorique';
 import { journaliserMouvement } from '../lib/mouvementsStock';
 import { telechargerCSV } from '../lib/export';
+import { extraireClotures, trouverEmploye } from '../lib/whatsapp';
+import { messageErreur } from '../lib/erreurs';
 
 const UNITES = ['g', 'kg', 'mg', 'ml', 'pièce'];
 
@@ -52,6 +54,10 @@ export default function Import() {
   const [catForcee, setCatForcee] = useState('');
   const [uniteDefaut, setUniteDefaut] = useState('g');
   const [ajouterQte, setAjouterQte] = useState(true);
+  // Import WhatsApp (export de la discussion ou messages collés) → clôtures.
+  const [waTexte, setWaTexte] = useState('');
+  const [wa, setWa] = useState(null); // lignes analysées, une par clôture trouvée
+  const [remplacerClotures, setRemplacerClotures] = useState(false);
 
   useEffect(() => {
     if (!magasinId) return;
@@ -197,6 +203,93 @@ export default function Import() {
     setStocks(null);
   }
 
+  // ----- WhatsApp (export de discussion .txt ou messages collés) -----
+  // Chaque message de clôture posté dans le groupe devient une clôture proposée,
+  // rattachée à l'employé dont le prénom correspond à l'auteur. On contrôle : le
+  // CA annoncé vs recalculé, les chromes du message vs ceux déjà saisis dans
+  // l'app ce jour-là, et si une clôture existe déjà (ignorée sauf « remplacer »).
+  async function analyserWhatsapp(texte) {
+    setStatut('');
+    const clos = extraireClotures(texte);
+    if (clos.length === 0) {
+      setWa(null);
+      setStatut('Aucune clôture reconnue dans ce texte (il faut des lignes « CB … », « Moro … » sous une date).');
+      return;
+    }
+    const dates = [...new Set(clos.map((c) => c.message.date))];
+    const [{ data: existantes }, { data: chr }] = await Promise.all([
+      supabase.from('caisse_jour').select('employe_id, date').eq('magasin_id', magasinId).in('date', dates),
+      supabase.from('chromes').select('employe_id, date, type, montant').eq('magasin_id', magasinId).in('date', dates),
+    ]);
+    const dejaLa = new Set((existantes ?? []).map((e) => `${e.employe_id}|${e.date}`));
+    const chromesApp = new Map();
+    for (const c of chr ?? []) {
+      const k = `${c.employe_id}|${c.date}`;
+      const signe = c.type === 'remboursement' ? -1 : 1;
+      chromesApp.set(k, somme([chromesApp.get(k) ?? 0, signe * Number(c.montant)]));
+    }
+    setWa(
+      clos.map((c) => {
+        const emp = trouverEmploye(c.auteur, employes);
+        const k = emp ? `${emp.id}|${c.message.date}` : '';
+        const existe = dejaLa.has(k);
+        return {
+          ...c,
+          employeId: emp?.id ?? '',
+          existe,
+          chromesApp: chromesApp.has(k) ? chromesApp.get(k) : null,
+          inclure: Boolean(emp) && !existe,
+        };
+      }),
+    );
+  }
+
+  async function choisirExportWhatsapp(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    await analyserWhatsapp(await file.text());
+  }
+
+  function majLigneWa(i, champs) {
+    setWa((l) => l.map((x, j) => (j === i ? { ...x, ...champs } : x)));
+  }
+
+  async function importerWhatsapp() {
+    if (!wa) return;
+    const rows = wa
+      .filter((l) => l.inclure && l.employeId && (!l.existe || remplacerClotures))
+      .map((l) => ({
+        employe_id: l.employeId,
+        date: l.message.date,
+        ventes_directes: somme([l.cloture.cb, l.cloture.especes, l.cloture.virements]),
+        cb: l.cloture.cb,
+        especes: l.cloture.especes,
+        virements: l.cloture.virements,
+        fond_caisse: l.cloture.fond_caisse,
+        commentaire: ['Import WhatsApp', l.cloture.commentaire].filter(Boolean).join(' — '),
+      }));
+    if (rows.length === 0) {
+      setStatut('Aucune clôture à importer (coche des lignes, ou active « remplacer » pour celles déjà en base).');
+      return;
+    }
+    if (remplacerClotures && rows.some((r) => wa.find((l) => l.employeId === r.employe_id && l.message.date === r.date)?.existe)) {
+      if (!window.confirm('Des clôtures déjà enregistrées vont être REMPLACÉES par celles du message. Continuer ?')) return;
+    }
+    setEnCours(true);
+    setStatut('');
+    const { error } = await supabase.from('caisse_jour').upsert(rows, { onConflict: 'employe_id,date' });
+    setEnCours(false);
+    if (error) {
+      console.error('Import WhatsApp:', error);
+      setStatut(`Import impossible : ${messageErreur(error)}`);
+      return;
+    }
+    setStatut(`${rows.length} clôture(s) importée(s) depuis WhatsApp ✅`);
+    setWa(null);
+    setWaTexte('');
+  }
+
   const totalCaisse = resultat ? somme(resultat.caisse.map((c) => c.ventes_directes)) : 0;
   const totalCharges = resultat ? somme(resultat.charges.map((c) => c.montant)) : 0;
   const totalFourn = resultat ? somme(resultat.fournisseurs.map((c) => c.montant)) : 0;
@@ -213,6 +306,7 @@ export default function Import() {
         <button className={mode === 'tableur' ? 'actif' : ''} onClick={() => setMode('tableur')}>Tableur</button>
         <button className={mode === 'chromes' ? 'actif' : ''} onClick={() => setMode('chromes')}>Dettes</button>
         <button className={mode === 'stocks' ? 'actif' : ''} onClick={() => setMode('stocks')}>Stocks</button>
+        <button className={mode === 'whatsapp' ? 'actif' : ''} onClick={() => setMode('whatsapp')}>WhatsApp</button>
       </div>
 
       {mode === 'tableur' ? (
@@ -301,6 +395,108 @@ export default function Import() {
               </div>
               <button className="btn btn-primary" onClick={importerChromes} disabled={enCours}>
                 {enCours ? 'Import…' : `Importer ${chromes.length} ligne(s)`}
+              </button>
+            </>
+          )}
+        </>
+      ) : mode === 'whatsapp' ? (
+        <>
+          <div className="card">
+            <p className="statut">
+              Les clôtures postées dans le <strong>groupe WhatsApp</strong> (« 04/09 · CA · CB · Moro ·
+              Chromes · Livraisons · Caisse départ ») deviennent des clôtures de l’app. Colle un ou
+              plusieurs messages ci-dessous, ou dépose l’<strong>export de la discussion</strong>{' '}
+              (WhatsApp → infos du groupe → Exporter la discussion → sans médias → fichier .txt).
+              Chaque clôture est rattachée à l’employé dont le prénom correspond à l’auteur.
+            </p>
+            <textarea
+              rows={7}
+              value={waTexte}
+              onChange={(e) => setWaTexte(e.target.value)}
+              placeholder={'[04/09/2026 21:17:33] Adam: 04/09\nCA 4046,20\nCB 3213,7\nMoro 692,5\nChromes\nGaétan +33\n…'}
+            />
+            <div className="form-inline">
+              <button type="button" className="btn btn-primary" onClick={() => analyserWhatsapp(waTexte)} disabled={!waTexte.trim()}>
+                Analyser le texte collé
+              </button>
+              <label className="btn btn-discret">
+                Choisir l’export .txt…
+                <input type="file" accept=".txt,text/plain" style={{ display: 'none' }} onChange={choisirExportWhatsapp} />
+              </label>
+            </div>
+            <p className="statut">
+              Les chromes du message ne sont pas importés (ils se saisissent dans Clients) : ils servent
+              à recalculer le CA et à repérer un oubli. Les livraisons notées « (Moro) » vont en espèces,
+              les autres dans « Virements / autres ».
+            </p>
+          </div>
+
+          {wa && (
+            <>
+              <div className="cartes-kpi">
+                <div className="kpi"><span className="kpi-label">Clôtures trouvées</span><span className="kpi-valeur">{wa.length}</span></div>
+                <div className="kpi"><span className="kpi-label">À importer</span><span className="kpi-valeur">{wa.filter((l) => l.inclure && l.employeId && (!l.existe || remplacerClotures)).length}</span></div>
+                <div className="kpi"><span className="kpi-label">Déjà en base</span><span className="kpi-valeur">{wa.filter((l) => l.existe).length}</span></div>
+              </div>
+              <label className="case-partage">
+                <input type="checkbox" checked={remplacerClotures} onChange={(e) => setRemplacerClotures(e.target.checked)} />
+                <span>Remplacer les clôtures déjà enregistrées par celles du message (sinon elles sont ignorées).</span>
+              </label>
+              <div className="card">
+                <h2>Aperçu</h2>
+                <table className="tableau tableau-cartes">
+                  <thead>
+                    <tr>
+                      <th></th><th>Date</th><th>Auteur → employé</th><th className="droite">CB</th><th className="droite">Espèces</th>
+                      <th className="droite">Virements</th><th className="droite">CA</th><th>Chromes</th><th>État</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {wa.map((l, i) => {
+                      const c = l.cloture;
+                      const chromesOk = l.chromesApp == null ? c.chromesMessage === 0 : Math.abs(l.chromesApp - c.chromesMessage) < 0.005;
+                      return (
+                        <tr key={i} style={{ opacity: l.inclure ? 1 : 0.55 }}>
+                          <td data-label="Importer">
+                            <input type="checkbox" checked={l.inclure} onChange={(e) => majLigneWa(i, { inclure: e.target.checked })} />
+                          </td>
+                          <td data-label="Date">{formatDateFr(l.message.date)}</td>
+                          <td data-label="Employé">
+                            <span className="promo-qui">{l.auteur} → </span>
+                            <select value={l.employeId} onChange={(e) => majLigneWa(i, { employeId: e.target.value })}>
+                              <option value="">— choisir —</option>
+                              {employes.map((emp) => (<option key={emp.id} value={emp.id}>{emp.nom}</option>))}
+                            </select>
+                          </td>
+                          <td className="droite" data-label="CB">{formatEuros(c.cb)}</td>
+                          <td className="droite" data-label="Espèces">{formatEuros(c.especes)}</td>
+                          <td className="droite" data-label="Virements">{formatEuros(c.virements)}</td>
+                          <td className="droite" data-label="CA">
+                            {formatEuros(c.caCalcule)}
+                            {c.caAnnonce != null && c.ecart !== 0 && (
+                              <span className="dette"> ⚠️ annoncé {formatEuros(c.caAnnonce)}</span>
+                            )}
+                          </td>
+                          <td data-label="Chromes">
+                            {c.chromesMessage === 0 && l.chromesApp == null
+                              ? '—'
+                              : `${formatEuros(c.chromesMessage)} / app ${l.chromesApp == null ? '0 €' : formatEuros(l.chromesApp)}`}
+                            {!chromesOk && <span className="dette"> ⚠️</span>}
+                          </td>
+                          <td data-label="État">
+                            {!l.employeId ? 'Employé inconnu' : l.existe ? (remplacerClotures ? 'À remplacer' : 'Déjà en base') : 'Nouvelle'}
+                            {l.message.avertissements.length > 0 && (
+                              <span className="promo-qui" title={l.message.avertissements.join('\n')}> · {l.message.avertissements.length} ligne(s) ignorée(s)</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <button className="btn btn-primary" onClick={importerWhatsapp} disabled={enCours}>
+                {enCours ? 'Import…' : 'Importer les clôtures cochées'}
               </button>
             </>
           )}
