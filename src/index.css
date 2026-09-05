@@ -1604,6 +1604,27 @@ hr {
 .veille-item.veille-fournisseur {
   border-left-color: #c58cff;
 }
+.veille-item.veille-goodies {
+  border-left-color: #f6c26b;
+}
+.veille-fiche {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin: 0.2rem 0 0.35rem;
+  font-size: 0.85rem;
+}
+.veille-puce {
+  background: var(--fond-3, rgba(255, 255, 255, 0.06));
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  color: var(--texte-doux);
+  text-decoration: none;
+}
+.veille-site {
+  color: var(--vert);
+}
 .veille-item.veille-opportunite {
   border-left-color: #4fd08a;
   background: rgba(79, 208, 138, 0.08);

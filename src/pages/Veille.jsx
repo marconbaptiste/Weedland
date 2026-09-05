@@ -14,16 +14,21 @@ import { formatDateFr } from '../lib/format';
 // articles (avec sources) est caché dans des tiroirs par section. Gain de place.
 const CATEGORIES = {
   interdit: { emoji: '🔴', libelle: 'Devient interdit / restreint', classe: 'veille-interdit' },
-  autorise: { emoji: '🟢', libelle: 'Autorisé / opportunité', classe: 'veille-autorise' },
+  autorise: { emoji: '🟢', libelle: 'Autorisé / clarifié', classe: 'veille-autorise' },
   a_suivre: { emoji: '🟡', libelle: 'À suivre', classe: 'veille-suivre' },
-  produit: { emoji: '🆕', libelle: 'Nouveau produit / tendance', classe: 'veille-produit' },
-  fournisseur: { emoji: '🏭', libelle: 'Fournisseur / appro', classe: 'veille-fournisseur' },
+  fleur: { emoji: '🌿', libelle: 'Nouvelle fleur', classe: 'veille-produit' },
+  produit: { emoji: '🆕', libelle: 'Nouveau produit', classe: 'veille-produit' },
+  goodies: { emoji: '🎁', libelle: 'Goodies & accessoires', classe: 'veille-goodies' },
+  fournisseur: { emoji: '🏭', libelle: 'Fournisseur / grossiste', classe: 'veille-fournisseur' },
+  tendance: { emoji: '📈', libelle: 'Tendance du marché', classe: 'veille-opportunite' },
   opportunite: { emoji: '💡', libelle: 'Opportunité — à ajouter au catalogue', classe: 'veille-opportunite' },
 };
 
-const PROD = ['produit', 'fournisseur', 'opportunite']; // nouveautés commerciales
+const PROD = ['fleur', 'produit', 'goodies', 'opportunite']; // nouveautés à vendre
+const FOURN = ['fournisseur', 'tendance']; // approvisionnement & marché
 const REGL = ['interdit', 'autorise', 'a_suivre']; // réglementaire / légal
-const COLS = 'id, created_at, titre, intro, synthese_produits, synthese_reglementation, items, magasin_id';
+const COLS =
+  'id, created_at, titre, intro, synthese_produits, synthese_fournisseurs, synthese_reglementation, items, magasin_id';
 
 // Fiche molécules (table `molecules`, référence globale mise à jour par l'IA).
 const STATUTS_MOL = {
@@ -43,6 +48,21 @@ function ItemLi({ it }) {
         </span>
         {it.date && <span className="veille-date">🗓️ {formatDateFr(it.date)}</span>}
       </div>
+      {(it.nom || it.marque || it.molecule || it.taux || it.type || it.pays) && (
+        <p className="veille-fiche">
+          {it.nom && <strong>{it.nom}</strong>}
+          {it.marque && <span className="veille-puce">🏷️ {it.marque}</span>}
+          {it.molecule && <span className="veille-puce">🧬 {it.molecule}</span>}
+          {it.taux && <span className="veille-puce">💪 {it.taux}</span>}
+          {it.type && <span className="veille-puce">{it.type}</span>}
+          {it.pays && <span className="veille-puce">📍 {it.pays}</span>}
+          {it.site && (
+            <a href={it.site} target="_blank" rel="noopener noreferrer" className="veille-puce veille-site">
+              🌐 site officiel
+            </a>
+          )}
+        </p>
+      )}
       <p className="veille-texte">{it.texte}</p>
       {it.source_url && (
         <a href={it.source_url} target="_blank" rel="noopener noreferrer" className="veille-source">
@@ -236,6 +256,7 @@ export default function Veille() {
   const [msg, setMsg] = useState('');
   const [avertOuvert, setAvertOuvert] = useState(false); // bandeau « indicatif » replié
   const [prodOuvert, setProdOuvert] = useState(false); // tiroir nouveautés produits
+  const [fournOuvert, setFournOuvert] = useState(false); // tiroir fournisseurs & marché
   const [reglOuvert, setReglOuvert] = useState(false); // tiroir réglementation
   const monteRef = useRef(true); // évite les setState après démontage
   const pollRef = useRef(null); // id du timer de surveillance
@@ -380,6 +401,7 @@ export default function Veille() {
   const items = bulletin?.items ?? [];
   const parDate = (a, b) => (b.date || '').localeCompare(a.date || '');
   const itemsProd = items.filter((i) => PROD.includes(i.categorie)).sort(parDate);
+  const itemsFourn = items.filter((i) => FOURN.includes(i.categorie)).sort(parDate);
   const itemsRegl = items.filter((i) => REGL.includes(i.categorie)).sort(parDate);
 
   return (
@@ -474,20 +496,37 @@ export default function Veille() {
           {/* Synthèse du jour (toujours visible) */}
           {bulletin.intro && <p className="veille-intro">{bulletin.intro}</p>}
 
-          {items.length === 0 && !bulletin.synthese_produits && !bulletin.synthese_reglementation ? (
+          {items.length === 0 &&
+          !bulletin.synthese_produits &&
+          !bulletin.synthese_fournisseurs &&
+          !bulletin.synthese_reglementation ? (
             <p className="vide">Rien de notable sur cette période.</p>
           ) : (
             <>
               {/* Nouveautés produits & fournisseurs : synthèse + tiroir de détail */}
               <SectionTiroir
-                titre="🆕 Nouveautés, produits & fournisseurs"
+                titre="🌿 Nouveautés : fleurs, produits, goodies"
                 synthese={bulletin.synthese_produits}
                 items={itemsProd}
                 ouvert={prodOuvert}
                 onToggle={() => setProdOuvert((o) => !o)}
                 videTexte={
                   !bulletin.synthese_produits && itemsProd.length === 0
-                    ? 'Pas de nouveauté produit repérée ce coup-ci — l’IA scrute les lancements de marques, goûts et gammes fournisseurs.'
+                    ? 'Pas de nouveauté repérée ce coup-ci — l’IA scrute les sorties de fleurs (variété, molécule, taux), les nouveaux produits et les accessoires.'
+                    : null
+                }
+              />
+
+              {/* Fournisseurs européens & tendances : synthèse + tiroir */}
+              <SectionTiroir
+                titre="🏭 Fournisseurs européens & marché"
+                synthese={bulletin.synthese_fournisseurs}
+                items={itemsFourn}
+                ouvert={fournOuvert}
+                onToggle={() => setFournOuvert((o) => !o)}
+                videTexte={
+                  !bulletin.synthese_fournisseurs && itemsFourn.length === 0
+                    ? 'Pas de fournisseur ou de tendance repéré ce coup-ci (les tarifs ne sont jamais indiqués : ils changent trop vite).'
                     : null
                 }
               />
