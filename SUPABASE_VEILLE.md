@@ -9,7 +9,7 @@ coût minime.
 ## Composants déjà en place
 - Table `public.veille` (migration `2026-08-11-veille-cbd.sql`) : lecture pour les
   membres connectés, écriture réservée au `service_role`.
-- Edge Function `veille-cbd` : génération en **3 volets** (`produits`, `fournisseurs`, `legal`), chacun dans sa propre invocation avec recherche web, fusionnés dans le bulletin du jour (`veille_fusionner`). Le front lance les 3 en parallèle ; le **cron** appelle la fonction **sans** `volet` et elle se rappelle elle-même 3 fois avec le secret (fan-out). Déployée.
+- Edge Function `veille-cbd` : génération en **4 volets courts** (`fleurs`, `produits`, `fournisseurs`, `legal`), chacun dans sa propre invocation avec recherche web (≤ 4 recherches, ≤ ~2 000 tokens de sortie : c'est la génération du JSON qui coûte le temps, un volet bavard dépassait le délai à lui seul), fusionnés dans le bulletin du jour (`veille_fusionner`, qui horodate chaque volet dans `veille.volets`). Le front lance les 4 en parallèle et affiche « x/4 volets reçus » ; le **cron** appelle la fonction **sans** `volet` et elle se rappelle elle-même 4 fois avec le secret (fan-out). Repli RSS du volet légal sur Haiku (rapide). Déployée.
 - Front : page `/veille`, carte dans **Gestion**, aperçu sur l'accueil, bouton
   **« Générer maintenant »** (admin).
 

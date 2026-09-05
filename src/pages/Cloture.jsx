@@ -5,7 +5,11 @@ import { parseMontant, formatEuros } from '../lib/format';
 import { aujourdhuiISO } from '../lib/dates';
 import { resumeJour, somme, interessement } from '../lib/comptabilite';
 import { lireBrouillon, ecrireBrouillon, effacerBrouillon } from '../lib/brouillon';
+import { parserMessageCloture, proposerCloture } from '../lib/whatsapp';
 import ChampMontant from '../components/ChampMontant';
+
+// Montant (nombre) → texte de saisie français (virgule), vide pour 0.
+const enSaisie = (n) => (n ? String(n).replace('.', ',') : '');
 
 // Module 1 — Clôture de caisse journalière (par employé / par jour).
 export default function Cloture() {
@@ -31,6 +35,12 @@ export default function Cloture() {
   // CA « tel que déclaré » d'une clôture existante (avant toute modification).
   const [ventesDeclarees, setVentesDeclarees] = useState(null);
   const [modifie, setModifie] = useState(false);
+  // Pré-remplissage depuis un message WhatsApp collé (format habituel de l'équipe).
+  const [collerOuvert, setCollerOuvert] = useState(false);
+  const [texteColle, setTexteColle] = useState('');
+  const [infoColle, setInfoColle] = useState('');
+  // Proposition à appliquer APRÈS le rechargement déclenché par le changement de date.
+  const preRemplissage = useRef(null);
 
   // Brouillon (survit au changement d'onglet) : prêt seulement après chargement,
   // pour ne pas écraser le brouillon avec l'état vide initial.
@@ -111,8 +121,66 @@ export default function Cloture() {
       setPartageurs([]);
       setModifie(false);
     }
+    // Message WhatsApp collé pour une AUTRE date : on applique la proposition
+    // maintenant (après le chargement, sinon elle serait écrasée).
+    if (preRemplissage.current) {
+      const c = preRemplissage.current;
+      preRemplissage.current = null;
+      setForm((f) => ({
+        ...f,
+        cb: enSaisie(c.cb),
+        especes: enSaisie(c.especes),
+        virements: enSaisie(c.virements),
+        fond_caisse: enSaisie(c.fond_caisse),
+        commentaire: c.commentaire || f.commentaire,
+      }));
+      setModifie(true);
+    }
     pret.current = true;
   }, [utilisateur.id, date, tauxParDefaut]);
+
+  // Lit un message de clôture WhatsApp (« CB 3213,7 / Moro 692,5 / Chromes… »)
+  // et pré-remplit le formulaire : rien n'est enregistré tant qu'on ne valide pas.
+  // Les chromes du message ne sont PAS importés (ils se saisissent dans Clients) :
+  // ils servent seulement à recalculer le CA et à signaler un écart.
+  function appliquerColle() {
+    const c = proposerCloture(parserMessageCloture(texteColle));
+    if (!c) {
+      setInfoColle('Message non reconnu : il faut au moins une ligne « CB … » ou « Moro … ».');
+      return;
+    }
+    const messages = [];
+    if (c.caAnnonce != null) {
+      messages.push(
+        c.ecart === 0
+          ? `CA du message vérifié (${formatEuros(c.caAnnonce)}).`
+          : `⚠️ CA annoncé ${formatEuros(c.caAnnonce)} ≠ recalculé ${formatEuros(c.caCalcule)} (écart ${formatEuros(c.ecart)}) — vérifie les montants.`,
+      );
+    }
+    if (c.nbChromes) {
+      messages.push(
+        `${c.nbChromes} chrome(s) dans le message (${formatEuros(c.chromesMessage)}) : à saisir dans Clients s'ils ne le sont pas déjà (voir le récapitulatif).`,
+      );
+    }
+    if (c.nbLivraisons) messages.push(`${c.nbLivraisons} livraison(s) ventilée(s) en espèces / virements (détail en commentaire).`);
+    setInfoColle(messages.join(' '));
+    if (c.date && c.date !== date) {
+      preRemplissage.current = c;
+      setDate(c.date); // → charger() applique la proposition après le rechargement
+    } else {
+      setForm((f) => ({
+        ...f,
+        cb: enSaisie(c.cb),
+        especes: enSaisie(c.especes),
+        virements: enSaisie(c.virements),
+        fond_caisse: enSaisie(c.fond_caisse),
+        commentaire: c.commentaire || f.commentaire,
+      }));
+      setModifie(true);
+    }
+    setCollerOuvert(false);
+    setTexteColle('');
+  }
 
   useEffect(() => {
     charger();
@@ -292,6 +360,37 @@ export default function Cloture() {
         <span>Date</span>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </label>
+
+      <div className="card">
+        <button
+          type="button"
+          className="courses-tete"
+          onClick={() => setCollerOuvert((o) => !o)}
+          aria-expanded={collerOuvert}
+        >
+          <h2>📋 Coller un message WhatsApp</h2>
+          <span className="chevron">{collerOuvert ? '▾' : '▸'}</span>
+        </button>
+        {collerOuvert && (
+          <>
+            <p className="statut">
+              Copie le message de clôture posté dans le groupe (date, CA, CB, Moro, chromes, livraisons,
+              caisse départ) : la date et les montants sont pré-remplis ci-dessous, à vérifier avant
+              d’enregistrer.
+            </p>
+            <textarea
+              rows={6}
+              value={texteColle}
+              onChange={(e) => setTexteColle(e.target.value)}
+              placeholder={'04/09\nCA 4046,20\nCB 3213,7\nMoro 692,5\nChromes\nGaétan +33\n…'}
+            />
+            <button type="button" className="btn btn-primary" onClick={appliquerColle} disabled={!texteColle.trim()}>
+              Pré-remplir la clôture
+            </button>
+          </>
+        )}
+        {infoColle && <p className="statut">{infoColle}</p>}
+      </div>
 
       <div className="grille-caisse">
         <div className="col">
