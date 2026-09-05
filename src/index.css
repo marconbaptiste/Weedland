@@ -1157,6 +1157,9 @@ hr {
   display: block;
   margin: 0.8rem auto 0;
 }
+.banniere-alerte {
+  border: 1px solid var(--rouge);
+}
 .banniere-config {
   display: flex;
   align-items: center;

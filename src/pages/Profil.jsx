@@ -6,6 +6,7 @@ import { formatEuros } from '../lib/format';
 import { aujourdhuiISO, intervallePeriode, intervalleAnnee } from '../lib/dates';
 import { somme } from '../lib/comptabilite';
 import GuideDemarrage from '../components/GuideDemarrage';
+import AlerteClotures from '../components/AlerteClotures';
 import CalculatriceMonnaie from '../components/CalculatriceMonnaie';
 import { lazy, Suspense } from 'react';
 
@@ -219,6 +220,8 @@ export default function Profil() {
   return (
     <div className="page">
       <h1>Bonjour {prenom} 👋</h1>
+
+      <AlerteClotures />
 
       {estAdmin && !configFaite && (
         <Link to="/configuration" className="card banniere-config">
