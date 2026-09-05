@@ -40,7 +40,7 @@ const telechargerModele = (cle) => {
 // - Tableur : dépose les CSV exportés (caisse/charges/fournisseurs), dispatch auto.
 // - Chromes : un CSV détaillé de dettes clients (rattaché par surnom, sans doublon).
 export default function Import() {
-  const { utilisateur, magasinId } = useAuth();
+  const { utilisateur, magasinId, options } = useAuth();
   const [mode, setMode] = useState('tableur');
   const [employes, setEmployes] = useState([]);
   const [employeId, setEmployeId] = useState(utilisateur.id);
@@ -306,7 +306,10 @@ export default function Import() {
         <button className={mode === 'tableur' ? 'actif' : ''} onClick={() => setMode('tableur')}>Tableur</button>
         <button className={mode === 'chromes' ? 'actif' : ''} onClick={() => setMode('chromes')}>Dettes</button>
         <button className={mode === 'stocks' ? 'actif' : ''} onClick={() => setMode('stocks')}>Stocks</button>
-        <button className={mode === 'whatsapp' ? 'actif' : ''} onClick={() => setMode('whatsapp')}>WhatsApp</button>
+        {/* Propre au magasin (drapeau `magasins.import_whatsapp`) : format de message d'une équipe précise. */}
+        {options.whatsapp && (
+          <button className={mode === 'whatsapp' ? 'actif' : ''} onClick={() => setMode('whatsapp')}>WhatsApp</button>
+        )}
       </div>
 
       {mode === 'tableur' ? (
@@ -399,7 +402,7 @@ export default function Import() {
             </>
           )}
         </>
-      ) : mode === 'whatsapp' ? (
+      ) : mode === 'whatsapp' && options.whatsapp ? (
         <>
           <div className="card">
             <p className="statut">

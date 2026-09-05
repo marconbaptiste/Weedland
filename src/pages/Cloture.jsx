@@ -13,7 +13,7 @@ const enSaisie = (n) => (n ? String(n).replace('.', ',') : '');
 
 // Module 1 — Clôture de caisse journalière (par employé / par jour).
 export default function Cloture() {
-  const { utilisateur, profil } = useAuth();
+  const { utilisateur, profil, options } = useAuth();
   const tauxParDefaut = profil?.pourcentage_interessement ?? 0;
   const [date, setDate] = useState(aujourdhuiISO());
   const [form, setForm] = useState({
@@ -361,6 +361,8 @@ export default function Cloture() {
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </label>
 
+      {/* Propre au magasin (drapeau `magasins.import_whatsapp`) : format de message d'une équipe précise. */}
+      {options.whatsapp && (
       <div className="card">
         <button
           type="button"
@@ -391,6 +393,7 @@ export default function Cloture() {
         )}
         {infoColle && <p className="statut">{infoColle}</p>}
       </div>
+      )}
 
       <div className="grille-caisse">
         <div className="col">
