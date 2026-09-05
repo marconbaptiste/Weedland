@@ -20,6 +20,10 @@ export default [
       'react/jsx-uses-vars': 'error',
       'react/jsx-uses-react': 'error',
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      // Une const/let référencée avant sa déclaration (ex. dans les dépendances
+      // d'un useEffect) plante au rendu (TDZ) → écran noir. Les fonctions
+      // déclarées (hoistées) restent permises.
+      'no-use-before-define': ['error', { functions: false, variables: true, classes: true }],
     },
   },
   {

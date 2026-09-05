@@ -3,8 +3,10 @@ import QRCode from 'qrcode';
 // URL encodée dans le QR d'un client : ouvre /carte/<id>, la carte de fidélité
 // PUBLIQUE (le client voit ses tampons sans se connecter ; le personnel connecté
 // peut ajouter un tampon). Le scanner intégré, lui, tamponne directement.
-export function urlFidelite(clientId) {
-  return `${window.location.origin}/carte/${clientId}`;
+// Le `token` (à usage unique, rotatif) est joint en `?t=…` : c'est lui que le
+// scanner consomme — un QR capturé/partagé devient caduc au scan suivant.
+export function urlFidelite(clientId, token) {
+  return `${window.location.origin}/carte/${clientId}${token ? `?t=${token}` : ''}`;
 }
 
 // URL encodée dans le QR d'INSCRIPTION d'un magasin : ouvre /rejoindre/<id>, la

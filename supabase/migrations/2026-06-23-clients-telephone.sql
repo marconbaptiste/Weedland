@@ -25,4 +25,4 @@ from public.clients cl
 left join public.chromes ch on ch.client_id = cl.id
 group by cl.id, cl.surnom, cl.description, cl.telephone;
 
-grant select on public.v_solde_client to anon, authenticated;
+grant select on public.v_solde_client to authenticated;

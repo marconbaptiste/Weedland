@@ -1,13 +1,18 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { messageErreur } from '../lib/erreurs';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant } from '../lib/format';
+import { useInvite } from '../components/ModalePrompt';
+import HorairesEmploye from '../components/HorairesEmploye';
+import { horairesMagasinDefaut } from '../lib/horaires';
 
 // Module — Gestion des comptes (réservé admin).
 // La création de compte passe par l'Edge Function `creer-employe` (clé
 // service_role côté serveur). Le changement de rôle se fait directement (RLS).
 export default function Comptes() {
-  const { utilisateur, profil } = useAuth();
+  const { utilisateur, profil, magasinId } = useAuth();
+  const { invite, elementInvite } = useInvite();
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState({
     nom: '',
@@ -18,18 +23,33 @@ export default function Comptes() {
   });
   const [statut, setStatut] = useState('');
   const [envoi, setEnvoi] = useState(false);
+  const [creationOuverte, setCreationOuverte] = useState(false); // modale « Nouveau compte »
   // Allowlist des emails autorisés à se connecter (notamment via Google).
   const [autorises, setAutorises] = useState([]);
   const [nouvelEmail, setNouvelEmail] = useState('');
+  // Horaires : défaut du magasin (pré-remplissage) + employé en cours d'édition.
+  const [horairesMag, setHorairesMag] = useState(horairesMagasinDefaut());
+  const [horairesEmp, setHorairesEmp] = useState(null); // employé { id, nom, horaires_fixes } | null
+  const [gestion, setGestion] = useState(null); // id de l'employé géré (fiche modale) | null
 
   const charger = useCallback(async () => {
-    const [{ data }, { data: aut }] = await Promise.all([
-      supabase.from('users').select('id, nom, role, pourcentage_interessement').order('nom'),
-      supabase.from('comptes_autorises').select('email, role').order('email'),
+    if (!magasinId) return;
+    // Cloisonnement explicite au magasin actif : la RLS de `users` autorise un
+    // superadmin à lire TOUS les magasins (pour le pilotage) — sans ce filtre,
+    // la gestion des comptes d'un magasin afficherait les employés des autres.
+    const [{ data }, { data: aut }, { data: mag }] = await Promise.all([
+      supabase
+        .from('users')
+        .select('id, nom, role, pourcentage_interessement, horaires_fixes, email, actif')
+        .eq('magasin_id', magasinId)
+        .order('nom'),
+      supabase.from('comptes_autorises').select('email, role').eq('magasin_id', magasinId).order('email'),
+      supabase.from('magasins').select('horaires').eq('id', magasinId).single(),
     ]);
     setUsers(data ?? []);
     setAutorises(aut ?? []);
-  }, []);
+    setHorairesMag({ ...horairesMagasinDefaut(), ...(mag?.horaires ?? {}) });
+  }, [magasinId]);
 
   useEffect(() => {
     charger();
@@ -39,21 +59,62 @@ export default function Comptes() {
     e.preventDefault();
     const email = nouvelEmail.trim().toLowerCase();
     if (!email) return;
-    await supabase
+    const { error } = await supabase
       .from('comptes_autorises')
       .upsert({ email, magasin_id: profil?.magasin_id }, { onConflict: 'email' });
+    if (error) {
+      // L'email est unique sur toute la plateforme : déjà rattaché à un autre magasin.
+      setStatut(
+        error.code === '23505' || /row-level security/i.test(error.message ?? '')
+          ? 'Cet email est déjà utilisé sur un autre magasin.'
+          : `Autorisation impossible : ${messageErreur(error)}`,
+      );
+      return;
+    }
     setNouvelEmail('');
     charger();
   }
 
   async function retirerEmail(email) {
     if (!window.confirm(`Retirer ${email} des comptes autorisés ?`)) return;
-    await supabase.from('comptes_autorises').delete().eq('email', email);
+    await supabase.from('comptes_autorises').delete().eq('email', email).eq('magasin_id', magasinId);
+    charger();
+  }
+
+  // Offboarding : désactive (ou réactive) un compte via l'Edge Function —
+  // bannissement Auth + users.actif=false (la RLS refuse tout immédiatement)
+  // + retrait de l'allowlist. Le profil et son historique sont conservés.
+  async function basculerActif(u) {
+    const desactiver = u.actif !== false;
+    if (
+      desactiver &&
+      !window.confirm(
+        `Désactiver le compte de ${u.nom} ? Il ne pourra plus se connecter ni accéder aux données (réactivable plus tard).`,
+      )
+    )
+      return;
+    setStatut('');
+    const { data, error } = await supabase.functions.invoke('creer-employe', {
+      body: { action: desactiver ? 'desactiver-compte' : 'reactiver-compte', userId: u.id },
+    });
+    if (error || data?.error) {
+      let message = data?.error ?? 'Opération impossible.';
+      try {
+        const corps = await error?.context?.json();
+        if (corps?.error) message = corps.error;
+      } catch {
+        /* message générique */
+      }
+      setStatut(message);
+      return;
+    }
+    setStatut(desactiver ? 'Compte désactivé — accès coupé ✅' : 'Compte réactivé ✅');
     charger();
   }
 
   async function changerRole(id, role) {
-    await supabase.from('users').update({ role }).eq('id', id);
+    const { error } = await supabase.from('users').update({ role }).eq('id', id);
+    setStatut(error ? `Rôle non modifié : ${messageErreur(error)}` : 'Enregistré ✅');
     charger();
   }
 
@@ -67,7 +128,13 @@ export default function Comptes() {
   // Persiste le taux d'intéressement de l'employé (au blur).
   async function enregistrerPourcentage(id, valeur) {
     const taux = parseMontant(valeur);
-    await supabase.from('users').update({ pourcentage_interessement: taux }).eq('id', id);
+    if (taux < 0 || taux > 100) {
+      setStatut('Taux non enregistré : il doit être entre 0 et 100.');
+      charger();
+      return;
+    }
+    const { error } = await supabase.from('users').update({ pourcentage_interessement: taux }).eq('id', id);
+    setStatut(error ? `Taux non enregistré : ${messageErreur(error)}` : 'Enregistré ✅');
     charger();
   }
 
@@ -82,15 +149,20 @@ export default function Comptes() {
       charger(); // restaure l'ancien nom si vidé
       return;
     }
-    await supabase.from('users').update({ nom }).eq('id', id);
+    const { error } = await supabase.from('users').update({ nom }).eq('id', id);
+    setStatut(error ? `Nom non enregistré : ${messageErreur(error)}` : 'Enregistré ✅');
     charger();
   }
 
   async function reinitialiserMdp(id, nom) {
-    const motDePasse = window.prompt(`Nouveau mot de passe pour ${nom} (min. 6 caractères) :`);
+    const motDePasse = await invite({
+      titre: 'Réinitialiser le mot de passe',
+      label: `Nouveau mot de passe pour ${nom} (min. 8 caractères)`,
+      type: 'password',
+    });
     if (!motDePasse) return;
     setStatut('');
-    const { data, error } = await supabase.functions.invoke('hyper-api', {
+    const { data, error } = await supabase.functions.invoke('creer-employe', {
       body: { action: 'reset', userId: id, motDePasse },
     });
     if (error) {
@@ -126,9 +198,7 @@ export default function Comptes() {
       },
       { onConflict: 'email' },
     );
-    // NB : le slug de l'Edge Function déployée est « hyper-api » (le nom affiché
-    // « creer-employe » n'est qu'une étiquette ; le slug ne peut pas changer).
-    const { data, error } = await supabase.functions.invoke('hyper-api', { body: form });
+    const { data, error } = await supabase.functions.invoke('creer-employe', { body: form });
     setEnvoi(false);
     if (error) {
       let message = 'Erreur lors de la création (la fonction creer-employe est-elle déployée ?).';
@@ -147,92 +217,213 @@ export default function Comptes() {
     }
     setForm({ nom: '', email: '', motDePasse: '', role: 'employe', pourcentage: '' });
     setStatut('Compte créé ✅');
+    setCreationOuverte(false);
     charger();
   }
 
   return (
     <div className="page">
-      <h1>Comptes</h1>
-
-      <form className="card" onSubmit={creer}>
-        <h2>Nouveau compte</h2>
-        <label className="field">
-          <span>Nom</span>
-          <input
-            value={form.nom}
-            onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))}
-            required
-          />
-        </label>
-        <label className="field">
-          <span>Email</span>
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            required
-          />
-        </label>
-        <label className="field">
-          <span>Mot de passe</span>
-          <input
-            type="text"
-            value={form.motDePasse}
-            onChange={(e) => setForm((f) => ({ ...f, motDePasse: e.target.value }))}
-            required
-          />
-        </label>
-        <label className="field">
-          <span>Rôle</span>
-          <select
-            value={form.role}
-            onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
-          >
-            <option value="employe">Employé</option>
-            <option value="admin">Admin</option>
-          </select>
-        </label>
-        <label className="field">
-          <span>% d’intéressement (par défaut)</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            placeholder="ex. 5"
-            value={form.pourcentage}
-            onChange={(e) => setForm((f) => ({ ...f, pourcentage: e.target.value }))}
-          />
-        </label>
-        <button className="btn btn-primary" type="submit" disabled={envoi}>
-          {envoi ? 'Création…' : 'Créer le compte'}
+      <div className="entete-client">
+        <h1>Comptes</h1>
+        <button
+          type="button"
+          className="btn btn-primary btn-compact"
+          onClick={() => {
+            setForm({ nom: '', email: '', motDePasse: '', role: 'employe', pourcentage: '' });
+            setStatut('');
+            setCreationOuverte(true);
+          }}
+        >
+          + Nouveau compte
         </button>
-        {statut && <p className="statut">{statut}</p>}
-      </form>
+      </div>
+
+      {!creationOuverte && !gestion && statut && <p className="statut">{statut}</p>}
 
       <div className="card">
         <h2>Employés</h2>
-        <table className="tableau">
-          <thead>
-            <tr>
-              <th>Nom</th>
-              <th>Rôle</th>
-              <th className="droite">% intéress.</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id}>
-                <td>
+        {/* Liste compacte (mobile) : nom + rôle, bouton « Gérer » → fiche modale. */}
+        <ul className="liste-produits">
+          {users.map((u) => (
+            <li key={u.id} className="ligne-produit">
+              <div className="ligne-produit-nom">
+                <span>{u.nom || '—'}</span>
+                {u.id === utilisateur.id ? (
+                  <span className="badge badge-solde tag-partage">Admin (vous)</span>
+                ) : (
+                  <span className="badge tag-partage">{u.role === 'admin' ? 'Admin' : 'Employé'}</span>
+                )}
+              </div>
+              <span className="ligne-produit-qte">
+                {Number(u.pourcentage_interessement) > 0 ? `${u.pourcentage_interessement} %` : '—'}
+              </span>
+              <button
+                type="button"
+                className="btn btn-discret ligne-produit-gerer"
+                onClick={() => setGestion(u.id)}
+              >
+                Gérer
+              </button>
+            </li>
+          ))}
+          {users.length === 0 && <li className="vide">Aucun compte.</li>}
+        </ul>
+      </div>
+
+      {(() => {
+        // L'email autorisé de chaque compte se gère depuis sa fiche. Ici on ne
+        // garde QUE les emails autorisés sans compte encore créé (connexion
+        // Google en attente), pour ne pas dupliquer la liste des comptes.
+        const emailsComptes = new Set(
+          users.map((u) => (u.email ?? '').toLowerCase()).filter(Boolean),
+        );
+        const orphelins = autorises.filter(
+          (a) => !emailsComptes.has((a.email ?? '').toLowerCase()),
+        );
+        return (
+          <div className="card">
+            <h2>Autoriser un email (connexion Google)</h2>
+            <p className="statut">
+              Deux façons d’ajouter quelqu’un : <strong>« + Nouveau compte »</strong> (tu lui crées
+              un identifiant + mot de passe) ou, si la personne préfère se connecter{' '}
+              <strong>avec Google</strong>, autorise simplement son email ici — son profil se créera
+              tout seul à sa première connexion. Les comptes déjà créés autorisent leur email
+              automatiquement.
+            </p>
+            <form className="form-inline" onSubmit={autoriserEmail}>
+              <input
+                type="email"
+                placeholder="email@exemple.com"
+                value={nouvelEmail}
+                onChange={(e) => setNouvelEmail(e.target.value)}
+              />
+              <button className="btn" type="submit">
+                Autoriser
+              </button>
+            </form>
+            {orphelins.length > 0 && (
+              <ul className="liste-produits">
+                {orphelins.map((a) => (
+                  <li key={a.email} className="ligne-produit">
+                    <span className="ligne-produit-nom">{a.email}</span>
+                    <button
+                      type="button"
+                      className="btn btn-discret ligne-produit-gerer"
+                      onClick={() => retirerEmail(a.email)}
+                      aria-label="Retirer l’autorisation"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })()}
+      {creationOuverte && (
+        <div
+          className="aide-fond"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Nouveau compte"
+          onClick={() => setCreationOuverte(false)}
+        >
+          <form className="modale-client" onClick={(e) => e.stopPropagation()} onSubmit={creer}>
+            <div className="modale-client-tete">
+              <strong>Nouveau compte</strong>
+              <button type="button" className="btn btn-discret" onClick={() => setCreationOuverte(false)}>
+                Fermer
+              </button>
+            </div>
+            <div className="form-chrome">
+              <label className="field">
+                <span>Nom</span>
+                <input value={form.nom} onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))} required />
+              </label>
+              <label className="field">
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Mot de passe</span>
+                <input
+                  type="text"
+                  value={form.motDePasse}
+                  onChange={(e) => setForm((f) => ({ ...f, motDePasse: e.target.value }))}
+                  required
+                />
+                <small className="champ-aide">
+                  8 caractères minimum. Il reste visible pour que tu puisses le communiquer à
+                  l’employé.
+                </small>
+              </label>
+              <label className="field">
+                <span>Rôle</span>
+                <select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
+                  <option value="employe">Employé</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>% d’intéressement (par défaut)</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="ex. 5"
+                  value={form.pourcentage}
+                  onChange={(e) => setForm((f) => ({ ...f, pourcentage: e.target.value }))}
+                />
+              </label>
+              <button className="btn btn-primary" type="submit" disabled={envoi}>
+                {envoi ? 'Création…' : 'Créer le compte'}
+              </button>
+              {statut && <p className="statut">{statut}</p>}
+            </div>
+          </form>
+        </div>
+      )}
+
+      {gestion && (() => {
+        const u = users.find((x) => x.id === gestion);
+        if (!u) return null;
+        const estMoi = u.id === utilisateur.id;
+        return (
+          <div
+            className="aide-fond"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Fiche employé"
+            onClick={() => setGestion(null)}
+          >
+            <div className="modale-client" onClick={(e) => e.stopPropagation()}>
+              <div className="modale-client-tete">
+                <strong>
+                  {u.nom || 'Employé'}
+                  {u.actif === false && <span className="badge badge-dette"> désactivé</span>}
+                </strong>
+                <button type="button" className="btn btn-discret" onClick={() => setGestion(null)}>
+                  Fermer
+                </button>
+              </div>
+              <div className="form-chrome">
+                <label className="field">
+                  <span>Nom</span>
                   <input
-                    className="champ-nom"
                     type="text"
                     value={u.nom ?? ''}
                     onChange={(e) => majNomLocal(u.id, e.target.value)}
                     onBlur={(e) => enregistrerNom(u.id, e.target.value)}
                   />
-                </td>
-                <td>
-                  {u.id === utilisateur.id ? (
+                </label>
+                <label className="field">
+                  <span>Rôle</span>
+                  {estMoi ? (
                     <span className="badge badge-solde">Admin (vous)</span>
                   ) : (
                     <select value={u.role} onChange={(e) => changerRole(u.id, e.target.value)}>
@@ -240,90 +431,62 @@ export default function Comptes() {
                       <option value="admin">Admin</option>
                     </select>
                   )}
-                </td>
-                <td className="droite">
+                </label>
+                <label className="field">
+                  <span>% d’intéressement</span>
                   <input
-                    className="champ-pourcentage"
                     type="text"
                     inputMode="decimal"
                     value={u.pourcentage_interessement ?? ''}
                     onChange={(e) => majPourcentageLocal(u.id, e.target.value)}
                     onBlur={(e) => enregistrerPourcentage(u.id, e.target.value)}
                   />
-                </td>
-                <td>
+                </label>
+                <label className="field">
+                  <span>Email de connexion</span>
+                  <input type="email" value={u.email ?? '—'} readOnly disabled />
+                </label>
+                <div className="form-inline">
+                  <button type="button" className="btn" onClick={() => setHorairesEmp(u)}>
+                    🗓️ Horaires fixes
+                  </button>
                   <button
                     type="button"
-                    className="btn btn-discret"
+                    className="btn"
                     onClick={() => reinitialiserMdp(u.id, u.nom)}
                   >
-                    Réinit. MDP
+                    🔑 Réinit. mot de passe
                   </button>
-                </td>
-              </tr>
-            ))}
-            {users.length === 0 && (
-              <tr>
-                <td colSpan={4} className="vide">
-                  Aucun compte.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card">
-        <h2>Connexion Google — emails autorisés</h2>
-        <p className="statut">
-          Seuls ces emails peuvent se connecter (par Google ou mot de passe). Un email retiré ici
-          ne pourra plus créer de nouvelle session. Les comptes que tu crées ci-dessus sont ajoutés
-          automatiquement.
-        </p>
-        <form className="form-inline" onSubmit={autoriserEmail}>
-          <input
-            type="email"
-            placeholder="email@exemple.com"
-            value={nouvelEmail}
-            onChange={(e) => setNouvelEmail(e.target.value)}
-          />
-          <button className="btn" type="submit">
-            Autoriser
-          </button>
-        </form>
-        <table className="tableau">
-          <thead>
-            <tr>
-              <th>Email autorisé</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {autorises.map((a) => (
-              <tr key={a.email}>
-                <td>{a.email}</td>
-                <td className="droite">
+                </div>
+                {!estMoi && (
                   <button
                     type="button"
-                    className="btn btn-discret"
-                    onClick={() => retirerEmail(a.email)}
-                    aria-label="Retirer l’autorisation"
+                    className={`btn ${u.actif === false ? '' : 'btn-discret fiche-supprimer'}`}
+                    onClick={() => basculerActif(u)}
                   >
-                    ✕
+                    {u.actif === false ? '✅ Réactiver le compte' : '🚫 Désactiver le compte (retirer l’accès)'}
                   </button>
-                </td>
-              </tr>
-            ))}
-            {autorises.length === 0 && (
-              <tr>
-                <td colSpan={2} className="vide">
-                  Aucun email autorisé.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                )}
+                {statut && <p className="statut">{statut}</p>}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {horairesEmp && (
+        <HorairesEmploye
+          employe={horairesEmp}
+          defautMagasin={horairesMag}
+          onClose={() => setHorairesEmp(null)}
+          onSaved={(h) =>
+            setUsers((liste) =>
+              liste.map((u) => (u.id === horairesEmp.id ? { ...u, horaires_fixes: h } : u)),
+            )
+          }
+        />
+      )}
+      {elementInvite}
     </div>
   );
 }

@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useVerrou } from '../lib/verrou';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatDateFr } from '../lib/format';
 import { aujourdhuiISO, intervallePeriode } from '../lib/dates';
 import { somme } from '../lib/comptabilite';
@@ -7,6 +9,8 @@ import ChampMontant from '../components/ChampMontant';
 
 // Module 3 — Paiements employés (réservé admin). Total par employé / mois courant.
 export default function Paiements() {
+  const verrou = useVerrou();
+  const { magasinId } = useAuth();
   const [employes, setEmployes] = useState([]);
   const [paiements, setPaiements] = useState([]);
   const [form, setForm] = useState({
@@ -15,14 +19,17 @@ export default function Paiements() {
     motif: '',
     date: aujourdhuiISO(),
   });
+  const [ajoutOuvert, setAjoutOuvert] = useState(false); // modale « Nouveau paiement »
   // Édition en ligne d'un paiement existant (admin).
   const [edition, setEdition] = useState(null); // id en cours d'édition
   const [editForm, setEditForm] = useState({ employe_id: '', montant: '', motif: '', date: '' });
   const [debutMois, finMois] = intervallePeriode('mois');
 
   const charger = useCallback(async () => {
+    if (!magasinId) return;
     const [emp, pay] = await Promise.all([
-      supabase.from('users').select('id, nom').order('nom'),
+      // Cloisonné au magasin actif (la RLS de `users` est large pour le superadmin).
+      supabase.from('users').select('id, nom').eq('magasin_id', magasinId).order('nom'),
       supabase
         .from('paiements_employes')
         .select('id, employe_id, montant, motif, date, users(nom)')
@@ -32,7 +39,7 @@ export default function Paiements() {
     ]);
     setEmployes(emp.data ?? []);
     setPaiements(pay.data ?? []);
-  }, [debutMois, finMois]);
+  }, [debutMois, finMois, magasinId]);
 
   useEffect(() => {
     charger();
@@ -50,6 +57,7 @@ export default function Paiements() {
     });
     if (!error) {
       setForm((f) => ({ ...f, montant: '', motif: '' }));
+      setAjoutOuvert(false);
       charger();
     }
   }
@@ -97,47 +105,77 @@ export default function Paiements() {
 
   return (
     <div className="page">
-      <h1>Paiements employés</h1>
-
-      <form className="card" onSubmit={ajouter}>
-        <label className="field">
-          <span>Employé</span>
-          <select
-            value={form.employe_id}
-            onChange={(e) => setForm((f) => ({ ...f, employe_id: e.target.value }))}
-          >
-            <option value="">— Choisir —</option>
-            {employes.map((emp) => (
-              <option key={emp.id} value={emp.id}>
-                {emp.nom}
-              </option>
-            ))}
-          </select>
-        </label>
-        <ChampMontant
-          label="Montant"
-          valeur={form.montant}
-          onChange={(v) => setForm((f) => ({ ...f, montant: v }))}
-        />
-        <label className="field">
-          <span>Motif</span>
-          <input
-            value={form.motif}
-            onChange={(e) => setForm((f) => ({ ...f, motif: e.target.value }))}
-          />
-        </label>
-        <label className="field">
-          <span>Date</span>
-          <input
-            type="date"
-            value={form.date}
-            onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-          />
-        </label>
-        <button className="btn btn-primary" type="submit">
-          Enregistrer le paiement
+      <div className="entete-client">
+        <h1>Paiements employés</h1>
+        <button
+          type="button"
+          className="btn btn-primary btn-compact"
+          onClick={() => {
+            setForm({ employe_id: '', montant: '', motif: '', date: aujourdhuiISO() });
+            setAjoutOuvert(true);
+          }}
+        >
+          + Nouveau paiement
         </button>
-      </form>
+      </div>
+
+      {ajoutOuvert && (
+        <div
+          className="aide-fond"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Nouveau paiement"
+          onClick={() => setAjoutOuvert(false)}
+        >
+          <form className="modale-client" onClick={(e) => e.stopPropagation()} onSubmit={(e) => verrou(() => ajouter(e))}>
+            <div className="modale-client-tete">
+              <strong>Nouveau paiement</strong>
+              <button type="button" className="btn btn-discret" onClick={() => setAjoutOuvert(false)}>
+                Fermer
+              </button>
+            </div>
+            <div className="form-chrome">
+              <label className="field">
+                <span>Employé</span>
+                <select
+                  value={form.employe_id}
+                  onChange={(e) => setForm((f) => ({ ...f, employe_id: e.target.value }))}
+                >
+                  <option value="">— Choisir —</option>
+                  {employes.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.nom}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <ChampMontant
+                label="Montant"
+                valeur={form.montant}
+                onChange={(v) => setForm((f) => ({ ...f, montant: v }))}
+              />
+              <label className="field">
+                <span>Motif</span>
+                <input
+                  value={form.motif}
+                  onChange={(e) => setForm((f) => ({ ...f, motif: e.target.value }))}
+                />
+              </label>
+              <label className="field">
+                <span>Date</span>
+                <input
+                  type="date"
+                  value={form.date}
+                  onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+                />
+              </label>
+              <button className="btn btn-primary" type="submit">
+                Enregistrer le paiement
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="card">
         <h2>Totaux du mois</h2>
@@ -153,7 +191,7 @@ export default function Paiements() {
 
       <div className="card">
         <h2>Paiements du mois</h2>
-        <table className="tableau">
+        <table className="tableau tableau-cartes">
           <thead>
             <tr>
               <th>Date</th>
@@ -167,14 +205,14 @@ export default function Paiements() {
             {paiements.map((p) =>
               edition === p.id ? (
                 <tr key={p.id}>
-                  <td>
+                  <td data-label="Date">
                     <input
                       type="date"
                       value={editForm.date}
                       onChange={(e) => setEditForm((f) => ({ ...f, date: e.target.value }))}
                     />
                   </td>
-                  <td>
+                  <td data-label="Employé">
                     <select
                       value={editForm.employe_id}
                       onChange={(e) => setEditForm((f) => ({ ...f, employe_id: e.target.value }))}
@@ -186,14 +224,14 @@ export default function Paiements() {
                       ))}
                     </select>
                   </td>
-                  <td>
+                  <td data-label="Motif">
                     <input
                       className="champ-nom"
                       value={editForm.motif}
                       onChange={(e) => setEditForm((f) => ({ ...f, motif: e.target.value }))}
                     />
                   </td>
-                  <td className="droite">
+                  <td className="droite" data-label="Montant">
                     <input
                       className="champ-pourcentage"
                       type="text"
@@ -213,10 +251,10 @@ export default function Paiements() {
                 </tr>
               ) : (
                 <tr key={p.id}>
-                  <td>{formatDateFr(p.date)}</td>
-                  <td>{p.users?.nom ?? '—'}</td>
-                  <td>{p.motif ?? '—'}</td>
-                  <td className="droite">{formatEuros(p.montant)}</td>
+                  <td data-label="Date">{formatDateFr(p.date)}</td>
+                  <td data-label="Employé">{p.users?.nom ?? '—'}</td>
+                  <td data-label="Motif">{p.motif ?? '—'}</td>
+                  <td className="droite" data-label="Montant">{formatEuros(p.montant)}</td>
                   <td className="actions-cellule">
                     <button type="button" className="btn btn-discret" onClick={() => commencerEdition(p)}>
                       Modifier

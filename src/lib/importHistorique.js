@@ -28,6 +28,7 @@ function parseCaisse(rows) {
   const iCA = idx(['ca', 'ventes', 'ventes_directes']);
   const iCB = idx(['cb']);
   const iMoro = idx(['moro', 'especes', 'espèces']);
+  const iVir = idx(['vir', 'virement', 'virements']);
   const out = [];
   for (let r = 1; r < rows.length; r += 1) {
     const ligne = rows[r];
@@ -38,6 +39,7 @@ function parseCaisse(rows) {
       ventes_directes: parseMontant(ligne[iCA] ?? '0'),
       cb: iCB >= 0 ? parseMontant(ligne[iCB] ?? '0') : 0,
       especes: iMoro >= 0 ? parseMontant(ligne[iMoro] ?? '0') : 0,
+      virements: iVir >= 0 ? parseMontant(ligne[iVir] ?? '0') : 0,
     });
   }
   return out;
@@ -105,4 +107,26 @@ export function analyserChromes(texte) {
     out.push({ date, surnom, type, montant });
   }
   return out;
+}
+
+/**
+ * Analyse un CSV de stocks (colonnes catégorie / produit / quantité, en-têtes
+ * souples). Renvoie [{ categorie, nom, quantite }] pour les lignes ayant un nom.
+ * Fonction pure (testée).
+ */
+export function analyserStocks(texte) {
+  const rows = parseCSVObjets(texte);
+  if (rows.length === 0) return [];
+  const cles = Object.keys(rows[0]);
+  const trouver = (cands) => cles.find((k) => cands.some((c) => k.includes(c)));
+  const kCat = trouver(['categorie', 'category', 'famille', 'rayon']);
+  const kNom = trouver(['produit', 'article', 'designation', 'libelle', 'nom', 'product']);
+  const kQte = trouver(['quantite', 'quantity', 'qte', 'qty', 'stock']);
+  return rows
+    .map((r) => ({
+      categorie: (kCat ? r[kCat] : '').trim(),
+      nom: (kNom ? r[kNom] : '').trim(),
+      quantite: parseMontant(kQte ? r[kQte] : '0'),
+    }))
+    .filter((r) => r.nom);
 }
