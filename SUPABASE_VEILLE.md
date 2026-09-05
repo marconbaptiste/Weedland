@@ -9,7 +9,7 @@ coût minime.
 ## Composants déjà en place
 - Table `public.veille` (migration `2026-08-11-veille-cbd.sql`) : lecture pour les
   membres connectés, écriture réservée au `service_role`.
-- Edge Function `veille-cbd` : RSS → tri/résumé IA (Claude) → insertion. Déployée.
+- Edge Function `veille-cbd` : génération en **3 volets** (`produits`, `fournisseurs`, `legal`), chacun dans sa propre invocation avec recherche web, fusionnés dans le bulletin du jour (`veille_fusionner`). Le front lance les 3 en parallèle ; le **cron** appelle la fonction **sans** `volet` et elle se rappelle elle-même 3 fois avec le secret (fan-out). Déployée.
 - Front : page `/veille`, carte dans **Gestion**, aperçu sur l'accueil, bouton
   **« Générer maintenant »** (admin).
 
