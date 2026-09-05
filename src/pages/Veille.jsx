@@ -304,11 +304,19 @@ export default function Veille() {
         .order('created_at', { ascending: true });
       if (monteRef.current) setPropositions(Array.isArray(props) ? props : []);
     }
+    // Génération en 3 volets (produits / fournisseurs / légal), chacun fusionné
+    // dans le bulletin du jour dès qu'il arrive : on affiche au fur et à mesure
+    // et on coupe la roue quand les 3 sont là.
     if (attenduRef.current !== undefined && data && data.id !== attenduRef.current) {
-      attenduRef.current = undefined;
-      if (pollRef.current) clearTimeout(pollRef.current);
-      setGen(false);
-      setMsg(`Bulletin mis à jour ✅ (${(data.items ?? []).length} info(s)).`);
+      const recus = [data.synthese_produits, data.synthese_fournisseurs, data.synthese_reglementation].filter(Boolean).length;
+      if (recus >= 3) {
+        attenduRef.current = undefined;
+        if (pollRef.current) clearTimeout(pollRef.current);
+        setGen(false);
+        setMsg(`Bulletin mis à jour ✅ (${(data.items ?? []).length} info(s)).`);
+      } else {
+        setMsg(`Recherche en cours… ${recus}/3 volets reçus (nouveautés, fournisseurs, légal).`);
+      }
     }
     return data;
   }, [monMag, estSuperadmin]);
@@ -336,7 +344,7 @@ export default function Veille() {
   // bulletin dès qu'il apparaît). Le retour de veille déclenche aussi `charger`.
   const surveiller = useCallback(
     (essai = 0) => {
-      const MAX = 30; // ~5 min à 10 s
+      const MAX = 33; // ~5,5 min à 10 s (3 volets de ≤ 2,5 min en parallèle)
       pollRef.current = setTimeout(async () => {
         if (!monteRef.current) return;
         await charger();
@@ -361,12 +369,19 @@ export default function Veille() {
     setGen(true);
     setMsg('');
     attenduRef.current = bulletin?.id ?? null; // on attend un bulletin d'id différent
-    const { data, error } = await supabase.functions.invoke('veille-cbd', { body: {} });
+    // Trois recherches indépendantes, chacune dans sa propre invocation (une
+    // recherche web ne tient pas dans le délai d'une seule) — lancées en parallèle.
+    const reponses = await Promise.all(
+      ['produits', 'fournisseurs', 'legal'].map((volet) =>
+        supabase.functions.invoke('veille-cbd', { body: { volet } }),
+      ),
+    );
+    const echec = reponses.find((r) => r.error || r.data?.error);
     // Erreur immédiate (non autorisé, clé IA manquante…) → on s'arrête là.
-    if (error || data?.error) {
-      let m = data?.error ?? 'Génération impossible pour le moment.';
+    if (echec && reponses.every((r) => r.error || r.data?.error)) {
+      let m = echec.data?.error ?? 'Génération impossible pour le moment.';
       try {
-        const corps = await error?.context?.json();
+        const corps = await echec.error?.context?.json();
         if (corps?.error) m = corps.error;
       } catch {
         /* message générique */
