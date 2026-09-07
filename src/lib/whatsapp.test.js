@@ -83,16 +83,19 @@ describe('dateDepuisEntete', () => {
 });
 
 describe('proposerCloture', () => {
-  it('ventile les livraisons et contrôle le CA annoncé', () => {
+  it('ne reprend que CB et Moro, et contrôle le CA annoncé', () => {
     const c = proposerCloture(parserMessageCloture(MESSAGE, { dateEnvoi: new Date(2026, 8, 4) }));
+    expect(c.date).toBe('2026-09-04');
     expect(c.cb).toBe(3213.7);
-    expect(c.especes).toBe(744.5); // Moro 692,5 + livraison Chessy 52 (Moro)
-    expect(c.virements).toBe(52); // pote Brahim (mode non précisé)
-    expect(c.fond_caisse).toBe(100);
-    expect(c.caCalcule).toBe(4046.2); // 3213,7 + 744,5 + 52 + 33 + 3
+    expect(c.especes).toBe(692.5); // Moro seul : les livraisons ne sont PAS reprises
+    expect(c.caAnnonce).toBe(4046.2);
+    expect(c.caCalcule).toBe(4046.2); // 3213,7 + 692,5 + livraisons 104 + chromes 36
     expect(c.ecart).toBe(0);
     expect(c.chromesMessage).toBe(36);
-    expect(c.commentaire).toContain('Chessy');
+    expect(c.livraisonsMessage).toBe(104);
+    expect(c.nbLivraisons).toBe(2);
+    expect(c).not.toHaveProperty('virements');
+    expect(c).not.toHaveProperty('fond_caisse');
   });
 
   it('détecte un écart entre CA annoncé et CA recalculé', () => {

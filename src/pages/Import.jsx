@@ -276,16 +276,25 @@ export default function Import() {
     if (!wa) return;
     const rows = wa
       .filter((l) => l.inclure && l.employeId && (!l.existe || remplacerClotures))
-      .map((l) => ({
-        employe_id: l.employeId,
-        date: l.message.date,
-        ventes_directes: somme([l.cloture.cb, l.cloture.especes, l.cloture.virements]),
-        cb: l.cloture.cb,
-        especes: l.cloture.especes,
-        virements: l.cloture.virements,
-        fond_caisse: l.cloture.fond_caisse,
-        commentaire: ['Import WhatsApp', l.cloture.commentaire].filter(Boolean).join(' — '),
-      }));
+      .map((l) => {
+        // Seuls CB et Moro sont repris (demande du magasin). Le CA annoncé et les
+        // livraisons du message restent en commentaire pour rappel : les livraisons
+        // se saisissent ensuite à la main dans la clôture (Virements / autres).
+        const c = l.cloture;
+        const rappels = [];
+        if (c.caAnnonce != null) rappels.push(`CA annoncé ${formatEuros(c.caAnnonce)}`);
+        if (c.nbLivraisons) rappels.push(`${c.nbLivraisons} livraison(s) ${formatEuros(c.livraisonsMessage)} à saisir`);
+        return {
+          employe_id: l.employeId,
+          date: l.message.date,
+          ventes_directes: somme([c.cb, c.especes]),
+          cb: c.cb,
+          especes: c.especes,
+          virements: 0,
+          fond_caisse: 0,
+          commentaire: ['Import WhatsApp', ...rappels].join(' — '),
+        };
+      });
     if (rows.length === 0) {
       setStatut('Aucune clôture à importer (coche des lignes, ou active « remplacer » pour celles déjà en base).');
       return;
@@ -445,9 +454,10 @@ export default function Import() {
               </label>
             </div>
             <p className="statut">
-              Les chromes du message ne sont pas importés (ils se saisissent dans Clients) : ils servent
-              à recalculer le CA et à repérer un oubli. Les livraisons notées « (Moro) » vont en espèces,
-              les autres dans « Virements / autres ».
+              Seuls la <strong>date</strong>, l’<strong>auteur</strong>, la <strong>CB</strong> et le{' '}
+              <strong>Moro</strong> sont repris ; le CA annoncé sert de contrôle. Les chromes sont ceux
+              déjà saisis dans Clients, et les livraisons restent à saisir à la main dans chaque clôture
+              (rappel en commentaire).
             </p>
           </div>
 
@@ -467,8 +477,8 @@ export default function Import() {
                 <table className="tableau tableau-cartes">
                   <thead>
                     <tr>
-                      <th></th><th>Date</th><th>Auteur → employé</th><th className="droite">CB</th><th className="droite">Espèces</th>
-                      <th className="droite">Virements</th><th className="droite">CA</th><th>Chromes</th><th>État</th>
+                      <th></th><th>Date</th><th>Auteur → employé</th><th className="droite">CB</th><th className="droite">Moro</th>
+                      <th className="droite">CA annoncé</th><th>Chromes</th><th>État</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -489,12 +499,14 @@ export default function Import() {
                             </select>
                           </td>
                           <td className="droite" data-label="CB">{formatEuros(c.cb)}</td>
-                          <td className="droite" data-label="Espèces">{formatEuros(c.especes)}</td>
-                          <td className="droite" data-label="Virements">{formatEuros(c.virements)}</td>
-                          <td className="droite" data-label="CA">
-                            {formatEuros(c.caCalcule)}
+                          <td className="droite" data-label="Moro">{formatEuros(c.especes)}</td>
+                          <td className="droite" data-label="CA annoncé">
+                            {c.caAnnonce == null ? '—' : formatEuros(c.caAnnonce)}
+                            {c.nbLivraisons > 0 && (
+                              <span className="promo-qui"> dont {formatEuros(c.livraisonsMessage)} de livraison(s) à saisir</span>
+                            )}
                             {c.caAnnonce != null && c.ecart !== 0 && (
-                              <span className="dette"> ⚠️ annoncé {formatEuros(c.caAnnonce)}</span>
+                              <span className="dette"> ⚠️ le message ne tombe pas juste (écart {formatEuros(c.ecart)})</span>
                             )}
                           </td>
                           <td data-label="Chromes">
