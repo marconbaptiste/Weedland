@@ -222,23 +222,40 @@ export default function Import() {
       supabase.from('chromes').select('employe_id, date, type, montant').eq('magasin_id', magasinId).in('date', dates),
     ]);
     const dejaLa = new Set((existantes ?? []).map((e) => `${e.employe_id}|${e.date}`));
+    const nomPar = new Map(employes.map((e) => [e.id, e.nom]));
     const chromesApp = new Map();
+    const autresApp = new Map(); // chromes « autre » (virement/chèque rattaché à un client) déjà saisis
     for (const c of chr ?? []) {
       const k = `${c.employe_id}|${c.date}`;
       const signe = c.type === 'remboursement' ? -1 : 1;
       chromesApp.set(k, somme([chromesApp.get(k) ?? 0, signe * Number(c.montant)]));
+      if (c.type === 'autre') autresApp.set(k, somme([autresApp.get(k) ?? 0, Number(c.montant)]));
     }
     setWa(
       clos.map((c) => {
         const emp = trouverEmploye(c.auteur, employes);
         const k = emp ? `${emp.id}|${c.message.date}` : '';
         const existe = dejaLa.has(k);
+        // ANTI-DOUBLON : une clôture est unique par (employé, date) — l'upsert ne
+        // peut donc jamais créer deux lignes pour le même employé. Le vrai risque
+        // est une DEUXIÈME clôture du même jour sous un AUTRE employé (CA compté
+        // deux fois) : déjà en base, ou deux messages du lot pour la même date.
+        const autresJour = (existantes ?? [])
+          .filter((e) => e.date === c.message.date && e.employe_id !== emp?.id)
+          .map((e) => nomPar.get(e.employe_id) ?? 'un collègue');
+        const memeDateLot = clos.filter((o) => o !== c && o.message.date === c.message.date).map((o) => o.auteur);
+        // Livraisons du message peut-être déjà saisies en chrome « autre » ce jour.
+        const autresDeja = autresApp.get(k) ?? 0;
         return {
           ...c,
           employeId: emp?.id ?? '',
           existe,
           chromesApp: chromesApp.has(k) ? chromesApp.get(k) : null,
-          inclure: Boolean(emp) && !existe,
+          autresJour,
+          memeDateLot,
+          autresDeja: c.cloture.nbLivraisons > 0 ? autresDeja : 0,
+          // Décoché par défaut dès qu'il y a un risque de double comptage.
+          inclure: Boolean(emp) && !existe && autresJour.length === 0 && memeDateLot.length === 0,
         };
       }),
     );
@@ -488,6 +505,15 @@ export default function Import() {
                           </td>
                           <td data-label="État">
                             {!l.employeId ? 'Employé inconnu' : l.existe ? (remplacerClotures ? 'À remplacer' : 'Déjà en base') : 'Nouvelle'}
+                            {l.autresJour.length > 0 && (
+                              <span className="dette"> ⚠️ {l.autresJour.join(', ')} a déjà clôturé ce jour (double CA ?)</span>
+                            )}
+                            {l.memeDateLot.length > 0 && (
+                              <span className="dette"> ⚠️ même date aussi postée par {l.memeDateLot.join(', ')}</span>
+                            )}
+                            {l.autresDeja > 0 && (
+                              <span className="dette"> ⚠️ {formatEuros(l.autresDeja)} déjà saisis en « autre » ce jour : livraisons peut-être déjà comptées</span>
+                            )}
                             {l.message.avertissements.length > 0 && (
                               <span className="promo-qui" title={l.message.avertissements.join('\n')}> · {l.message.avertissements.length} ligne(s) ignorée(s)</span>
                             )}

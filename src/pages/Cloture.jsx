@@ -41,6 +41,9 @@ export default function Cloture() {
   const [infoColle, setInfoColle] = useState('');
   // Proposition à appliquer APRÈS le rechargement déclenché par le changement de date.
   const preRemplissage = useRef(null);
+  // Collègues ayant DÉJÀ une clôture à cette date (anti-doublon : une deuxième
+  // clôture du même jour par un autre employé compterait le CA deux fois).
+  const [autresClotures, setAutresClotures] = useState([]);
 
   // Brouillon (survit au changement d'onglet) : prêt seulement après chargement,
   // pour ne pas écraser le brouillon avec l'état vide initial.
@@ -67,7 +70,7 @@ export default function Cloture() {
     const cle = `brouillon-caisse:${utilisateur.id}:${date}`;
 
     // Les deux lectures sont indépendantes → en parallèle.
-    const [{ data: caisse }, { data: chromes }] = await Promise.all([
+    const [{ data: caisse }, { data: chromes }, { data: autres }] = await Promise.all([
       supabase
         .from('caisse_jour')
         .select('*')
@@ -79,8 +82,11 @@ export default function Cloture() {
         .select('type, montant')
         .eq('employe_id', utilisateur.id)
         .eq('date', date),
+      // Noms des collègues ayant déjà clôturé ce jour (fonction bornée au magasin).
+      supabase.rpc('clotures_jour', { p_date: date }),
     ]);
     setChromesJour(chromes ?? []);
+    setAutresClotures((autres ?? []).filter((a) => a.employe_id !== utilisateur.id).map((a) => a.nom));
     setCaisseId(caisse?.id ?? null);
 
     const brouillon = lireBrouillon(cle);
@@ -360,6 +366,19 @@ export default function Cloture() {
         <span>Date</span>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </label>
+
+      {autresClotures.length > 0 && (
+        <div className="card banniere-config banniere-alerte">
+          <span className="banniere-config-emoji">⚠️</span>
+          <span>
+            <strong>{autresClotures.join(', ')} a déjà enregistré une clôture pour ce jour.</strong>
+            <span className="statut">
+              En relais (l’un après l’autre, chacun sa part de CA) c’est normal. Sinon, ne saisis pas une
+              deuxième fois la même caisse : le CA serait compté deux fois.
+            </span>
+          </span>
+        </div>
+      )}
 
       {/* Propre au magasin (drapeau `magasins.import_whatsapp`) : format de message d'une équipe précise. */}
       {options.whatsapp && (
