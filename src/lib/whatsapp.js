@@ -23,10 +23,10 @@
 //    iOS ou Android) → toutes les clôtures trouvées, avec leur auteur (Import).
 //
 // Règles métier (cf. comptabilite.js) : « Moro » = espèces. Le CA annoncé dans le
-// message = CB + Moro + Σ chromes + Σ livraisons. Dans l'app, les chromes sont
-// saisis à part (registre `chromes`) : on ne les réimporte PAS, on s'en sert
-// seulement pour contrôler le CA. Les livraisons encaissées sont ventilées : celles
-// notées « (Moro) » vont dans les espèces, les autres dans « Virements / autres ».
+// message = CB + Moro + Σ chromes + Σ livraisons. On ne REPREND que la date,
+// l'auteur, le CA (contrôle), la CB et le Moro — demande du magasin. Les chromes
+// sont déjà saisis dans l'app (registre `chromes`) et les livraisons se saisissent
+// à la main dans la clôture : le message ne sert qu'à les rappeler.
 import { parseMontant } from './format';
 import { somme } from './comptabilite';
 
@@ -202,37 +202,33 @@ export function parserMessageCloture(texte, { dateEnvoi } = {}) {
 
 /**
  * Propose les champs d'une clôture de l'app à partir d'un message analysé.
- * - espèces = Moro + livraisons payées en espèces ;
- * - virements = virements annoncés + livraisons hors espèces (virement, inconnu) ;
- * - CB = CB annoncée + livraisons notées (CB).
- * Le CA recalculé (CB + espèces + virements + avances − remboursements) est
- * comparé au CA annoncé : `ecart` ≠ 0 → à vérifier avant d'enregistrer.
+ * VOLONTAIREMENT MINIMAL (demande du magasin) : on ne reprend que la DATE, la
+ * CB et le MORO (espèces). Le CA annoncé sert de CONTRÔLE, rien d'autre n'est
+ * repris : les chromes sont déjà saisis dans Clients, et les livraisons se
+ * saisissent à la main dans la clôture (« Virements / autres » ou espèces).
+ * `caCalcule` = CB + Moro + chromes du message + livraisons du message (contrôle
+ * de cohérence interne du message) ; `livraisonsMessage` = total des livraisons
+ * annoncées (à saisir dans l'app), pour expliquer un écart avec le CA de l'app.
  */
 export function proposerCloture(msg) {
   if (!msg) return null;
-  const livr = (mode) => somme(msg.livraisons.filter((l) => l.mode === mode).map((l) => l.montant));
-  const cb = somme([msg.cb ?? 0, livr('cb')]);
-  const especes = somme([msg.especes ?? 0, livr('especes')]);
-  const virements = somme([msg.virements ?? 0, livr('virement'), livr('inconnu')]);
+  const cb = msg.cb ?? 0;
+  const especes = msg.especes ?? 0;
   const avances = somme(msg.chromes.filter((c) => c.type === 'avance').map((c) => c.montant));
   const remboursements = somme(msg.chromes.filter((c) => c.type === 'remboursement').map((c) => c.montant));
-  const caCalcule = somme([cb, especes, virements, avances, -remboursements]);
+  const livraisonsMessage = somme(msg.livraisons.map((l) => l.montant));
+  const caCalcule = somme([cb, especes, msg.virements ?? 0, livraisonsMessage, avances, -remboursements]);
   const ecart = msg.ca == null ? 0 : somme([msg.ca, -caCalcule]);
-  const detailLivr = msg.livraisons
-    .map((l) => `+${String(l.montant).replace('.', ',')} ${l.nom}${l.mode === 'especes' ? ' (espèces)' : ''}`)
-    .join(', ');
   return {
     date: msg.date,
     cb,
     especes,
-    virements,
-    fond_caisse: msg.fond ?? 0,
-    commentaire: detailLivr ? `Livraisons : ${detailLivr}` : '',
     caAnnonce: msg.ca,
     caCalcule,
     ecart,
     chromesMessage: somme([avances, -remboursements]),
     nbChromes: msg.chromes.length,
+    livraisonsMessage,
     nbLivraisons: msg.livraisons.length,
   };
 }

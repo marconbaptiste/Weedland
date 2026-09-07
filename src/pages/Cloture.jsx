@@ -39,6 +39,10 @@ export default function Cloture() {
   const [collerOuvert, setCollerOuvert] = useState(false);
   const [texteColle, setTexteColle] = useState('');
   const [infoColle, setInfoColle] = useState('');
+  // CA annoncé dans le message WhatsApp : sert de CONTRÔLE face au CA de l'app
+  // (CB + espèces + virements + chromes saisis) — un écart = livraisons/chromes
+  // pas encore saisis, ou une erreur de frappe.
+  const [caAnnonce, setCaAnnonce] = useState(null);
   // Proposition à appliquer APRÈS le rechargement déclenché par le changement de date.
   const preRemplissage = useRef(null);
   // Collègues ayant DÉJÀ une clôture à cette date (anti-doublon : une deuxième
@@ -132,56 +136,38 @@ export default function Cloture() {
     if (preRemplissage.current) {
       const c = preRemplissage.current;
       preRemplissage.current = null;
-      setForm((f) => ({
-        ...f,
-        cb: enSaisie(c.cb),
-        especes: enSaisie(c.especes),
-        virements: enSaisie(c.virements),
-        fond_caisse: enSaisie(c.fond_caisse),
-        commentaire: c.commentaire || f.commentaire,
-      }));
+      setForm((f) => ({ ...f, cb: enSaisie(c.cb), especes: enSaisie(c.especes) }));
       setModifie(true);
+    } else {
+      setCaAnnonce(null); // autre jour : le contrôle WhatsApp ne s'applique plus
     }
     pret.current = true;
   }, [utilisateur.id, date, tauxParDefaut]);
 
-  // Lit un message de clôture WhatsApp (« CB 3213,7 / Moro 692,5 / Chromes… »)
-  // et pré-remplit le formulaire : rien n'est enregistré tant qu'on ne valide pas.
-  // Les chromes du message ne sont PAS importés (ils se saisissent dans Clients) :
-  // ils servent seulement à recalculer le CA et à signaler un écart.
+  // Lit un message de clôture WhatsApp (« CB 3213,7 / Moro 692,5 / … ») et ne
+  // reprend QUE la date, la CB et le Moro (espèces) — rien n'est enregistré tant
+  // qu'on ne valide pas. Le CA annoncé sert de contrôle (récapitulatif). Les
+  // chromes sont déjà dans Clients ; les livraisons se saisissent à la main ici.
   function appliquerColle() {
     const c = proposerCloture(parserMessageCloture(texteColle));
     if (!c) {
       setInfoColle('Message non reconnu : il faut au moins une ligne « CB … » ou « Moro … ».');
       return;
     }
-    const messages = [];
-    if (c.caAnnonce != null) {
+    const messages = [`Repris : CB ${formatEuros(c.cb)} et espèces (Moro) ${formatEuros(c.especes)}.`];
+    if (c.nbLivraisons) {
       messages.push(
-        c.ecart === 0
-          ? `CA du message vérifié (${formatEuros(c.caAnnonce)}).`
-          : `⚠️ CA annoncé ${formatEuros(c.caAnnonce)} ≠ recalculé ${formatEuros(c.caCalcule)} (écart ${formatEuros(c.ecart)}) — vérifie les montants.`,
+        `${c.nbLivraisons} livraison(s) dans le message (${formatEuros(c.livraisonsMessage)}) : saisis-les dans « Virements / autres » (ou en espèces si payées en liquide).`,
       );
     }
-    if (c.nbChromes) {
-      messages.push(
-        `${c.nbChromes} chrome(s) dans le message (${formatEuros(c.chromesMessage)}) : à saisir dans Clients s'ils ne le sont pas déjà (voir le récapitulatif).`,
-      );
-    }
-    if (c.nbLivraisons) messages.push(`${c.nbLivraisons} livraison(s) ventilée(s) en espèces / virements (détail en commentaire).`);
+    if (c.caAnnonce != null) messages.push('Le CA annoncé est comparé au CA de l’app dans le récapitulatif.');
     setInfoColle(messages.join(' '));
+    setCaAnnonce(c.caAnnonce);
     if (c.date && c.date !== date) {
       preRemplissage.current = c;
       setDate(c.date); // → charger() applique la proposition après le rechargement
     } else {
-      setForm((f) => ({
-        ...f,
-        cb: enSaisie(c.cb),
-        especes: enSaisie(c.especes),
-        virements: enSaisie(c.virements),
-        fond_caisse: enSaisie(c.fond_caisse),
-        commentaire: c.commentaire || f.commentaire,
-      }));
+      setForm((f) => ({ ...f, cb: enSaisie(c.cb), especes: enSaisie(c.especes) }));
       setModifie(true);
     }
     setCollerOuvert(false);
@@ -395,9 +381,10 @@ export default function Cloture() {
         {collerOuvert && (
           <>
             <p className="statut">
-              Copie le message de clôture posté dans le groupe (date, CA, CB, Moro, chromes, livraisons,
-              caisse départ) : la date et les montants sont pré-remplis ci-dessous, à vérifier avant
-              d’enregistrer.
+              Copie le message de clôture posté dans le groupe : seuls la <strong>date</strong>, la{' '}
+              <strong>CB</strong> et le <strong>Moro</strong> (espèces) sont repris, et le CA annoncé sert de
+              contrôle. Les livraisons se saisissent ensuite à la main dans « Virements / autres » ; les
+              chromes sont ceux déjà saisis dans Clients.
             </p>
             <textarea
               rows={6}
@@ -553,6 +540,23 @@ export default function Cloture() {
             <span className="recap-valeur">{formatEuros(resume.encaissements)}</span>
           </div>
         </div>
+        {caAnnonce != null && (
+          <div className="recap-ligne">
+            <span>CA annoncé (WhatsApp)</span>
+            <strong>
+              {formatEuros(caAnnonce)}
+              {Math.abs(somme([caAnnonce, -caAffiche])) < 0.005 ? (
+                <span className="solde-ok"> ✓ identique</span>
+              ) : (
+                <span className="dette">
+                  {' '}
+                  ⚠️ écart {formatEuros(somme([caAnnonce, -caAffiche]))} (livraisons ou chromes pas encore
+                  saisis ?)
+                </span>
+              )}
+            </strong>
+          </div>
+        )}
         <p className="statut">
           CA = ventes du jour (CB, espèces, virements, hors remboursements de dettes) + avances +
           autres. Un remboursement récupère une dette déjà comptée au CA le jour de l’avance.
