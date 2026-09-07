@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { Fragment, useEffect, useState, useCallback } from 'react';
+import { supabase, lireTout } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { parseMontant, formatEuros, formatNombre, formatDateFr } from '../lib/format';
 import { premierDuMois, intervallePeriode } from '../lib/dates';
+import { somme } from '../lib/comptabilite';
 import ChampMontant from '../components/ChampMontant';
 
 // Module Historique.
@@ -10,18 +11,48 @@ import ChampMontant from '../components/ChampMontant';
 //   fiches lisibles, avec le détail des chromes par client.
 // - Employé : son propre historique (clôtures + journées partagées).
 export default function Historique() {
-  const { utilisateur, estAdmin } = useAuth();
+  const { utilisateur, estAdmin, magasinId } = useAuth();
 
   // ---------- Vue employé (personnelle) ----------
   const [perso, setPerso] = useState([]);
+  const [chromesPerso, setChromesPerso] = useState({}); // date -> {avances, remboursements, autres}
   useEffect(() => {
-    if (estAdmin) return;
-    supabase
-      .from('v_interessement_employe')
-      .select('caisse_id, date, est_proprietaire, ca_jour, encaissements, ecart, heures_travaillees, interessement')
-      .eq('employe_id', utilisateur.id)
-      .order('date', { ascending: false })
-      .then(({ data }) => setPerso(data ?? []));
+    if (estAdmin) return undefined;
+    let annule = false;
+    (async () => {
+      // Paginé (`lireTout`) : tout l'historique de l'employé, au-delà des
+      // 1 000 lignes que PostgREST renvoie par défaut sans prévenir.
+      const [{ data: p }, { data: chr }] = await Promise.all([
+        lireTout(
+          supabase
+            .from('v_interessement_employe')
+            .select('caisse_id, date, est_proprietaire, ca_jour, encaissements, ecart, heures_travaillees, interessement')
+            .eq('employe_id', utilisateur.id)
+            .order('date', { ascending: false })
+            .order('caisse_id'),
+        ),
+        lireTout(
+          supabase
+            .from('chromes')
+            .select('date, type, montant, clients(surnom)')
+            .eq('employe_id', utilisateur.id)
+            .order('id'),
+        ),
+      ]);
+      if (annule) return;
+      setPerso(p ?? []);
+      const map = {};
+      (chr ?? []).forEach((c) => {
+        if (!map[c.date]) map[c.date] = { avances: [], remboursements: [], autres: [] };
+        const cible =
+          c.type === 'avance' ? map[c.date].avances : c.type === 'autre' ? map[c.date].autres : map[c.date].remboursements;
+        cible.push({ surnom: c.clients?.surnom ?? 'client', montant: c.montant });
+      });
+      setChromesPerso(map);
+    })();
+    return () => {
+      annule = true;
+    };
   }, [estAdmin, utilisateur.id]);
 
   // ---------- Vue admin (générale) ----------
@@ -38,14 +69,14 @@ export default function Historique() {
     const [cl, emps, chr] = await Promise.all([
       supabase
         .from('v_ca_jour')
-        .select('caisse_id, date, employe_id, ventes_directes, cb, especes, fond_caisse, avances, remboursements, ca_jour, encaissements, ecart')
+        .select('caisse_id, date, employe_id, ventes_directes, cb, especes, virements, fond_caisse, avances, remboursements, autres, ca_jour, encaissements, ecart')
         .gte('date', debut)
         .lte('date', fin)
         .order('date', { ascending: false }),
-      supabase.from('users').select('id, nom'),
+      supabase.from('users').select('id, nom').eq('magasin_id', magasinId),
       supabase
         .from('chromes')
-        .select('date, employe_id, type, montant, clients(surnom)')
+        .select('date, employe_id, type, montant, modifie_le, modifie_par, clients(surnom)')
         .gte('date', debut)
         .lte('date', fin),
     ]);
@@ -54,12 +85,18 @@ export default function Historique() {
     const map = {};
     (chr.data ?? []).forEach((c) => {
       const k = `${c.employe_id}|${c.date}`;
-      if (!map[k]) map[k] = { avances: [], remboursements: [] };
-      const cible = c.type === 'avance' ? map[k].avances : map[k].remboursements;
-      cible.push({ surnom: c.clients?.surnom ?? 'client', montant: c.montant });
+      if (!map[k]) map[k] = { avances: [], remboursements: [], autres: [] };
+      const cible =
+        c.type === 'avance' ? map[k].avances : c.type === 'autre' ? map[k].autres : map[k].remboursements;
+      cible.push({
+        surnom: c.clients?.surnom ?? 'client',
+        montant: c.montant,
+        modifie_le: c.modifie_le,
+        modifie_par: c.modifie_par,
+      });
     });
     setChromes(map);
-  }, [mois]);
+  }, [mois, magasinId]);
 
   useEffect(() => {
     if (estAdmin) chargerAdmin();
@@ -70,7 +107,7 @@ export default function Historique() {
       <div className="page">
         <h1>Mon historique</h1>
         <div className="card">
-          <table className="tableau">
+          <table className="tableau tableau-cartes">
             <thead>
               <tr>
                 <th>Date</th>
@@ -81,18 +118,48 @@ export default function Historique() {
               </tr>
             </thead>
             <tbody>
-              {perso.map((l) => (
-                <tr key={l.caisse_id}>
-                  <td>
-                    {formatDateFr(l.date)}
-                    {!l.est_proprietaire && <span className="badge badge-solde tag-partage">partagée</span>}
-                  </td>
-                  <td className="droite">{l.est_proprietaire ? formatEuros(l.ca_jour) : '—'}</td>
-                  <td className="droite">{l.est_proprietaire ? formatEuros(l.encaissements) : '—'}</td>
-                  <td className="droite">{formatNombre(l.heures_travaillees)}</td>
-                  <td className="droite">{formatEuros(l.interessement)}</td>
-                </tr>
-              ))}
+              {perso.map((l) => {
+                const d = chromesPerso[l.date];
+                const aChromes = d && (d.avances.length || d.remboursements.length || d.autres.length);
+                return (
+                  <Fragment key={l.caisse_id}>
+                    <tr>
+                      <td data-label="Date">
+                        {formatDateFr(l.date)}
+                        {!l.est_proprietaire && <span className="badge badge-solde tag-partage">partagée</span>}
+                      </td>
+                      <td className="droite" data-label="CA">{l.est_proprietaire ? formatEuros(l.ca_jour) : '—'}</td>
+                      <td className="droite" data-label="Encaissements">{l.est_proprietaire ? formatEuros(l.encaissements) : '—'}</td>
+                      <td className="droite" data-label="Heures">{formatNombre(l.heures_travaillees)}</td>
+                      <td className="droite" data-label="Intéress.">{formatEuros(l.interessement)}</td>
+                    </tr>
+                    {aChromes && (
+                      <tr className="histo-chromes-ligne">
+                        <td colSpan={5}>
+                          <div className="histo-chromes-jour">
+                            <span className="histo-chromes-label">Chromes du jour :</span>
+                            {d.avances.map((a, i) => (
+                              <span key={`a${i}`} className="chip-chrome">
+                                {a.surnom} <span className="dette">+{formatEuros(a.montant)}</span>
+                              </span>
+                            ))}
+                            {d.remboursements.map((r, i) => (
+                              <span key={`r${i}`} className="chip-chrome">
+                                {r.surnom} <span className="solde-ok">−{formatEuros(r.montant)}</span>
+                              </span>
+                            ))}
+                            {d.autres.map((v, i) => (
+                              <span key={`o${i}`} className="chip-chrome">
+                                {v.surnom} <span>{formatEuros(v.montant)}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
               {perso.length === 0 && (
                 <tr><td colSpan={5} className="vide">Aucune clôture enregistrée.</td></tr>
               )}
@@ -110,6 +177,7 @@ export default function Historique() {
     setEditForm({
       cb: String(c.cb),
       especes: String(c.especes),
+      virements: String(c.virements ?? 0),
       fond_caisse: String(c.fond_caisse),
       employe_id: c.employe_id,
     });
@@ -117,15 +185,26 @@ export default function Historique() {
   const majEdit = (champ) => (v) => setEditForm((f) => ({ ...f, [champ]: v }));
 
   async function enregistrerEdition(id) {
-    // CA recalculé automatiquement : ventes_directes = CB + espèces.
+    // CA recalculé automatiquement : ventes_directes = CB + espèces + virements
+    // (même convention que la Clôture — oublier les virements ici faisait
+    // chuter le CA de la journée à chaque correction).
+    const cb = parseMontant(editForm.cb);
+    const especes = parseMontant(editForm.especes);
+    const virements = parseMontant(editForm.virements);
+    const fond = parseMontant(editForm.fond_caisse);
+    if ([cb, especes, virements, fond].some((v) => v < 0)) {
+      setEditMsg('Les montants ne peuvent pas être négatifs.');
+      return;
+    }
     const { error } = await supabase
       .from('caisse_jour')
       .update({
         employe_id: editForm.employe_id,
-        ventes_directes: parseMontant(editForm.cb) + parseMontant(editForm.especes),
-        cb: parseMontant(editForm.cb),
-        especes: parseMontant(editForm.especes),
-        fond_caisse: parseMontant(editForm.fond_caisse),
+        ventes_directes: somme([cb, especes, virements]),
+        cb,
+        especes,
+        virements,
+        fond_caisse: fond,
       })
       .eq('id', id);
     if (error) {
@@ -164,7 +243,7 @@ export default function Historique() {
         employe_id,
         date,
         closure: closures.find((c) => `${c.employe_id}|${c.date}` === cle) ?? null,
-        det: chromes[cle] || { avances: [], remboursements: [] },
+        det: chromes[cle] || { avances: [], remboursements: [], autres: [] },
       };
     })
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
@@ -207,7 +286,8 @@ export default function Historique() {
                   </select>
                 </label>
                 <ChampMontant label="Encaissements CB" valeur={editForm.cb} onChange={majEdit('cb')} />
-                <ChampMontant label="Espèces (Moro)" valeur={editForm.especes} onChange={majEdit('especes')} />
+                <ChampMontant label="Espèces" valeur={editForm.especes} onChange={majEdit('especes')} />
+                <ChampMontant label="Virements / autres" valeur={editForm.virements} onChange={majEdit('virements')} />
                 <ChampMontant label="Fond de caisse" valeur={editForm.fond_caisse} onChange={majEdit('fond_caisse')} />
                 <div className="form-inline">
                   <button className="btn btn-primary" onClick={() => enregistrerEdition(c.caisse_id)}>Enregistrer</button>
@@ -223,7 +303,12 @@ export default function Historique() {
                   <div className="histo-grille">
                     <span>CA</span><strong>{formatEuros(c.ca_jour)}</strong>
                     <span>CB</span><span>{formatEuros(c.cb)}</span>
-                    <span>Espèces (Moro)</span><span>{formatEuros(c.especes)}</span>
+                    <span>Espèces</span><span>{formatEuros(c.especes)}</span>
+                    {Number(c.virements) > 0 && (
+                      <>
+                        <span>Virements / autres</span><span>{formatEuros(c.virements)}</span>
+                      </>
+                    )}
                     <span>Fond de caisse</span><span>{formatEuros(c.fond_caisse)}</span>
                   </div>
                 ) : (
@@ -237,6 +322,11 @@ export default function Historique() {
                       <div key={i} className="histo-chrome">
                         <span>{a.surnom}</span>
                         <span className="dette">+ {formatEuros(a.montant)}</span>
+                        {a.modifie_le && (
+                          <span className="histo-modif">
+                            ✏️ corrigé par {noms[a.modifie_par] ?? '—'} le {formatDateFr(a.modifie_le)}
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -249,6 +339,28 @@ export default function Historique() {
                       <div key={i} className="histo-chrome">
                         <span>{r.surnom}</span>
                         <span className="solde-ok">− {formatEuros(r.montant)}</span>
+                        {r.modifie_le && (
+                          <span className="histo-modif">
+                            ✏️ corrigé par {noms[r.modifie_par] ?? '—'} le {formatDateFr(r.modifie_le)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {det.autres.length > 0 && (
+                  <div className="histo-bloc">
+                    <span className="histo-titre">Autres</span>
+                    {det.autres.map((v, i) => (
+                      <div key={i} className="histo-chrome">
+                        <span>{v.surnom}</span>
+                        <span>{formatEuros(v.montant)}</span>
+                        {v.modifie_le && (
+                          <span className="histo-modif">
+                            ✏️ corrigé par {noms[v.modifie_par] ?? '—'} le {formatDateFr(v.modifie_le)}
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>

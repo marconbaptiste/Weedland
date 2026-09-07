@@ -1,10 +1,15 @@
 // Edge Function : création de comptes + inscription self-service d'un magasin.
-// Déploiement : `supabase functions deploy creer-employe` (slug déployé : hyper-api).
+// Déploiement : `supabase functions deploy creer-employe` (slug : creer-employe).
 //
-// Trois usages :
-//  - action 'inscription' : PUBLIC (pas d'auth). Crée un magasin + son admin,
-//    protégé par un code secret (Deno.env CODE_INSCRIPTION). Anti-spam.
+// Usages :
+//  - action 'creer-magasin' : compte CONNECTÉ dont l'email est CONFIRMÉ et qui
+//    n'a pas encore de profil (inscription publique : le front fait
+//    auth.signUp → email de confirmation → à la 1re connexion on crée le
+//    magasin + le profil admin). Preuve de possession de l'email = la
+//    confirmation Supabase Auth ; 1 magasin par email ; plafond global/jour.
 //  - action 'reset' : admin/superadmin — réinitialise le mot de passe d'un employé.
+//  - action 'desactiver-compte' / 'reactiver-compte' : offboarding.
+//  - action 'supprimer-magasin' : super-admin.
 //  - défaut : admin/superadmin — crée un compte employé/admin.
 //
 // Le trigger handle_new_user (schema) crée le profil public.users à partir de
@@ -35,74 +40,6 @@ Deno.serve(async (req) => {
     const corps = await req.json();
 
     // ----------------------------------------------------------------------
-    // 1) Inscription self-service d'un magasin (PUBLIC, protégée par un code).
-    // ----------------------------------------------------------------------
-    if (corps.action === 'inscription') {
-      const admin = createClient(url, serviceRole);
-      const codeSaisi = String(corps.code ?? '').trim();
-      const codeEnv = (Deno.env.get('CODE_INSCRIPTION') ?? '').trim();
-      // Code valide s'il existe (actif) dans codes_inscription OU = secret env.
-      const { data: codeRow } = await admin
-        .from('codes_inscription')
-        .select('code, utilisations')
-        .eq('code', codeSaisi)
-        .eq('actif', true)
-        .maybeSingle();
-      if (!codeSaisi || (!codeRow && codeSaisi !== codeEnv)) {
-        return json({ error: 'Code d’inscription invalide.' }, 403);
-      }
-      const nomMagasin = String(corps.nomMagasin ?? '').trim();
-      const nom = String(corps.nom ?? '').trim();
-      const email = String(corps.email ?? '').trim().toLowerCase();
-      const motDePasse = String(corps.motDePasse ?? '');
-      if (!nomMagasin || !nom || !email) {
-        return json({ error: 'Magasin, nom et email sont requis.' }, 400);
-      }
-      if (motDePasse.length < 8) {
-        return json({ error: 'Mot de passe trop court (8 caractères minimum).' }, 400);
-      }
-
-      // Email déjà autorisé / utilisé ?
-      const { data: deja } = await admin
-        .from('comptes_autorises')
-        .select('email')
-        .eq('email', email)
-        .maybeSingle();
-      if (deja) return json({ error: 'Cet email est déjà utilisé.' }, 400);
-
-      // Créer le magasin (service_role => contourne la RLS).
-      const { data: mag, error: errMag } = await admin
-        .from('magasins')
-        .insert({ nom: nomMagasin })
-        .select('id')
-        .single();
-      if (errMag || !mag) return json({ error: errMag?.message ?? 'Création du magasin impossible' }, 400);
-
-      // Autoriser l'email en admin de ce magasin.
-      const { error: errAuth } = await admin
-        .from('comptes_autorises')
-        .insert({ email, role: 'admin', magasin_id: mag.id });
-      if (errAuth) return json({ error: errAuth.message }, 400);
-
-      // Créer le compte (le trigger crée le profil admin + magasin).
-      const { error: errUser } = await admin.auth.admin.createUser({
-        email,
-        password: motDePasse,
-        email_confirm: true,
-        user_metadata: { nom, role: 'admin' },
-      });
-      if (errUser) return json({ error: errUser.message }, 400);
-
-      if (codeRow) {
-        await admin
-          .from('codes_inscription')
-          .update({ utilisations: (codeRow.utilisations ?? 0) + 1 })
-          .eq('code', codeSaisi);
-      }
-      return json({ ok: true }, 200);
-    }
-
-    // ----------------------------------------------------------------------
     // 2) Reste : réservé aux administrateurs (et super-admin).
     // ----------------------------------------------------------------------
     const authHeader = req.headers.get('Authorization') ?? '';
@@ -118,14 +55,76 @@ Deno.serve(async (req) => {
     const admin = createClient(url, serviceRole);
     const { data: profil } = await admin
       .from('users')
-      .select('role')
+      .select('role, magasin_id, actif')
       .eq('id', user.id)
-      .single();
-    if (profil?.role !== 'admin' && profil?.role !== 'superadmin') {
+      .maybeSingle();
+    if (profil?.actif === false) return json({ error: 'Compte désactivé' }, 403);
+
+    // ----------------------------------------------------------------------
+    // 1) Inscription publique — création du magasin par un compte confirmé.
+    // ----------------------------------------------------------------------
+    if (corps.action === 'creer-magasin') {
+      if (profil) return json({ error: 'Ce compte a déjà un magasin.' }, 400);
+      if (!user.email_confirmed_at && !user.confirmed_at) {
+        return json({ error: 'Confirme d’abord ton adresse email (lien reçu par email).' }, 403);
+      }
+      const email = String(user.email ?? '').toLowerCase();
+      const meta = user.user_metadata ?? {};
+      const nomMagasin = String(corps.nomMagasin ?? meta.nomMagasin ?? '').trim().slice(0, 80);
+      const nom = String(corps.nom ?? meta.nom ?? meta.full_name ?? meta.name ?? email.split('@')[0]).trim().slice(0, 80);
+      const cgvVersion = String(corps.cgvVersion ?? meta.cgvVersion ?? '').trim().slice(0, 20);
+      if (!nomMagasin) return json({ error: 'Le nom du magasin est requis.' }, 400);
+      if (!cgvVersion) return json({ error: 'L’acceptation des CGV est requise.' }, 400);
+      // Email déjà rattaché à un magasin (autorisé par un admin) ? → le profil se
+      // crée par reclamer_profil(), pas ici.
+      const { data: deja } = await admin.from('comptes_autorises').select('magasin_id').eq('email', email).maybeSingle();
+      if (deja) return json({ error: 'Cet email est déjà rattaché à un magasin : reconnecte-toi.' }, 400);
+      // Plafond global anti-création de masse (bots) : 40 nouveaux magasins / jour.
+      const depuis = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const { count } = await admin.from('magasins').select('id', { count: 'exact', head: true }).gte('created_at', depuis);
+      if ((count ?? 0) >= 40) {
+        console.error('creer-magasin: plafond quotidien atteint');
+        return json({ error: 'Trop d’inscriptions aujourd’hui, réessaie demain.' }, 429);
+      }
+
+      const { data: mag, error: errMag } = await admin
+        .from('magasins')
+        .insert({ nom: nomMagasin, cgv_version: cgvVersion, cgv_acceptees_le: new Date().toISOString() })
+        .select('id')
+        .single();
+      if (errMag || !mag) {
+        console.error('creer-magasin magasin:', errMag);
+        return json({ error: 'Création du magasin impossible. Réessaie dans un instant.' }, 500);
+      }
+      const { error: errAuth } = await admin
+        .from('comptes_autorises')
+        .insert({ email, role: 'admin', magasin_id: mag.id });
+      const { error: errProfil } = errAuth
+        ? { error: errAuth }
+        : await admin.from('users').insert({
+            id: user.id,
+            nom,
+            role: 'admin',
+            pourcentage_interessement: 0,
+            magasin_id: mag.id,
+            email,
+          });
+      if (errProfil) {
+        await admin.from('comptes_autorises').delete().eq('email', email).eq('magasin_id', mag.id);
+        await admin.from('magasins').delete().eq('id', mag.id);
+        console.error('creer-magasin profil:', errProfil);
+        return json({ error: 'Création du compte impossible. Réessaie dans un instant.' }, 500);
+      }
+      return json({ ok: true, magasinId: mag.id }, 200);
+    }
+
+    if (!profil || (profil.role !== 'admin' && profil.role !== 'superadmin')) {
       return json({ error: 'Accès réservé aux administrateurs' }, 403);
     }
 
     // 2a. Suppression d'un magasin et de toutes ses données (super-admin).
+    //     Purge SQL transactionnelle (magasin_purger : toutes les tables dans
+    //     l'ordre des dépendances), puis comptes Auth et fichiers Storage.
     if (corps.action === 'supprimer-magasin') {
       if (profil.role !== 'superadmin') return json({ error: 'Réservé au super-admin' }, 403);
       const magasinId = String(corps.magasinId ?? '');
@@ -134,18 +133,70 @@ Deno.serve(async (req) => {
       if (moi?.magasin_id === magasinId) {
         return json({ error: 'Bascule sur un autre magasin avant de supprimer celui-ci.' }, 400);
       }
-      const tables = ['caisse_jour', 'chromes', 'promos', 'stocks', 'charges', 'fournisseurs', 'paiements_employes', 'clients'];
-      for (const t of tables) {
-        const { error: errDel } = await admin.from(t).delete().eq('magasin_id', magasinId);
-        if (errDel) return json({ error: `${t}: ${errDel.message}` }, 400);
+      const { data: membres } = await admin.from('users').select('id, role').eq('magasin_id', magasinId);
+      if ((membres ?? []).some((m) => m.role === 'superadmin')) {
+        return json({ error: 'Ce magasin héberge un compte superadmin : déplace-le d’abord.' }, 400);
       }
-      const { data: membres } = await admin.from('users').select('id').eq('magasin_id', magasinId);
+      const { error: errPurge } = await admin.rpc('magasin_purger', { p_id: magasinId });
+      if (errPurge) {
+        console.error('supprimer-magasin purge:', errPurge);
+        return json({ error: 'Suppression impossible (données). Rien n’a été supprimé.' }, 500);
+      }
       for (const membre of membres ?? []) {
-        await admin.auth.admin.deleteUser(membre.id);
+        const { error: errDel } = await admin.auth.admin.deleteUser(membre.id);
+        if (errDel) console.error('supprimer-magasin deleteUser:', membre.id, errDel.message);
       }
-      await admin.from('comptes_autorises').delete().eq('magasin_id', magasinId);
-      const { error: errMag } = await admin.from('magasins').delete().eq('id', magasinId);
-      if (errMag) return json({ error: errMag.message }, 400);
+      // Fichiers : justificatifs/<magasin>/… et logos/<magasin>/…
+      for (const bucket of ['justificatifs', 'logos']) {
+        try {
+          const chemins: string[] = [];
+          const { data: dossiers } = await admin.storage.from(bucket).list(magasinId, { limit: 1000 });
+          for (const d of dossiers ?? []) {
+            if (d.id) {
+              chemins.push(`${magasinId}/${d.name}`);
+            } else {
+              const { data: fichiers } = await admin.storage.from(bucket).list(`${magasinId}/${d.name}`, { limit: 1000 });
+              for (const f of fichiers ?? []) chemins.push(`${magasinId}/${d.name}/${f.name}`);
+            }
+          }
+          if (chemins.length) await admin.storage.from(bucket).remove(chemins);
+        } catch (e) {
+          console.error('supprimer-magasin storage', bucket, e);
+        }
+      }
+      return json({ ok: true }, 200);
+    }
+
+    // 2b. Désactivation / réactivation d'un compte employé (offboarding).
+    //     Désactiver = bannir le compte Auth (plus de connexion ni de refresh)
+    //     + users.actif=false (est_membre()/est_admin() → toute la RLS refuse
+    //     immédiatement, même avec un JWT encore valide) + retrait de l'allowlist.
+    //     Le profil est conservé (historique des clôtures/chromes référencé).
+    if (corps.action === 'desactiver-compte' || corps.action === 'reactiver-compte') {
+      const userId = String(corps.userId ?? '');
+      if (!userId) return json({ error: 'userId requis' }, 400);
+      if (userId === user.id) return json({ error: 'Impossible sur son propre compte.' }, 400);
+      const { data: cible } = await admin.from('users').select('magasin_id, role, email').eq('id', userId).single();
+      if (!cible || cible.role === 'superadmin') return json({ error: 'Compte introuvable' }, 404);
+      if (profil.role !== 'superadmin' && cible.magasin_id !== profil.magasin_id) {
+        return json({ error: 'Compte hors de votre magasin' }, 403);
+      }
+      const desactiver = corps.action === 'desactiver-compte';
+      const { error: errBan } = await admin.auth.admin.updateUserById(userId, {
+        ban_duration: desactiver ? '876600h' : 'none',
+      });
+      if (errBan) {
+        console.error('desactiver-compte ban:', errBan);
+        return json({ error: 'Opération impossible. Réessaie.' }, 500);
+      }
+      await admin.from('users').update({ actif: !desactiver }).eq('id', userId);
+      if (desactiver && cible.email) {
+        await admin.from('comptes_autorises').delete().eq('email', cible.email).eq('magasin_id', cible.magasin_id);
+      } else if (!desactiver && cible.email) {
+        await admin
+          .from('comptes_autorises')
+          .upsert({ email: cible.email, role: cible.role === 'admin' ? 'admin' : 'employe', magasin_id: cible.magasin_id }, { onConflict: 'email' });
+      }
       return json({ ok: true }, 200);
     }
 
@@ -153,6 +204,18 @@ Deno.serve(async (req) => {
     if (corps.action === 'reset') {
       const { userId, motDePasse: nouveau } = corps;
       if (!userId || !nouveau) return json({ error: 'Champs requis : userId, motDePasse' }, 400);
+      // Un admin ne peut réinitialiser QUE les comptes de SON magasin, et jamais
+      // un superadmin. Le superadmin, lui, peut viser n'importe quel compte.
+      if (profil.role !== 'superadmin') {
+        const { data: cible } = await admin
+          .from('users')
+          .select('magasin_id, role')
+          .eq('id', userId)
+          .single();
+        if (!cible || cible.magasin_id !== profil.magasin_id || cible.role === 'superadmin') {
+          return json({ error: 'Compte hors de votre magasin' }, 403);
+        }
+      }
       const { error: errReset } = await admin.auth.admin.updateUserById(userId, {
         password: nouveau,
       });
@@ -164,6 +227,24 @@ Deno.serve(async (req) => {
     const { email, motDePasse, nom, role, pourcentage } = corps;
     if (!email || !motDePasse || !nom) {
       return json({ error: 'Champs requis : nom, email, mot de passe' }, 400);
+    }
+    if (String(motDePasse).length < 8) {
+      return json({ error: 'Mot de passe trop court (8 caractères minimum).' }, 400);
+    }
+    // Cloisonnement : un admin (non superadmin) ne peut créer un compte que pour
+    // un email AUTORISÉ DANS SON magasin. Sans ce contrôle, un admin pouvait
+    // provisionner (avec un mot de passe qu'il choisit) un email inscrit dans
+    // l'allowlist d'un AUTRE magasin → prise de contrôle inter-tenant.
+    const emailCible = String(email).trim().toLowerCase();
+    if (profil.role !== 'superadmin') {
+      const { data: allow } = await admin
+        .from('comptes_autorises')
+        .select('magasin_id')
+        .eq('email', emailCible)
+        .maybeSingle();
+      if (!allow || allow.magasin_id !== profil.magasin_id) {
+        return json({ error: 'Cet email doit d’abord être autorisé dans votre magasin.' }, 403);
+      }
     }
     const taux = Number(String(pourcentage ?? '0').replace(',', '.')) || 0;
     const { data, error } = await admin.auth.admin.createUser({
@@ -180,6 +261,7 @@ Deno.serve(async (req) => {
 
     return json({ id: data.user?.id }, 200);
   } catch (e) {
-    return json({ error: String(e) }, 500);
+    console.error('creer-employe:', e);
+    return json({ error: 'Erreur interne.' }, 500);
   }
 });

@@ -43,3 +43,17 @@ export const supabase = configSupabaseOk
       global: { fetch: fetchAvecReprise },
     })
   : null;
+
+// PostgREST plafonne chaque réponse à 1 000 lignes SANS erreur : au-delà, une
+// somme calculée côté client (CA annuel, créances) serait silencieusement
+// fausse. `lireTout` enchaîne les pages jusqu'à épuisement. La requête DOIT
+// porter un `.order()` stable (ex. 'id') pour que les pages ne se chevauchent pas.
+export async function lireTout(requete, taille = 1000) {
+  const tout = [];
+  for (let page = 0; ; page += 1) {
+    const { data, error } = await requete.range(page * taille, (page + 1) * taille - 1);
+    if (error) return { data: tout, error };
+    tout.push(...(data ?? []));
+    if (!data || data.length < taille) return { data: tout, error: null };
+  }
+}

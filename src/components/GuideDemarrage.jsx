@@ -38,10 +38,10 @@ export default function GuideDemarrage() {
         { ok: etat.produits > 0, texte: 'Ajoute tes produits en stock', lien: '/stocks', libLien: 'Stocks' },
         { ok: etat.employes > 1, texte: 'Crée les comptes de tes employés', lien: '/comptes', libLien: 'Comptes' },
         { ok: etat.clients > 0, texte: 'Enregistre tes premiers clients', lien: '/chromes', libLien: 'Clients' },
-        { ok: etat.clotures > 0, texte: 'Fais ta première clôture de caisse', lien: '/caisse', libLien: 'Caisse' },
+        { ok: etat.clotures > 0, texte: 'Fais ta première clôture de caisse', lien: '/caisse/cloture', libLien: 'Clôture' },
       ]
     : [
-        { ok: etat.clotures > 0, texte: 'Fais ta première clôture de caisse', lien: '/caisse', libLien: 'Caisse' },
+        { ok: etat.clotures > 0, texte: 'Fais ta première clôture de caisse', lien: '/caisse/cloture', libLien: 'Clôture' },
         { ok: etat.chromes > 0, texte: 'Enregistre une avance ou un remboursement client', lien: '/chromes', libLien: 'Clients' },
       ];
   const faites = etapes.filter((e) => e.ok).length;
@@ -80,8 +80,8 @@ export default function GuideDemarrage() {
       </ul>
       {!estAdmin && (
         <p className="statut">
-          Astuce : retrouve tes ventes passées dans <strong>Historique</strong> et l’inventaire dans{' '}
-          <strong>Stocks</strong>.
+          Astuce : retrouve tes ventes passées dans <strong>Caisse → Historique</strong> (en bas de
+          la page) et l’inventaire dans l’onglet <strong>Stocks</strong>.
         </p>
       )}
     </div>

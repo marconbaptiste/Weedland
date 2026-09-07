@@ -1,16 +1,46 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
-import { formatEuros, formatDateFr } from '../lib/format';
+import { formatEuros, formatDateFr, formatNombre } from '../lib/format';
 import { somme } from '../lib/comptabilite';
 import { cleEntete } from '../lib/csv';
-import { analyserFichiers, analyserChromes } from '../lib/importHistorique';
+import { analyserFichiers, analyserChromes, analyserStocks } from '../lib/importHistorique';
+import { journaliserMouvement } from '../lib/mouvementsStock';
+import { telechargerCSV } from '../lib/export';
+import { extraireClotures, trouverEmploye } from '../lib/whatsapp';
+import { messageErreur } from '../lib/erreurs';
+
+const UNITES = ['g', 'kg', 'mg', 'ml', 'pièce'];
+
+// Modèles CSV téléchargeables : un exemple par type d'import, pour que
+// l'utilisateur voie exactement le format attendu (colonnes + une ligne).
+const MODELES = {
+  caisse: {
+    fichier: 'modele-caisse.csv',
+    entetes: ['date', 'ca', 'cb', 'especes', 'virements'],
+    exemple: ['2026-01-15', '250,00', '180,00', '70,00', '0'],
+  },
+  chromes: {
+    fichier: 'modele-dettes-clients.csv',
+    entetes: ['date', 'client', 'type', 'montant_eur'],
+    exemple: ['2026-01-15', 'Le Grand', 'avance', '20,00'],
+  },
+  stocks: {
+    fichier: 'modele-stocks.csv',
+    entetes: ['categorie', 'produit', 'quantite'],
+    exemple: ['Huiles', 'Huile 10 % 10 ml', '50'],
+  },
+};
+const telechargerModele = (cle) => {
+  const m = MODELES[cle];
+  telechargerCSV(m.fichier, m.entetes, [m.exemple]);
+};
 
 // Outil admin — Import de l'historique.
 // - Tableur : dépose les CSV exportés (caisse/charges/fournisseurs), dispatch auto.
 // - Chromes : un CSV détaillé de dettes clients (rattaché par surnom, sans doublon).
 export default function Import() {
-  const { utilisateur } = useAuth();
+  const { utilisateur, magasinId, options } = useAuth();
   const [mode, setMode] = useState('tableur');
   const [employes, setEmployes] = useState([]);
   const [employeId, setEmployeId] = useState(utilisateur.id);
@@ -19,10 +49,22 @@ export default function Import() {
   const [remplacer, setRemplacer] = useState(false);
   const [statut, setStatut] = useState('');
   const [enCours, setEnCours] = useState(false);
+  // Import stocks (CSV catégorie / produit / quantité)
+  const [stocks, setStocks] = useState(null);
+  const [catForcee, setCatForcee] = useState('');
+  const [uniteDefaut, setUniteDefaut] = useState('g');
+  const [ajouterQte, setAjouterQte] = useState(true);
+  // Import WhatsApp (export de la discussion ou messages collés) → clôtures.
+  const [waTexte, setWaTexte] = useState('');
+  const [wa, setWa] = useState(null); // lignes analysées, une par clôture trouvée
+  const [remplacerClotures, setRemplacerClotures] = useState(false);
 
   useEffect(() => {
-    supabase.from('users').select('id, nom').order('nom').then(({ data }) => setEmployes(data ?? []));
-  }, []);
+    if (!magasinId) return;
+    // Cloisonné au magasin actif (évite d'affecter un import à un employé d'un
+    // autre magasin quand c'est un superadmin qui importe).
+    supabase.from('users').select('id, nom').eq('magasin_id', magasinId).order('nom').then(({ data }) => setEmployes(data ?? []));
+  }, [magasinId]);
 
   // ----- Tableur (caisse / charges / fournisseurs) -----
   async function choisirFichiers(e) {
@@ -41,21 +83,21 @@ export default function Import() {
     const erreurs = [];
     if (resultat.caisse.length) {
       const rows = resultat.caisse.map((c) => ({
-        employe_id: employeId, date: c.date, ventes_directes: c.ventes_directes, cb: c.cb, especes: c.especes,
+        employe_id: employeId, date: c.date, ventes_directes: c.ventes_directes, cb: c.cb, especes: c.especes, virements: c.virements ?? 0,
       }));
       const { error } = await supabase.from('caisse_jour').upsert(rows, { onConflict: 'employe_id,date' });
-      if (error) erreurs.push(`Caisse : ${error.message}`);
+      if (error) { console.error('Import caisse:', error); erreurs.push('caisse'); }
     }
     if (resultat.charges.length) {
       const { error } = await supabase.from('charges').insert(resultat.charges);
-      if (error) erreurs.push(`Charges : ${error.message}`);
+      if (error) { console.error('Import charges:', error); erreurs.push('charges'); }
     }
     if (resultat.fournisseurs.length) {
       const { error } = await supabase.from('fournisseurs').insert(resultat.fournisseurs);
-      if (error) erreurs.push(`Fournisseurs : ${error.message}`);
+      if (error) { console.error('Import fournisseurs:', error); erreurs.push('fournisseurs'); }
     }
     setEnCours(false);
-    if (erreurs.length) { setStatut(`Erreur — ${erreurs.join(' · ')}`); return; }
+    if (erreurs.length) { setStatut(`Import impossible pour : ${erreurs.join(', ')}. Vérifie le fichier et réessaie.`); return; }
     setStatut(`Import réussi : ${resultat.caisse.length} journée(s), ${resultat.charges.length} charge(s), ${resultat.fournisseurs.length} fournisseur(s).`);
     setResultat(null);
   }
@@ -71,32 +113,207 @@ export default function Import() {
 
   async function importerChromes() {
     if (!chromes || chromes.length === 0) return;
+    if (
+      remplacer &&
+      !window.confirm(
+        'ATTENTION : « Repartir de zéro » va SUPPRIMER TOUS les chromes (avances/dettes) existants avant l\'import. Cette action est irréversible. Continuer ?',
+      )
+    ) {
+      return;
+    }
     setEnCours(true);
     setStatut('');
 
-    if (remplacer) {
-      const { error } = await supabase.from('chromes').delete().not('id', 'is', null);
-      if (error) { setEnCours(false); setStatut(`Erreur suppression : ${error.message}`); return; }
-    }
-
-    // Rattachement des clients par surnom (réutilise l'existant, crée les manquants).
-    const { data: clients } = await supabase.from('clients').select('id, surnom');
-    const map = new Map((clients ?? []).map((c) => [cleEntete(c.surnom), c.id]));
-    const manquants = [...new Set(chromes.map((l) => l.surnom))].filter((s) => !map.has(cleEntete(s)));
-    if (manquants.length) {
-      const { data: crees, error } = await supabase.from('clients').insert(manquants.map((surnom) => ({ surnom }))).select('id, surnom');
-      if (error) { setEnCours(false); setStatut(`Erreur création clients : ${error.message}`); return; }
-      (crees ?? []).forEach((c) => map.set(cleEntete(c.surnom), c.id));
-    }
-
-    const rows = chromes.map((l) => ({
-      client_id: map.get(cleEntete(l.surnom)), type: l.type, montant: l.montant, date: l.date, employe_id: utilisateur.id,
-    }));
-    const { error } = await supabase.from('chromes').insert(rows);
+    // Import TRANSACTIONNEL côté serveur (`importer_chromes`) : rattachement des
+    // clients par surnom, purge éventuelle et insertion dans la même transaction.
+    // Plus aucun cas où l'historique est supprimé puis l'insertion échoue.
+    const { data, error } = await supabase.rpc('importer_chromes', {
+      p_lignes: chromes.map((l) => ({ surnom: l.surnom, type: l.type, montant: l.montant, date: l.date })),
+      p_remplacer: remplacer,
+    });
     setEnCours(false);
-    if (error) { setStatut(`Erreur : ${error.message}`); return; }
-    setStatut(`${rows.length} ligne(s) de chromes importée(s) pour ${manquants.length} nouveau(x) client(s).`);
+    if (error) { console.error('Import chromes:', error); setStatut(`Import impossible (rien n'a été modifié) : ${error.message}`); return; }
+    setStatut(`${data?.lignes ?? chromes.length} ligne(s) de chromes importée(s) pour ${data?.clients_crees ?? 0} nouveau(x) client(s).`);
     setChromes(null);
+  }
+
+  // ----- Stocks (catégorie / produit / quantité) -----
+  async function choisirStocks(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setStatut('');
+    setStocks(analyserStocks(await file.text()));
+  }
+
+  async function importerStocks() {
+    if (!stocks || stocks.length === 0) return;
+    setEnCours(true);
+    setStatut('');
+    // Rapproche par nom (insensible casse/accents) : réappro si existant, sinon création.
+    const { data: existants } = await supabase.from('stocks').select('id, nom, quantite');
+    const map = new Map((existants ?? []).map((s) => [cleEntete(s.nom), s]));
+    const cat = catForcee.trim();
+    const aInserer = [];
+    const aMaj = [];
+    for (const l of stocks) {
+      const ex = map.get(cleEntete(l.nom));
+      if (ex) {
+        const q = ajouterQte ? Number(ex.quantite) + l.quantite : l.quantite;
+        aMaj.push({ id: ex.id, nom: ex.nom, quantite: q, delta: q - Number(ex.quantite) });
+      } else {
+        aInserer.push({
+          categorie: cat || l.categorie || null,
+          nom: l.nom,
+          quantite: l.quantite,
+          unite: uniteDefaut,
+          seuil_alerte: 0,
+          prix_achat: 0,
+          prix_vente: 0,
+        });
+      }
+    }
+    const erreurs = [];
+    if (aInserer.length) {
+      const { data: crees, error } = await supabase.from('stocks').insert(aInserer).select('id, nom, quantite');
+      if (error) { console.error('Import stocks — création:', error); erreurs.push('création'); }
+      // Trace chaque nouveau produit importé (mouvement d'entrée, motif import).
+      for (const c of crees ?? []) {
+        if (Number(c.quantite) > 0) {
+          await journaliserMouvement({
+            stock_id: c.id,
+            produit: c.nom,
+            delta: Number(c.quantite),
+            quantite_apres: Number(c.quantite),
+            motif: 'import',
+          });
+        }
+      }
+    }
+    for (const u of aMaj) {
+      if (!u.delta) continue;
+      // Réappro ATOMIQUE et journalisée côté serveur (`stock_mouvement`, motif
+      // import) : pas de lecture-modification-écriture, pas de double trace.
+      const { error } = await supabase.rpc('stock_mouvement', { p_id: u.id, p_delta: u.delta, p_motif: 'import' });
+      if (error) { console.error('Import stocks — réappro:', error); erreurs.push('réappro'); break; }
+    }
+    setEnCours(false);
+    if (erreurs.length) { setStatut(`Import impossible (${erreurs.join(', ')}). Vérifie le fichier et réessaie.`); return; }
+    setStatut(`Import stocks : ${aInserer.length} nouveau(x) produit(s), ${aMaj.length} réapprovisionné(s).`);
+    setStocks(null);
+  }
+
+  // ----- WhatsApp (export de discussion .txt ou messages collés) -----
+  // Chaque message de clôture posté dans le groupe devient une clôture proposée,
+  // rattachée à l'employé dont le prénom correspond à l'auteur. On contrôle : le
+  // CA annoncé vs recalculé, les chromes du message vs ceux déjà saisis dans
+  // l'app ce jour-là, et si une clôture existe déjà (ignorée sauf « remplacer »).
+  async function analyserWhatsapp(texte) {
+    setStatut('');
+    const clos = extraireClotures(texte);
+    if (clos.length === 0) {
+      setWa(null);
+      setStatut('Aucune clôture reconnue dans ce texte (il faut des lignes « CB … », « Moro … » sous une date).');
+      return;
+    }
+    const dates = [...new Set(clos.map((c) => c.message.date))];
+    const [{ data: existantes }, { data: chr }] = await Promise.all([
+      supabase.from('caisse_jour').select('employe_id, date').eq('magasin_id', magasinId).in('date', dates),
+      supabase.from('chromes').select('employe_id, date, type, montant').eq('magasin_id', magasinId).in('date', dates),
+    ]);
+    const dejaLa = new Set((existantes ?? []).map((e) => `${e.employe_id}|${e.date}`));
+    const nomPar = new Map(employes.map((e) => [e.id, e.nom]));
+    const chromesApp = new Map();
+    const autresApp = new Map(); // chromes « autre » (virement/chèque rattaché à un client) déjà saisis
+    for (const c of chr ?? []) {
+      const k = `${c.employe_id}|${c.date}`;
+      const signe = c.type === 'remboursement' ? -1 : 1;
+      chromesApp.set(k, somme([chromesApp.get(k) ?? 0, signe * Number(c.montant)]));
+      if (c.type === 'autre') autresApp.set(k, somme([autresApp.get(k) ?? 0, Number(c.montant)]));
+    }
+    setWa(
+      clos.map((c) => {
+        const emp = trouverEmploye(c.auteur, employes);
+        const k = emp ? `${emp.id}|${c.message.date}` : '';
+        const existe = dejaLa.has(k);
+        // ANTI-DOUBLON : une clôture est unique par (employé, date) — l'upsert ne
+        // peut donc jamais créer deux lignes pour le même employé. Le vrai risque
+        // est une DEUXIÈME clôture du même jour sous un AUTRE employé (CA compté
+        // deux fois) : déjà en base, ou deux messages du lot pour la même date.
+        const autresJour = (existantes ?? [])
+          .filter((e) => e.date === c.message.date && e.employe_id !== emp?.id)
+          .map((e) => nomPar.get(e.employe_id) ?? 'un collègue');
+        const memeDateLot = clos.filter((o) => o !== c && o.message.date === c.message.date).map((o) => o.auteur);
+        // Livraisons du message peut-être déjà saisies en chrome « autre » ce jour.
+        const autresDeja = autresApp.get(k) ?? 0;
+        return {
+          ...c,
+          employeId: emp?.id ?? '',
+          existe,
+          chromesApp: chromesApp.has(k) ? chromesApp.get(k) : null,
+          autresJour,
+          memeDateLot,
+          autresDeja: c.cloture.nbLivraisons > 0 ? autresDeja : 0,
+          // Décoché par défaut dès qu'il y a un risque de double comptage.
+          inclure: Boolean(emp) && !existe && autresJour.length === 0 && memeDateLot.length === 0,
+        };
+      }),
+    );
+  }
+
+  async function choisirExportWhatsapp(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    await analyserWhatsapp(await file.text());
+  }
+
+  function majLigneWa(i, champs) {
+    setWa((l) => l.map((x, j) => (j === i ? { ...x, ...champs } : x)));
+  }
+
+  async function importerWhatsapp() {
+    if (!wa) return;
+    const rows = wa
+      .filter((l) => l.inclure && l.employeId && (!l.existe || remplacerClotures))
+      .map((l) => {
+        // Seuls CB et Moro sont repris (demande du magasin). Le CA annoncé et les
+        // livraisons du message restent en commentaire pour rappel : les livraisons
+        // se saisissent ensuite à la main dans la clôture (Virements / autres).
+        const c = l.cloture;
+        const rappels = [];
+        if (c.caAnnonce != null) rappels.push(`CA annoncé ${formatEuros(c.caAnnonce)}`);
+        if (c.nbLivraisons) rappels.push(`${c.nbLivraisons} livraison(s) ${formatEuros(c.livraisonsMessage)} à saisir`);
+        return {
+          employe_id: l.employeId,
+          date: l.message.date,
+          ventes_directes: somme([c.cb, c.especes]),
+          cb: c.cb,
+          especes: c.especes,
+          virements: 0,
+          fond_caisse: 0,
+          commentaire: ['Import WhatsApp', ...rappels].join(' — '),
+        };
+      });
+    if (rows.length === 0) {
+      setStatut('Aucune clôture à importer (coche des lignes, ou active « remplacer » pour celles déjà en base).');
+      return;
+    }
+    if (remplacerClotures && rows.some((r) => wa.find((l) => l.employeId === r.employe_id && l.message.date === r.date)?.existe)) {
+      if (!window.confirm('Des clôtures déjà enregistrées vont être REMPLACÉES par celles du message. Continuer ?')) return;
+    }
+    setEnCours(true);
+    setStatut('');
+    const { error } = await supabase.from('caisse_jour').upsert(rows, { onConflict: 'employe_id,date' });
+    setEnCours(false);
+    if (error) {
+      console.error('Import WhatsApp:', error);
+      setStatut(`Import impossible : ${messageErreur(error)}`);
+      return;
+    }
+    setStatut(`${rows.length} clôture(s) importée(s) depuis WhatsApp ✅`);
+    setWa(null);
+    setWaTexte('');
   }
 
   const totalCaisse = resultat ? somme(resultat.caisse.map((c) => c.ventes_directes)) : 0;
@@ -111,9 +328,14 @@ export default function Import() {
     <div className="page">
       <h1>Import de l'historique</h1>
 
-      <div className="bascule">
-        <button className={mode === 'tableur' ? 'actif' : ''} onClick={() => setMode('tableur')}>Tableur (caisse/charges/fournisseurs)</button>
-        <button className={mode === 'chromes' ? 'actif' : ''} onClick={() => setMode('chromes')}>Dettes clients</button>
+      <div className="bascule bascule-mini">
+        <button className={mode === 'tableur' ? 'actif' : ''} onClick={() => setMode('tableur')}>Tableur</button>
+        <button className={mode === 'chromes' ? 'actif' : ''} onClick={() => setMode('chromes')}>Dettes</button>
+        <button className={mode === 'stocks' ? 'actif' : ''} onClick={() => setMode('stocks')}>Stocks</button>
+        {/* Propre au magasin (drapeau `magasins.import_whatsapp`) : format de message d'une équipe précise. */}
+        {options.whatsapp && (
+          <button className={mode === 'whatsapp' ? 'actif' : ''} onClick={() => setMode('whatsapp')}>WhatsApp</button>
+        )}
       </div>
 
       {mode === 'tableur' ? (
@@ -129,10 +351,15 @@ export default function Import() {
                 {employes.map((emp) => (<option key={emp.id} value={emp.id}>{emp.nom}</option>))}
               </select>
             </label>
-            <label className="btn btn-primary">
-              Choisir les fichiers CSV…
-              <input type="file" accept=".csv,text/csv" multiple style={{ display: 'none' }} onChange={choisirFichiers} />
-            </label>
+            <div className="form-inline">
+              <label className="btn btn-primary">
+                Choisir les fichiers CSV…
+                <input type="file" accept=".csv,text/csv" multiple style={{ display: 'none' }} onChange={choisirFichiers} />
+              </label>
+              <button type="button" className="btn btn-discret" onClick={() => telechargerModele('caisse')}>
+                ⬇️ Télécharger un modèle
+              </button>
+            </div>
           </div>
 
           {resultat && (
@@ -149,7 +376,7 @@ export default function Import() {
             </>
           )}
         </>
-      ) : (
+      ) : mode === 'chromes' ? (
         <>
           <div className="card">
             <p className="statut">
@@ -160,10 +387,15 @@ export default function Import() {
               <input type="checkbox" checked={remplacer} onChange={(e) => setRemplacer(e.target.checked)} />
               <span>Repartir de zéro (supprime d'abord tous les chromes existants — utile si tu remplaces un total provisoire)</span>
             </label>
-            <label className="btn btn-primary">
-              Choisir le fichier CSV…
-              <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={choisirChromes} />
-            </label>
+            <div className="form-inline">
+              <label className="btn btn-primary">
+                Choisir le fichier CSV…
+                <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={choisirChromes} />
+              </label>
+              <button type="button" className="btn btn-discret" onClick={() => telechargerModele('chromes')}>
+                ⬇️ Télécharger un modèle
+              </button>
+            </div>
           </div>
 
           {chromes && (
@@ -175,15 +407,15 @@ export default function Import() {
               </div>
               <div className="card">
                 <h2>Aperçu</h2>
-                <table className="tableau">
+                <table className="tableau tableau-cartes">
                   <thead><tr><th>Date</th><th>Client</th><th>Type</th><th className="droite">Montant</th></tr></thead>
                   <tbody>
                     {chromes.slice(0, 12).map((l, i) => (
                       <tr key={i}>
-                        <td>{formatDateFr(l.date)}</td>
-                        <td>{l.surnom}</td>
-                        <td>{l.type === 'avance' ? 'Avance' : 'Remboursement'}</td>
-                        <td className={`droite ${l.type === 'avance' ? 'dette' : 'solde-ok'}`}>{formatEuros(l.montant)}</td>
+                        <td data-label="Date">{formatDateFr(l.date)}</td>
+                        <td data-label="Client">{l.surnom}</td>
+                        <td data-label="Type">{l.type === 'avance' ? 'Avance' : 'Remboursement'}</td>
+                        <td className={`droite ${l.type === 'avance' ? 'dette' : 'solde-ok'}`} data-label="Montant">{formatEuros(l.montant)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -192,6 +424,189 @@ export default function Import() {
               </div>
               <button className="btn btn-primary" onClick={importerChromes} disabled={enCours}>
                 {enCours ? 'Import…' : `Importer ${chromes.length} ligne(s)`}
+              </button>
+            </>
+          )}
+        </>
+      ) : mode === 'whatsapp' && options.whatsapp ? (
+        <>
+          <div className="card">
+            <p className="statut">
+              Les clôtures postées dans le <strong>groupe WhatsApp</strong> (« 04/09 · CA · CB · Moro ·
+              Chromes · Livraisons · Caisse départ ») deviennent des clôtures de l’app. Colle un ou
+              plusieurs messages ci-dessous, ou dépose l’<strong>export de la discussion</strong>{' '}
+              (WhatsApp → infos du groupe → Exporter la discussion → sans médias → fichier .txt).
+              Chaque clôture est rattachée à l’employé dont le prénom correspond à l’auteur.
+            </p>
+            <textarea
+              rows={7}
+              value={waTexte}
+              onChange={(e) => setWaTexte(e.target.value)}
+              placeholder={'[04/09/2026 21:17:33] Adam: 04/09\nCA 4046,20\nCB 3213,7\nMoro 692,5\nChromes\nGaétan +33\n…'}
+            />
+            <div className="form-inline">
+              <button type="button" className="btn btn-primary" onClick={() => analyserWhatsapp(waTexte)} disabled={!waTexte.trim()}>
+                Analyser le texte collé
+              </button>
+              <label className="btn btn-discret">
+                Choisir l’export .txt…
+                <input type="file" accept=".txt,text/plain" style={{ display: 'none' }} onChange={choisirExportWhatsapp} />
+              </label>
+            </div>
+            <p className="statut">
+              Seuls la <strong>date</strong>, l’<strong>auteur</strong>, la <strong>CB</strong> et le{' '}
+              <strong>Moro</strong> sont repris ; le CA annoncé sert de contrôle. Les chromes sont ceux
+              déjà saisis dans Clients, et les livraisons restent à saisir à la main dans chaque clôture
+              (rappel en commentaire).
+            </p>
+          </div>
+
+          {wa && (
+            <>
+              <div className="cartes-kpi">
+                <div className="kpi"><span className="kpi-label">Clôtures trouvées</span><span className="kpi-valeur">{wa.length}</span></div>
+                <div className="kpi"><span className="kpi-label">À importer</span><span className="kpi-valeur">{wa.filter((l) => l.inclure && l.employeId && (!l.existe || remplacerClotures)).length}</span></div>
+                <div className="kpi"><span className="kpi-label">Déjà en base</span><span className="kpi-valeur">{wa.filter((l) => l.existe).length}</span></div>
+              </div>
+              <label className="case-partage">
+                <input type="checkbox" checked={remplacerClotures} onChange={(e) => setRemplacerClotures(e.target.checked)} />
+                <span>Remplacer les clôtures déjà enregistrées par celles du message (sinon elles sont ignorées).</span>
+              </label>
+              <div className="card">
+                <h2>Aperçu</h2>
+                <table className="tableau tableau-cartes">
+                  <thead>
+                    <tr>
+                      <th></th><th>Date</th><th>Auteur → employé</th><th className="droite">CB</th><th className="droite">Moro</th>
+                      <th className="droite">CA annoncé</th><th>Chromes</th><th>État</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {wa.map((l, i) => {
+                      const c = l.cloture;
+                      const chromesOk = l.chromesApp == null ? c.chromesMessage === 0 : Math.abs(l.chromesApp - c.chromesMessage) < 0.005;
+                      return (
+                        <tr key={i} style={{ opacity: l.inclure ? 1 : 0.55 }}>
+                          <td data-label="Importer">
+                            <input type="checkbox" checked={l.inclure} onChange={(e) => majLigneWa(i, { inclure: e.target.checked })} />
+                          </td>
+                          <td data-label="Date">{formatDateFr(l.message.date)}</td>
+                          <td data-label="Employé">
+                            <span className="promo-qui">{l.auteur} → </span>
+                            <select value={l.employeId} onChange={(e) => majLigneWa(i, { employeId: e.target.value })}>
+                              <option value="">— choisir —</option>
+                              {employes.map((emp) => (<option key={emp.id} value={emp.id}>{emp.nom}</option>))}
+                            </select>
+                          </td>
+                          <td className="droite" data-label="CB">{formatEuros(c.cb)}</td>
+                          <td className="droite" data-label="Moro">{formatEuros(c.especes)}</td>
+                          <td className="droite" data-label="CA annoncé">
+                            {c.caAnnonce == null ? '—' : formatEuros(c.caAnnonce)}
+                            {c.nbLivraisons > 0 && (
+                              <span className="promo-qui"> dont {formatEuros(c.livraisonsMessage)} de livraison(s) à saisir</span>
+                            )}
+                            {c.caAnnonce != null && c.ecart !== 0 && (
+                              <span className="dette"> ⚠️ le message ne tombe pas juste (écart {formatEuros(c.ecart)})</span>
+                            )}
+                          </td>
+                          <td data-label="Chromes">
+                            {c.chromesMessage === 0 && l.chromesApp == null
+                              ? '—'
+                              : `${formatEuros(c.chromesMessage)} / app ${l.chromesApp == null ? '0 €' : formatEuros(l.chromesApp)}`}
+                            {!chromesOk && <span className="dette"> ⚠️</span>}
+                          </td>
+                          <td data-label="État">
+                            {!l.employeId ? 'Employé inconnu' : l.existe ? (remplacerClotures ? 'À remplacer' : 'Déjà en base') : 'Nouvelle'}
+                            {l.autresJour.length > 0 && (
+                              <span className="dette"> ⚠️ {l.autresJour.join(', ')} a déjà clôturé ce jour (double CA ?)</span>
+                            )}
+                            {l.memeDateLot.length > 0 && (
+                              <span className="dette"> ⚠️ même date aussi postée par {l.memeDateLot.join(', ')}</span>
+                            )}
+                            {l.autresDeja > 0 && (
+                              <span className="dette"> ⚠️ {formatEuros(l.autresDeja)} déjà saisis en « autre » ce jour : livraisons peut-être déjà comptées</span>
+                            )}
+                            {l.message.avertissements.length > 0 && (
+                              <span className="promo-qui" title={l.message.avertissements.join('\n')}> · {l.message.avertissements.length} ligne(s) ignorée(s)</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <button className="btn btn-primary" onClick={importerWhatsapp} disabled={enCours}>
+                {enCours ? 'Import…' : 'Importer les clôtures cochées'}
+              </button>
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="card">
+            <p className="statut">
+              Dépose un <strong>CSV de stocks</strong> — colonnes reconnues : <strong>catégorie</strong>,{' '}
+              <strong>produit</strong>, <strong>quantité</strong> (peu importe l'ordre / la casse).
+              Produit déjà présent = réapprovisionné ; sinon créé.
+            </p>
+            <div className="form-inline">
+              <label className="field" style={{ flex: 1 }}>
+                <span>Catégorie à forcer (facultatif — sinon celle du fichier)</span>
+                <input
+                  value={catForcee}
+                  onChange={(e) => setCatForcee(e.target.value)}
+                  placeholder="ex. Fleurs"
+                />
+              </label>
+              <label className="field">
+                <span>Unité (nouveaux produits)</span>
+                <select value={uniteDefaut} onChange={(e) => setUniteDefaut(e.target.value)}>
+                  {UNITES.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className="case-partage">
+              <input type="checkbox" checked={ajouterQte} onChange={(e) => setAjouterQte(e.target.checked)} />
+              <span>Ajouter aux quantités existantes (réappro). Décoché = remplace la quantité.</span>
+            </label>
+            <div className="form-inline">
+              <label className="btn btn-primary">
+                Choisir le fichier CSV…
+                <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={choisirStocks} />
+              </label>
+              <button type="button" className="btn btn-discret" onClick={() => telechargerModele('stocks')}>
+                ⬇️ Télécharger un modèle
+              </button>
+            </div>
+          </div>
+
+          {stocks && (
+            <>
+              <div className="cartes-kpi">
+                <div className="kpi"><span className="kpi-label">Lignes</span><span className="kpi-valeur">{stocks.length}</span></div>
+                <div className="kpi"><span className="kpi-label">Quantité totale</span><span className="kpi-valeur">{formatNombre(somme(stocks.map((s) => s.quantite)))}</span></div>
+              </div>
+              <div className="card">
+                <h2>Aperçu</h2>
+                <table className="tableau tableau-cartes">
+                  <thead><tr><th>Catégorie</th><th>Produit</th><th className="droite">Quantité</th></tr></thead>
+                  <tbody>
+                    {stocks.slice(0, 12).map((s, i) => (
+                      <tr key={i}>
+                        <td data-label="Catégorie">{catForcee.trim() || s.categorie || '—'}</td>
+                        <td data-label="Produit">{s.nom}</td>
+                        <td className="droite" data-label="Quantité">{formatNombre(s.quantite)} {uniteDefaut}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {stocks.length > 12 && <p className="statut">… et {stocks.length - 12} autre(s) ligne(s).</p>}
+              </div>
+              <button className="btn btn-primary" onClick={importerStocks} disabled={enCours}>
+                {enCours ? 'Import…' : `Importer ${stocks.length} produit(s)`}
               </button>
             </>
           )}

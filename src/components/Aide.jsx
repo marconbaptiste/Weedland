@@ -105,15 +105,12 @@ export default function Aide() {
 
               {estAdmin && (
                 <>
-                  <Section titre="Dashboard (admin)">
-                    Vue consolidée de toute l’équipe par période (jour, semaine, mois, année ou
-                    période personnalisée), avec export <strong>CSV / Excel</strong> et{' '}
-                    <strong>PDF</strong>.
-                  </Section>
                   <Section titre="Comptabilité (admin)">
-                    CA par mois / semaine / année, charges et fournisseurs (avec justificatifs
-                    photo et lecture OCR du montant), et calcul du{' '}
-                    <strong>bénéfice = CA − charges − fournisseurs</strong>.
+                    Vue consolidée par période (mois, année ou période personnalisée) : CA,
+                    charges et fournisseurs (avec justificatifs photo et lecture OCR du montant),
+                    calcul du <strong>bénéfice = CA − charges − fournisseurs</strong>, détail{' '}
+                    <strong>intéressement / heures par employé</strong>, et exports{' '}
+                    <strong>CSV / Excel</strong> et <strong>PDF</strong>.
                   </Section>
                   <Section titre="Paiements, fiches de paie & comptes (admin)">
                     Gérez les paiements employés, éditez les bulletins de paie, suivez l’activité

@@ -18,6 +18,7 @@ export default function Magasins() {
   const [statut, setStatut] = useState('');
   const [nomMagasin, setNomMagasin] = useState('');
   const [admin, setAdmin] = useState({ magasin_id: '', email: '', nom: '', motDePasse: '', pourcentage: '' });
+  const [adminOuvert, setAdminOuvert] = useState(false); // modale « Autoriser un administrateur »
   const [filActif, setFilActif] = useState(null); // magasin sélectionné pour la messagerie
 
   const charger = useCallback(async () => {
@@ -64,7 +65,7 @@ export default function Magasins() {
     if (m.id === magasinId) return setStatut('Bascule sur un autre magasin (en haut) avant de supprimer celui-ci.');
     if (!window.confirm(`Supprimer « ${m.nom} » et TOUTES ses données ? Irréversible.`)) return;
     setStatut('Suppression…');
-    const { data, error } = await supabase.functions.invoke('hyper-api', {
+    const { data, error } = await supabase.functions.invoke('creer-employe', {
       body: { action: 'supprimer-magasin', magasinId: m.id },
     });
     if (error || data?.error) return setStatut(`Erreur : ${data?.error ?? error?.message}`);
@@ -84,7 +85,7 @@ export default function Magasins() {
     );
     if (errAuth) return setStatut(`Erreur autorisation : ${errAuth.message}`);
     if (admin.motDePasse && admin.nom.trim()) {
-      const { data, error } = await supabase.functions.invoke('hyper-api', {
+      const { data, error } = await supabase.functions.invoke('creer-employe', {
         body: { email, motDePasse: admin.motDePasse, nom: admin.nom.trim(), role: 'admin', pourcentage: admin.pourcentage },
       });
       if (error || data?.error) return setStatut(`Email autorisé, mais création en erreur : ${data?.error ?? error?.message}`);
@@ -93,12 +94,14 @@ export default function Magasins() {
       setStatut('Email autorisé ✅ — l’admin peut se connecter avec Google.');
     }
     setAdmin({ magasin_id: '', email: '', nom: '', motDePasse: '', pourcentage: '' });
+    setAdminOuvert(false);
   }
 
   // --- Codes ---
   async function genererCode() {
-    const alpha = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const code = Array.from({ length: 8 }, () => alpha[Math.floor(Math.random() * alpha.length)]).join('');
+    const alpha = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 32 symboles → un octet aléatoire par caractère (sans biais)
+    const octets = crypto.getRandomValues(new Uint8Array(8));
+    const code = Array.from(octets, (o) => alpha[o % alpha.length]).join('');
     await supabase.from('codes_inscription').insert({ code });
     charger();
   }
@@ -192,20 +195,41 @@ export default function Magasins() {
             </div>
           ))}
 
-          <form className="card" onSubmit={autoriserAdmin}>
-            <h2>Autoriser un administrateur</h2>
-            <label className="field">
-              <span>Magasin</span>
-              <select value={admin.magasin_id} onChange={(e) => setAdmin((a) => ({ ...a, magasin_id: e.target.value }))}>
-                <option value="">— Choisir —</option>
-                {magasins.map((m) => <option key={m.id} value={m.id}>{m.nom}</option>)}
-              </select>
-            </label>
-            <label className="field"><span>Email</span><input type="email" value={admin.email} onChange={(e) => setAdmin((a) => ({ ...a, email: e.target.value }))} /></label>
-            <label className="field"><span>Nom (si mot de passe)</span><input value={admin.nom} onChange={(e) => setAdmin((a) => ({ ...a, nom: e.target.value }))} /></label>
-            <label className="field"><span>Mot de passe (optionnel)</span><input type="text" value={admin.motDePasse} onChange={(e) => setAdmin((a) => ({ ...a, motDePasse: e.target.value }))} placeholder="vide = connexion Google" /></label>
-            <button className="btn btn-primary" type="submit">Autoriser l’administrateur</button>
-          </form>
+          <button type="button" className="btn btn-primary" onClick={() => setAdminOuvert(true)}>
+            + Autoriser un administrateur
+          </button>
+
+          {adminOuvert && (
+            <div
+              className="aide-fond"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Autoriser un administrateur"
+              onClick={() => setAdminOuvert(false)}
+            >
+              <form className="modale-client" onClick={(e) => e.stopPropagation()} onSubmit={autoriserAdmin}>
+                <div className="modale-client-tete">
+                  <strong>Autoriser un administrateur</strong>
+                  <button type="button" className="btn btn-discret" onClick={() => setAdminOuvert(false)}>
+                    Fermer
+                  </button>
+                </div>
+                <div className="form-chrome">
+                  <label className="field">
+                    <span>Magasin</span>
+                    <select value={admin.magasin_id} onChange={(e) => setAdmin((a) => ({ ...a, magasin_id: e.target.value }))}>
+                      <option value="">— Choisir —</option>
+                      {magasins.map((m) => <option key={m.id} value={m.id}>{m.nom}</option>)}
+                    </select>
+                  </label>
+                  <label className="field"><span>Email</span><input type="email" value={admin.email} onChange={(e) => setAdmin((a) => ({ ...a, email: e.target.value }))} /></label>
+                  <label className="field"><span>Nom (si mot de passe)</span><input value={admin.nom} onChange={(e) => setAdmin((a) => ({ ...a, nom: e.target.value }))} /></label>
+                  <label className="field"><span>Mot de passe (optionnel)</span><input type="text" value={admin.motDePasse} onChange={(e) => setAdmin((a) => ({ ...a, motDePasse: e.target.value }))} placeholder="vide = connexion Google" /></label>
+                  <button className="btn btn-primary" type="submit">Autoriser l’administrateur</button>
+                </div>
+              </form>
+            </div>
+          )}
         </>
       )}
 
@@ -216,13 +240,13 @@ export default function Magasins() {
             <button type="button" className="btn btn-primary" onClick={genererCode}>+ Générer</button>
           </div>
           <p className="statut">Donne un code à un nouveau patron pour qu’il crée son magasin.</p>
-          <table className="tableau">
+          <table className="tableau tableau-cartes">
             <thead><tr><th>Code</th><th className="droite">Utilisé</th><th></th></tr></thead>
             <tbody>
               {codes.map((c) => (
                 <tr key={c.code} style={{ opacity: c.actif ? 1 : 0.5 }}>
-                  <td><strong>{c.code}</strong>{!c.actif && ' (inactif)'}</td>
-                  <td className="droite">{c.utilisations}×</td>
+                  <td data-label="Code"><strong>{c.code}</strong>{!c.actif && ' (inactif)'}</td>
+                  <td className="droite" data-label="Utilisé">{c.utilisations}×</td>
                   <td className="actions-cellule">
                     <button type="button" className="btn btn-discret" onClick={() => copierCode(c.code)}>Copier</button>
                     <button type="button" className="btn btn-discret" onClick={() => basculerCode(c.code, c.actif)}>{c.actif ? 'Désactiver' : 'Activer'}</button>

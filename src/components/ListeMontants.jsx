@@ -2,7 +2,9 @@ import { formatEuros } from '../lib/format';
 
 // Liste éditable de montants (charges ou fournisseurs) : libellé + montant par
 // ligne, justificatif (photo de facture/ticket), total, ajout/suppression et
-// reprise du mois précédent.
+// reprise du mois précédent. `categories` (optionnel, charges uniquement) :
+// liste {id, libelle} → affiche un sélecteur de catégorie par ligne, persisté
+// via `onCategorie(id, valeur)`.
 export default function ListeMontants({
   titre,
   items,
@@ -14,6 +16,8 @@ export default function ListeMontants({
   onCopierPrecedent,
   onJustificatif,
   onVoirJustificatif,
+  categories,
+  onCategorie,
 }) {
   return (
     <div className="card">
@@ -21,11 +25,11 @@ export default function ListeMontants({
         <h2>{titre}</h2>
         <strong>{formatEuros(total)}</strong>
       </div>
-      <table className="tableau">
+      <table className="tableau tableau-cartes">
         <tbody>
           {items.map((it) => (
             <tr key={it.id}>
-              <td>
+              <td data-label="Libellé">
                 <input
                   className="champ-nom"
                   placeholder="Libellé"
@@ -34,7 +38,23 @@ export default function ListeMontants({
                   onBlur={() => onEnregistrer(it.id)}
                 />
               </td>
-              <td className="droite">
+              {categories && (
+                <td data-label="Catégorie">
+                  <select
+                    className="select-categorie"
+                    value={it.categorie ?? ''}
+                    onChange={(e) => onCategorie(it.id, e.target.value)}
+                  >
+                    <option value="">Catégorie…</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.libelle}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              )}
+              <td className="droite" data-label="Montant">
                 <input
                   className="champ-pourcentage"
                   inputMode="decimal"
@@ -44,7 +64,7 @@ export default function ListeMontants({
                   onBlur={() => onEnregistrer(it.id)}
                 />
               </td>
-              <td>
+              <td data-label="Facture">
                 <label className="btn btn-discret" title="Ajouter une facture (photo)">
                   📷
                   <input
@@ -83,7 +103,7 @@ export default function ListeMontants({
           ))}
           {items.length === 0 && (
             <tr>
-              <td colSpan={4} className="vide">
+              <td colSpan={categories ? 5 : 4} className="vide">
                 Aucune ligne.
               </td>
             </tr>

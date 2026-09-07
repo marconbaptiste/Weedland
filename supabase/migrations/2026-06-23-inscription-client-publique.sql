@@ -73,8 +73,9 @@ begin
     return v_id;
   end if;
 
-  insert into public.clients (surnom, telephone, magasin_id, tampons)
-  values (v_surnom, v_tel, p_magasin, 1) -- +1 étoile offerte à l'inscription
+  -- Carte créée à 0 tampon : seul le personnel peut en ajouter ensuite.
+  insert into public.clients (surnom, telephone, magasin_id)
+  values (v_surnom, v_tel, p_magasin)
   returning id into v_id;
 
   return v_id;

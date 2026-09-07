@@ -5,6 +5,8 @@ import { useAuth } from '../auth/AuthProvider';
 
 // Page ouverte en scannant le QR d'un client : ajoute un tampon, et déclenche
 // la récompense (reset) quand le palier est atteint.
+const appelsEnCours = new Map(); // clientId → promesse de l'appel fidelite_ajouter
+
 export default function Fidelite() {
   const { clientId } = useParams();
   const { magasinId } = useAuth();
@@ -20,7 +22,24 @@ export default function Fidelite() {
         .single();
       const palier = mag?.fidelite_palier ?? 10;
 
-      const { data: nb, error } = await supabase.rpc('fidelite_ajouter', { p_client: clientId });
+      // Garde anti-double tampon : un F5 ou un « retour » sur cette page ne doit
+      // pas créditer une 2ᵉ étoile (la page tamponne au montage). L'appel en
+      // cours est mémorisé au niveau du module pour que deux montages rapprochés
+      // (StrictMode, remontage) partagent le MÊME appel au lieu d'en refaire un.
+      const cle = `f:${clientId}`;
+      let appel = appelsEnCours.get(clientId);
+      if (!appel) {
+        const dernier = Number(sessionStorage.getItem(cle) || 0);
+        if (Date.now() - dernier < 120000) {
+          if (actif) setEtat({ chargement: false, erreur: 'Tampon déjà ajouté il y a moins de 2 minutes.' });
+          return;
+        }
+        sessionStorage.setItem(cle, String(Date.now()));
+        appel = supabase.rpc('fidelite_ajouter', { p_client: clientId });
+        appelsEnCours.set(clientId, appel);
+        appel.then(() => setTimeout(() => appelsEnCours.delete(clientId), 5000));
+      }
+      const { data: nb, error } = await appel;
       if (error) {
         if (actif) setEtat({ chargement: false, erreur: error.message || 'QR invalide.' });
         return;
