@@ -964,6 +964,30 @@ hr {
 .ligne-produit-gerer {
   flex: 0 0 auto;
 }
+/* Pointage d'inventaire : case devant chaque produit + barre « x/N · Tout cocher ». */
+.ligne-produit-coche {
+  flex: 0 0 auto;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin: 0;
+  accent-color: var(--vert, #2f6b4f);
+  cursor: pointer;
+}
+.ligne-produit.pointe .ligne-produit-nom > span:first-child {
+  color: var(--texte-doux);
+  text-decoration: line-through;
+  text-decoration-color: var(--bordure);
+}
+.inventaire-barre {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.inventaire-compte {
+  color: var(--texte-doux);
+}
 /* Fiche produit (modale) : bloc mouvement rapide en tête. */
 .fiche-mouvement {
   background: var(--fond-input);

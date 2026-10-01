@@ -92,7 +92,7 @@ function ChampCategorie({ valeur, onChange, categories, label = 'Catégorie', au
 // Module — Gestion des stocks (registre partagé : tout employé consulte et
 // ajuste ; seul l'admin supprime un produit).
 export default function Stocks() {
-  const { estAdmin } = useAuth();
+  const { estAdmin, magasinId } = useAuth();
   const [produits, setProduits] = useState([]);
   const [statut, setStatut] = useState('');
   const [recherche, setRecherche] = useState('');
@@ -117,6 +117,28 @@ export default function Stocks() {
   useEffect(() => {
     charger();
   }, [charger]);
+
+  // Pointage d'inventaire (colonne `stocks.inventaire_coche`, partagée par
+  // l'équipe) : cocher un produit = « compté », pour ne rien oublier. Mise à
+  // jour optimiste, puis écriture en base (RLS stocks_update, membres du magasin).
+  async function pointer(p, coche) {
+    setProduits((liste) => liste.map((x) => (x.id === p.id ? { ...x, inventaire_coche: coche } : x)));
+    const { error } = await supabase.from('stocks').update({ inventaire_coche: coche }).eq('id', p.id);
+    if (error) {
+      setProduits((liste) => liste.map((x) => (x.id === p.id ? { ...x, inventaire_coche: !coche } : x)));
+      setStatut(`Pointage impossible : ${messageErreur(error)}`);
+    }
+  }
+  async function pointerTout(coche) {
+    if (!magasinId) return;
+    setProduits((liste) => liste.map((x) => ({ ...x, inventaire_coche: coche })));
+    const { error } = await supabase.from('stocks').update({ inventaire_coche: coche }).eq('magasin_id', magasinId);
+    if (error) {
+      setStatut(`Pointage impossible : ${messageErreur(error)}`);
+      charger();
+    }
+  }
+  const nbCoches = produits.filter((p) => p.inventaire_coche).length;
 
   // Catégories réellement saisies (pour le sélecteur à la création/import).
   const categoriesReelles = [...new Set(produits.map((p) => (p.categorie ?? '').trim()).filter(Boolean))].sort(
@@ -414,14 +436,41 @@ export default function Stocks() {
         </div>
       )}
 
+      {produits.length > 0 && (
+        <div className="card inventaire-barre">
+          <span className="inventaire-compte">
+            ✅ Inventaire : <strong>{nbCoches}</strong> / {produits.length} pointé{nbCoches > 1 ? 's' : ''}
+          </span>
+          <div className="stocks-actions">
+            <button type="button" className="btn btn-compact" onClick={() => pointerTout(true)} disabled={nbCoches === produits.length}>
+              Tout cocher
+            </button>
+            <button type="button" className="btn btn-compact" onClick={() => pointerTout(false)} disabled={nbCoches === 0}>
+              Tout décocher
+            </button>
+          </div>
+        </div>
+      )}
+
       {categories.map((cat) => (
         <div key={cat} className="card">
-          <h2>{cat}</h2>
+          <h2>
+            {cat}
+            <span className="promo-qui"> · {parCategorie[cat].filter((p) => p.inventaire_coche).length}/{parCategorie[cat].length}</span>
+          </h2>
           {/* Liste compacte, pensée mobile : nom + quantité + bouton « Gérer »
               qui ouvre la fiche produit (mouvements, édition, suppression). */}
           <ul className="liste-produits">
             {parCategorie[cat].map((p) => (
-              <li key={p.id} className="ligne-produit">
+              <li key={p.id} className={`ligne-produit ${p.inventaire_coche ? 'pointe' : ''}`}>
+                <input
+                  type="checkbox"
+                  className="ligne-produit-coche"
+                  checked={Boolean(p.inventaire_coche)}
+                  onChange={(e) => pointer(p, e.target.checked)}
+                  aria-label={`${p.nom} compté`}
+                  title="Compté (inventaire)"
+                />
                 <div className="ligne-produit-nom">
                   <span>{p.nom}</span>
                   {Number(p.quantite) === 0 ? (
