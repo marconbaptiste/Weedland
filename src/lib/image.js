@@ -29,3 +29,31 @@ export async function compresserImage(file, { maxDim = 1600, qualite = 0.7 } = {
     return file; // format non décodable (ex. HEIC) : on envoie l'original
   }
 }
+
+/**
+ * Redimensionne un logo en PNG (conserve la transparence, utile sur fond sombre).
+ * @param {File} file
+ * @param {{maxDim?:number}} [options]
+ * @returns {Promise<Blob>} le logo en PNG (ou le fichier d'origine si échec)
+ */
+export async function compresserLogo(file, { maxDim = 512 } = {}) {
+  if (!file || !file.type?.startsWith('image/')) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    let { width, height } = bitmap;
+    if (width > maxDim || height > maxDim) {
+      const ratio = Math.min(maxDim / width, maxDim / height);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
+    const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+    bitmap.close?.();
+    return blob ?? file;
+  } catch {
+    return file;
+  }
+}

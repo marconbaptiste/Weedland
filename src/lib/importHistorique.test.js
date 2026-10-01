@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifier, analyserFichiers, analyserChromes } from './importHistorique.js';
+import { classifier, analyserFichiers, analyserChromes, analyserStocks } from './importHistorique.js';
 import { parseCSV } from './csv.js';
 
 const REVENUS = `Date;CA;CB;Moro
@@ -27,6 +27,20 @@ describe('classifier', () => {
   });
 });
 
+const REVENUS_VIR = `Date;CA;CB;Moro;Vir
+5 juillet 2026;2 802 €;1 901 €;595 €;39 €
+6 juillet 2026;2 656 €;1 498 €;975 €;
+Revenus totaux;5 458 €;3 399 €;1 570 €;39 €`;
+
+describe('parseCaisse — colonne Virements', () => {
+  it('lit la colonne « Vir » quand elle existe, sinon 0', () => {
+    const r = analyserFichiers([{ nom: 'Juillet 2026-Revenus.csv', texte: REVENUS_VIR }]);
+    expect(r.caisse[0]).toEqual({ date: '2026-07-05', ventes_directes: 2802, cb: 1901, especes: 595, virements: 39 });
+    // cellule Vir vide -> 0
+    expect(r.caisse[1]).toEqual({ date: '2026-07-06', ventes_directes: 2656, cb: 1498, especes: 975, virements: 0 });
+  });
+});
+
 describe('analyserFichiers', () => {
   it('dispatche caisse / charges / fournisseurs et ignore le reste', () => {
     const r = analyserFichiers([
@@ -38,7 +52,7 @@ describe('analyserFichiers', () => {
 
     // Caisse : 2 jours valides (le total est ignoré)
     expect(r.caisse).toHaveLength(2);
-    expect(r.caisse[0]).toEqual({ date: '2026-03-01', ventes_directes: 1895, cb: 1185, especes: 610 });
+    expect(r.caisse[0]).toEqual({ date: '2026-03-01', ventes_directes: 1895, cb: 1185, especes: 610, virements: 0 });
 
     // Charges : « Total énergie » gardé, « Dépenses totales » exclu, mois du nom de fichier
     expect(r.charges).toHaveLength(2);
@@ -67,5 +81,26 @@ describe('analyserChromes', () => {
     // montant avec virgule décimale dans un champ, séparateur ailleurs
     expect(r).toContainEqual({ date: '2026-06-11', surnom: 'Costaud (pote de Redouane)', type: 'avance', montant: 5.4 });
     expect(r).toContainEqual({ date: '2026-06-13', surnom: 'Mel', type: 'remboursement', montant: 20 });
+  });
+});
+
+describe('analyserStocks', () => {
+  it('mappe catégorie / produit / quantité avec en-têtes souples', () => {
+    const csv = `Catégorie;Produit;Quantité
+Fleurs;Amnesia;120,5
+Résines;Charas;30
+;;`; // ligne vide ignorée
+    const r = analyserStocks(csv);
+    expect(r).toHaveLength(2);
+    expect(r[0]).toEqual({ categorie: 'Fleurs', nom: 'Amnesia', quantite: 120.5 });
+    expect(r[1]).toEqual({ categorie: 'Résines', nom: 'Charas', quantite: 30 });
+  });
+
+  it('accepte des noms de colonnes variés (qté, article) et ignore les lignes sans produit', () => {
+    const csv = `article,qte
+Huile 10%,8
+,5`;
+    const r = analyserStocks(csv);
+    expect(r).toEqual([{ categorie: '', nom: 'Huile 10%', quantite: 8 }]);
   });
 });

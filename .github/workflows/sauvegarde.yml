@@ -27,12 +27,14 @@ jobs:
       DBPASS: ${{ secrets.SUPABASE_DB_PASSWORD }}
       PASS: ${{ secrets.BACKUP_PASSPHRASE }}
     steps:
-      - name: Installer pg_dump 16
+      - name: Installer pg_dump 17
+        # La base Supabase est en PostgreSQL 17 : pg_dump doit être >= la version
+        # du serveur, sinon « server version mismatch ». On installe le client 17.
         run: |
           sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
           sudo apt-get update
-          sudo apt-get install -y postgresql-client-16
+          sudo apt-get install -y postgresql-client-17
 
       - name: Dump + chiffrement
         run: |
@@ -44,7 +46,7 @@ jobs:
           export PGPASSWORD="$(printf '%s' "$DBPASS" | tr -d '\r\n')"
           echo "DIAG longueur du mot de passe (après nettoyage) : ${#PGPASSWORD}"
           ts=$(date +%Y%m%d-%H%M%S)
-          /usr/lib/postgresql/16/bin/pg_dump --no-owner --no-privileges -Fc -f dump.pgcustom
+          /usr/lib/postgresql/17/bin/pg_dump --no-owner --no-privileges -Fc -f dump.pgcustom
           openssl enc -aes-256-cbc -pbkdf2 -salt -in dump.pgcustom -out "weedland-$ts.sql.enc" -pass env:PASS
           rm -f dump.pgcustom
           echo "Sauvegarde créée : weedland-$ts.sql.enc ($(du -h weedland-$ts.sql.enc | cut -f1))"

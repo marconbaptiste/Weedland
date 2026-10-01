@@ -1,14 +1,44 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
+import Logo from '../components/Logo';
 
 export default function Login() {
   const { connexion, connexionGoogle } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const info = location.state?.info ?? ''; // message transmis par l'inscription
   const [email, setEmail] = useState('');
   const [motDePasse, setMotDePasse] = useState('');
   const [erreur, setErreur] = useState('');
   const [envoi, setEnvoi] = useState(false);
+  const [aide, setAide] = useState(false); // encart « mot de passe oublié »
+  const [resetEnvoi, setResetEnvoi] = useState(false);
+  const [infoReset, setInfoReset] = useState('');
+
+  async function envoyerReset() {
+    setErreur('');
+    setInfoReset('');
+    const mail = email.trim().toLowerCase();
+    if (!mail) {
+      setErreur('Saisis d’abord ton email ci-dessus, puis clique sur « Recevoir un lien ».');
+      return;
+    }
+    setResetEnvoi(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(mail, {
+      redirectTo: `${window.location.origin}/nouveau-mot-de-passe`,
+    });
+    setResetEnvoi(false);
+    if (error) {
+      console.error('resetPasswordForEmail:', error);
+      setErreur('Envoi impossible pour le moment. Réessaie dans un instant.');
+      return;
+    }
+    setInfoReset(
+      '📧 Si un compte existe pour cet email, un lien de réinitialisation vient d’être envoyé. Pense à vérifier tes spams.',
+    );
+  }
 
   async function soumettre(e) {
     e.preventDefault();
@@ -17,7 +47,7 @@ export default function Login() {
     const { error } = await connexion(email.trim(), motDePasse);
     setEnvoi(false);
     if (error) {
-      setErreur('Identifiants incorrects.');
+      setErreur('Email ou mot de passe incorrect. Vérifie bien les deux.');
       return;
     }
     navigate('/', { replace: true });
@@ -33,7 +63,9 @@ export default function Login() {
   return (
     <div className="page-connexion">
       <form className="card carte-connexion" onSubmit={soumettre}>
-        <h1 className="logo-connexion">Gestion</h1>
+        <Logo taille={40} className="marque-hero" />
+        <p className="statut" style={{ marginTop: '-0.25rem' }}>Connecte-toi à ton espace</p>
+        {info && <p className="statut message-info">🎉 {info}</p>}
         <label className="field">
           <span>Email</span>
           <input
@@ -58,6 +90,34 @@ export default function Login() {
         <button className="btn btn-primary" type="submit" disabled={envoi}>
           {envoi ? 'Connexion…' : 'Se connecter'}
         </button>
+
+        <button
+          type="button"
+          className="btn btn-discret lien-oubli"
+          onClick={() => setAide((a) => !a)}
+        >
+          Mot de passe oublié ?
+        </button>
+        {aide && (
+          <div className="encart-aide">
+            <p className="statut" style={{ marginTop: 0 }}>
+              Saisis ton email en haut, puis reçois un lien pour choisir un nouveau mot de passe :
+            </p>
+            <button
+              type="button"
+              className="btn"
+              onClick={envoyerReset}
+              disabled={resetEnvoi}
+            >
+              {resetEnvoi ? 'Envoi…' : '📧 Recevoir un lien par email'}
+            </button>
+            {infoReset && <p className="statut">{infoReset}</p>}
+            <p className="statut" style={{ marginBottom: 0 }}>
+              Tu peux aussi demander à ton responsable de le réinitialiser (menu{' '}
+              <strong>Comptes → Gérer → Réinit. mot de passe</strong>).
+            </p>
+          </div>
+        )}
 
         <div className="separateur"><span>ou</span></div>
 
