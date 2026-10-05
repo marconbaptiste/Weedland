@@ -46,6 +46,10 @@ create table if not exists public.caisse_jour (
   ventes_directes numeric(10, 2) not null default 0 check (ventes_directes >= 0),
   cb              numeric(10, 2) not null default 0 check (cb >= 0),
   especes         numeric(10, 2) not null default 0 check (especes >= 0),
+  -- Encaissements ni CB ni espèces (virement bancaire, etc.), montant global du
+  -- jour. Comptent dans le CA : ventes_directes = cb + especes + virements.
+  -- (L'intégration à v_ca_jour vit dans la migration 2026-08-08-virements-caisse.sql.)
+  virements       numeric(10, 2) not null default 0 check (virements >= 0),
   fond_caisse     numeric(10, 2) not null default 0 check (fond_caisse >= 0),
   -- Heures travaillées et taux d'intéressement appliqué ce jour-là (pré-rempli
   -- depuis la fiche employé mais ajustable, notamment pour les journées partagées).
@@ -298,7 +302,7 @@ grant select on
   public.v_chromes_jour,
   public.v_ca_jour,
   public.v_interessement_employe
-to anon, authenticated;
+to authenticated;
 
 -- Solde dû par client (Σ avances - Σ remboursements).
 create or replace view public.v_solde_client
@@ -313,7 +317,7 @@ select
 from public.clients cl
 left join public.chromes ch on ch.client_id = cl.id
 group by cl.id, cl.surnom, cl.description, cl.telephone;
-grant select on public.v_solde_client to anon, authenticated;
+grant select on public.v_solde_client to authenticated;
 
 -- ============================================================================
 -- DÉCLENCHEUR : crée automatiquement le profil public.users à l'inscription.
